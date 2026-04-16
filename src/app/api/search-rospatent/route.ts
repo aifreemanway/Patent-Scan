@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { extractSearchTerms } from "@/lib/extract-search-terms";
 
 export const runtime = "nodejs";
 
@@ -62,7 +63,8 @@ export async function POST(req: Request) {
   if (rl) return rl;
 
   const token = process.env.PATSEARCH_TOKEN;
-  if (!token) {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!token || !geminiKey) {
     return NextResponse.json({ error: "Service configuration error" }, { status: 500 });
   }
 
@@ -87,14 +89,34 @@ export async function POST(req: Request) {
     );
   }
 
+  let qn: string;
+  let extractedIpc: string[] = [];
+  try {
+    const terms = await extractSearchTerms(query, geminiKey);
+    qn = terms.qn;
+    extractedIpc = terms.ipcCodes;
+  } catch (e) {
+    console.error("[search-rospatent] term extraction failed", {
+      message: e instanceof Error ? e.message : String(e),
+      queryLen: query.length,
+    });
+    return NextResponse.json(
+      { error: "Query preprocessing failed" },
+      { status: 502 }
+    );
+  }
+
   const limit = Math.min(Math.max(body.limit ?? 10, 1), 50);
   const datasets = (body.datasets && body.datasets.length > 0)
     ? body.datasets
     : DEFAULT_DATASETS;
-  const groups = ipcGroups(body.ipcCodes ?? []);
+  const ipcInput = body.ipcCodes && body.ipcCodes.length > 0
+    ? body.ipcCodes
+    : extractedIpc;
+  const groups = ipcGroups(ipcInput);
 
   const payload: Record<string, unknown> = {
-    qn: query,
+    qn,
     limit,
     offset: 0,
     datasets,
@@ -169,5 +191,10 @@ export async function POST(req: Request) {
     };
   });
 
-  return NextResponse.json({ hits, total: raw.total ?? hits.length });
+  return NextResponse.json({
+    hits,
+    total: raw.total ?? hits.length,
+    usedQn: qn,
+    usedIpc: groups,
+  });
 }
