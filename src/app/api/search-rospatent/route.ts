@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   const groups = ipcGroups(body.ipcCodes ?? []);
 
   const payload: Record<string, unknown> = {
-    q: query,
+    qn: query,
     limit,
     offset: 0,
     datasets,
@@ -111,13 +111,26 @@ export async function POST(req: Request) {
       body: JSON.stringify(payload),
       signal: ctrl.signal,
     });
-  } catch {
+  } catch (e) {
+    console.error("[search-rospatent] fetch failed", {
+      name: e instanceof Error ? e.name : typeof e,
+      message: e instanceof Error ? e.message : String(e),
+      queryLen: query.length,
+    });
     return NextResponse.json({ error: "Patent search service unavailable" }, { status: 502 });
   } finally {
     clearTimeout(timer);
   }
 
   if (!resp.ok) {
+    const bodyText = await resp.text().catch(() => "");
+    console.error("[search-rospatent] non-ok response", {
+      status: resp.status,
+      statusText: resp.statusText,
+      body: bodyText.slice(0, 500),
+      queryLen: query.length,
+      payload: JSON.stringify(payload).slice(0, 300),
+    });
     return NextResponse.json({ error: "Patent search service error" }, { status: 502 });
   }
 
