@@ -7,7 +7,8 @@
     "appName": "Patent-Scan",
     "tagline": "Check your invention's uniqueness in a minute",
     "cta": "Check my invention",
-    "ctaSecondary": "Start check"
+    "ctaSecondary": "Start check",
+    "ctaLandscape": "Build patent landscape"
   },
   "Landing": {
     "hero": {
@@ -121,5 +122,52 @@
     "missingTitle": "No report data",
     "missingBody": "Looks like you opened this page directly. Start from the invention description.",
     "openLink": "Open"
+  },
+  "Landscape": {
+    "title": "Patent landscape",
+    "subtitle": "Describe a technology area — we build a patent map: key directions, geography, timeline, trends.",
+    "textareaLabel": "Technology area description",
+    "textareaPlaceholder": "For example: Processing of low-grade tin concentrates: pyrometallurgy, hydrometallurgy, cassiterite beneficiation, tin recovery from slags and secondary feedstocks…",
+    "minHint": "Minimum 80 characters",
+    "charCount": "{n} characters",
+    "submit": "Build landscape",
+    "loading": "Building landscape…",
+    "loadingHint": "Usually takes 1–2 minutes. Please keep this tab open.",
+    "loadingPlan": "Drafting the search plan…",
+    "loadingSearch": "Searching patent databases ({n} queries)…",
+    "loadingSynthesize": "Analyzing found patents ({n} items)…",
+    "errorTitle": "Landscape build failed",
+    "errorRetry": "Retry"
+  },
+  "LandscapeReport": {
+    "title": "Patent landscape",
+    "topicLabel": "Topic",
+    "counterTotal": "Total patents",
+    "counterRu": "Russia (RU + SU)",
+    "counterCn": "China (CN)",
+    "counterEpUs": "EP + US",
+    "overviewTitle": "Technology area overview",
+    "planTitle": "Search plan",
+    "planQueries": "Search queries",
+    "planIpc": "IPC classes",
+    "byCountryTitle": "Patents by country",
+    "countryOther": "Other",
+    "countryCount": "{n} patents",
+    "colId": "ID",
+    "colTitle": "Title",
+    "colYear": "Year",
+    "colIpc": "IPC",
+    "categoriesTitle": "Technical directions",
+    "matrixTitle": "Geography × timeline",
+    "matrixPeriod": "Period",
+    "trendsTitle": "Current trends",
+    "appendixTitle": "Full patent list",
+    "appendixCount": "{n} entries",
+    "ctaPrimary": "New landscape",
+    "missingTitle": "No report data",
+    "missingBody": "Looks like you opened this page directly. Start from a topic description.",
+    "emptyTitle": "No patents found",
+    "emptyBody": "Patent databases returned no relevant publications for this topic. Try rephrasing — add key terms or the application area.",
+    "emptyCta": "New search"
   }
 }

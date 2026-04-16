@@ -33,12 +33,20 @@ export default async function LandingPage({
           <p className="max-w-2xl text-lg text-slate-600">
             {t("hero.subtitle")}
           </p>
-          <Link
-            href="/search"
-            className="mt-2 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
-          >
-            {tc("cta")}
-          </Link>
+          <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row">
+            <Link
+              href="/search"
+              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+            >
+              {tc("cta")}
+            </Link>
+            <Link
+              href="/landscape"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
+            >
+              {tc("ctaLandscape")}
+            </Link>
+          </div>
           <p className="max-w-xl text-xs text-slate-500">
             {t("hero.disclaimer")}
           </p>
