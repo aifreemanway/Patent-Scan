@@ -49,7 +49,7 @@ function buildUrl(id: string, country: string): string {
   return `https://searchplatform.rospatent.gov.ru/docs/${encodeURIComponent(id)}`;
 }
 
-function ipcGroups(codes: string[]): string[] {
+function ipcSubclasses(codes: string[]): string[] {
   const out: string[] = [];
   for (const c of codes) {
     const head = c.trim().split(/[/\s]/, 1)[0];
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
   const ipcInput = body.ipcCodes && body.ipcCodes.length > 0
     ? body.ipcCodes
     : extractedIpc;
-  const groups = ipcGroups(ipcInput);
+  const subclasses = ipcSubclasses(ipcInput);
 
   const payload: Record<string, unknown> = {
     qn,
@@ -123,8 +123,10 @@ export async function POST(req: Request) {
     include_facets: false,
     highlight: body.highlight ?? false,
   };
-  if (groups.length > 0) {
-    payload.filter = { "classification.ipc_group": { values: groups } };
+  if (subclasses.length > 0) {
+    payload.filter = {
+      "classification.ipc_subclass": { values: subclasses },
+    };
   }
 
   const ctrl = new AbortController();
@@ -195,6 +197,6 @@ export async function POST(req: Request) {
     hits,
     total: raw.total ?? hits.length,
     usedQn: qn,
-    usedIpc: groups,
+    usedIpc: subclasses,
   });
 }
