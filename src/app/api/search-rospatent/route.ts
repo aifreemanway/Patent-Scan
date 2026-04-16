@@ -13,7 +13,8 @@ const DEFAULT_DATASETS = [
   "cis",
   "us",
   "ep",
-  "wo",
+  "jp",
+  "cn",
 ];
 
 type PatSearchHit = {
