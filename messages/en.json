@@ -1,0 +1,125 @@
+{
+  "Meta": {
+    "title": "Patent-Scan — check your invention's uniqueness",
+    "description": "AI portal for patent clearance: Rospatent + EPO + USPTO in one minute."
+  },
+  "Common": {
+    "appName": "Patent-Scan",
+    "tagline": "Check your invention's uniqueness in a minute",
+    "cta": "Check my invention",
+    "ctaSecondary": "Start check"
+  },
+  "Landing": {
+    "hero": {
+      "badge": "AI · Rospatent · EPO · USPTO",
+      "title": "Check your invention's uniqueness before visiting a patent attorney",
+      "subtitle": "Drop a description — AI builds the queries, hits 3 patent databases in parallel, returns a structured report with a recommendation.",
+      "disclaimer": "Not legal advice. The report is a reference point: iterate, file, or consult an expert."
+    },
+    "how": {
+      "title": "How it works",
+      "steps": [
+        {
+          "n": "01",
+          "title": "Describe your invention",
+          "body": "Plain text in any language and jargon. AI extracts keywords and IPC classes automatically."
+        },
+        {
+          "n": "02",
+          "title": "Parallel search",
+          "body": "Rospatent PatSearch (150M patents), EPO Espacenet OPS, USPTO. Duplicates merged by publication ID."
+        },
+        {
+          "n": "03",
+          "title": "Report & recommendation",
+          "body": "Overview, key analogs with overlaps and differences, geography, trends, final recommendation. PDF + web view."
+        }
+      ]
+    },
+    "get": {
+      "title": "What you get",
+      "items": [
+        {
+          "title": "Up to 30 relevant patents",
+          "body": "Titles, years, countries, IPC codes, clickable links to the original records in each database."
+        },
+        {
+          "title": "Analysis of 5–10 key analogs",
+          "body": "For each: similarity (High/Medium/Low), what overlaps, what differs from your invention."
+        },
+        {
+          "title": "Classification by direction",
+          "body": "Patents grouped by technical approach — you see which directions are already taken."
+        },
+        {
+          "title": "Final recommendation",
+          "body": "High/Medium/Low uniqueness + the concrete next step: iterate, file, or visit a patent attorney."
+        }
+      ]
+    },
+    "sources": {
+      "title": "Data sources",
+      "subtitle": "Only official open databases. We never fabricate data.",
+      "items": [
+        { "name": "Rospatent PatSearch", "meta": "150M patents · RU, SU, CIS, US, EP, WO" },
+        { "name": "EPO Espacenet OPS", "meta": "European and worldwide patents · OAuth2" },
+        { "name": "USPTO PatentsView", "meta": "US patents (in progress)" }
+      ]
+    },
+    "ctaBlock": {
+      "title": "Ready to check your invention?",
+      "subtitle": "Uploading a description takes 1 minute. The report is ready in 1–2 minutes."
+    }
+  },
+  "Search": {
+    "title": "Describe your invention",
+    "subtitle": "The more detail you provide, the sharper the search. Russian, English, and technical jargon all work.",
+    "textareaLabel": "Invention description",
+    "textareaPlaceholder": "For example: An automatic plastic waste sorting system using infrared spectral analysis and neural network classification by polymer type…",
+    "charCount": "{n} characters",
+    "minHint": "Minimum 80 characters",
+    "clarifyTitle": "Follow-up questions",
+    "clarifySubtitle": "AI will ask a few questions to narrow the search. Answers are optional.",
+    "questions": [
+      { "q": "What application area?", "placeholder": "e.g. recycling, logistics, medical" },
+      { "q": "What is the key technical technique?", "placeholder": "e.g. neural network, spectral analysis, mechanical gripping" },
+      { "q": "What distinguishes it from known analogs?", "placeholder": "e.g. accuracy, speed, no consumables" }
+    ],
+    "submit": "Start search",
+    "back": "Back",
+    "loading": "Building queries and polling patent databases…",
+    "loadingHint": "Usually takes 1–2 minutes. Please keep this tab open.",
+    "loadingSearch": "Searching Rospatent…",
+    "loadingAnalyze": "Analyzing the matches…",
+    "errorTitle": "Request failed",
+    "errorRetry": "Retry"
+  },
+  "Report": {
+    "title": "Uniqueness check report",
+    "subtitle": "Preview version of the report. A reference point, not a legal opinion.",
+    "uniquenessLabel": "Uniqueness score",
+    "uniquenessHigh": "High",
+    "uniquenessMedium": "Medium",
+    "uniquenessLow": "Low",
+    "overviewTitle": "Overview",
+    "patentsTitle": "Key analogs",
+    "patentsHeaders": { "id": "ID", "title": "Title", "year": "Year", "country": "Country", "similarity": "Similarity", "match": "Overlap", "diff": "Difference" },
+    "similarityHigh": "High",
+    "similarityMedium": "Medium",
+    "similarityLow": "Low",
+    "sourcesTitle": "Sources",
+    "sourceRospatent": "Rospatent PatSearch",
+    "sourceCount": "{n} patents",
+    "recommendationTitle": "Recommendation",
+    "ctaPrimary": "New check",
+    "ctaSecondary": "Download PDF",
+    "emptyTitle": "No patents found",
+    "emptyBody": "None of the sources returned relevant publications for your description. Try rephrasing — add key terms or the application area.",
+    "emptyCta": "New search",
+    "errorTitle": "Failed to build the report",
+    "errorBody": "One of the services returned an error. Please retry or adjust the description.",
+    "missingTitle": "No report data",
+    "missingBody": "Looks like you opened this page directly. Start from the invention description.",
+    "openLink": "Open"
+  }
+}
