@@ -7,7 +7,14 @@ const TIMEOUT_MS = 30_000;
 
 const PATSEARCH_URL =
   "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
-const DEFAULT_DATASETS = ["ru_since_1994", "ru_till_1994", "cis", "us"];
+const DEFAULT_DATASETS = [
+  "ru_since_1994",
+  "ru_till_1994",
+  "cis",
+  "us",
+  "ep",
+  "wo",
+];
 
 type PatSearchHit = {
   id?: string;
