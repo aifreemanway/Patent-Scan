@@ -3,7 +3,7 @@ const GEMINI_URL =
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: свободное описание технологической темы (на любом языке).
 
-Задача: сформулировать план поиска для построения патентного ландшафта в базе PatSearch (Роспатент, работает семантически по полю qn на русском). Нужно 3–5 РАЗНЫХ поисковых фраз, покрывающих тему с разных сторон, плюс общие IPC-subclass.
+Задача: сформулировать план поиска для построения патентного ландшафта в базе PatSearch (Роспатент, 150 млн патентов, семантический поиск по полю qn). База содержит патенты RU, CIS, US, EP, JP, CN — русские патенты индексированы на русском, остальные на английском. Нужно 3–5 РАЗНЫХ поисковых фраз на РУССКОМ + их переводы на АНГЛИЙСКИЙ, плюс общие IPC-subclass.
 
 Верни СТРОГО валидный JSON:
 {
@@ -12,12 +12,19 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
     "короткая фраза 5–15 слов на русском — аспект 2",
     "короткая фраза 5–15 слов на русском — аспект 3"
   ],
+  "queriesEn": [
+    "short phrase 5–15 words in English — same aspect 1",
+    "short phrase 5–15 words in English — same aspect 2",
+    "short phrase 5–15 words in English — same aspect 3"
+  ],
   "ipcSubclasses": ["C22B", "C01G"],
   "overviewSeed": "1–2 предложения: суть темы и её технологический контекст (для затравки итогового обзора)"
 }
 
-Правила queries:
-- ТОЛЬКО русский язык (PatSearch лучше работает с русским семантическим поиском)
+Правила queries и queriesEn:
+- queries — на РУССКОМ (для поиска RU/CIS патентов)
+- queriesEn — точный перевод каждого queries на АНГЛИЙСКИЙ (для поиска US/EP/CN/JP патентов)
+- queries и queriesEn должны быть одинаковой длины и соответствовать по индексу
 - 3–5 запросов, каждый покрывает РАЗНЫЙ аспект темы: метод / объект / применение / альтернативная технология / вторичное использование
 - 5–15 значимых слов в каждом запросе (существительные + ключевые прилагательные)
 - Без вводных слов, без воды, без брендов
@@ -42,6 +49,13 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
     "извлечение олова из хвостов обогащения и вторичного сырья",
     "вакуумное рафинирование олова от мышьяка и свинца"
   ],
+  "queriesEn": [
+    "smelting tin concentrates cassiterite reduction",
+    "flotation beneficiation cassiterite fine fractions",
+    "hydrometallurgical leaching tin from slags",
+    "tin recovery from tailings and secondary raw materials",
+    "vacuum refining tin removal arsenic lead impurities"
+  ],
   "ipcSubclasses": ["C22B", "B03D", "B03B"],
   "overviewSeed": "Переработка бедных оловянных концентратов — задача металлургии цветных металлов, совмещающая обогащение, пиро- и гидрометаллургию для извлечения Sn из сырья с низким содержанием металла и сложным составом примесей."
 }`;
@@ -52,6 +66,7 @@ type GeminiResponse = {
 
 export type LandscapePlan = {
   queries: string[];
+  queriesEn: string[];
   ipcSubclasses: string[];
   overviewSeed: string;
 };
@@ -96,12 +111,22 @@ export async function planLandscape(
 
   const parsed = JSON.parse(cleaned) as {
     queries?: unknown;
+    queriesEn?: unknown;
     ipcSubclasses?: unknown;
     overviewSeed?: unknown;
   };
 
   const queries = Array.isArray(parsed.queries)
     ? parsed.queries
+        .filter(
+          (q): q is string => typeof q === "string" && q.trim().length >= 5
+        )
+        .map((q) => q.trim())
+        .slice(0, 5)
+    : [];
+
+  const queriesEn = Array.isArray(parsed.queriesEn)
+    ? parsed.queriesEn
         .filter(
           (q): q is string => typeof q === "string" && q.trim().length >= 5
         )
@@ -126,5 +151,5 @@ export async function planLandscape(
     throw new Error("Gemini returned fewer than 2 queries");
   }
 
-  return { queries, ipcSubclasses, overviewSeed };
+  return { queries, queriesEn, ipcSubclasses, overviewSeed };
 }

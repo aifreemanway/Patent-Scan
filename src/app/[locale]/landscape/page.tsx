@@ -22,6 +22,7 @@ type LandscapeHit = {
 type PlanResponse = {
   topic: string;
   queries: string[];
+  queriesEn: string[];
   ipcSubclasses: string[];
   overviewSeed: string;
 };
@@ -49,7 +50,7 @@ export default function LandscapePage() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const canSubmit = topic.trim().length >= 80;
+  const canSubmit = topic.trim().length >= 60;
 
   async function handleSubmit() {
     setStep("loading");
@@ -72,8 +73,14 @@ export default function LandscapePage() {
         throw new Error("Plan returned no queries");
       }
 
-      setLoadingMsg(t("loadingSearch", { n: plan.queries.length }));
-      const searchPromises = plan.queries.map((qn) =>
+      // Combine Russian queries (for RU/CIS) and English queries (for US/EP/CN/JP)
+      const allQueries = [
+        ...plan.queries,
+        ...(plan.queriesEn || []),
+      ];
+
+      setLoadingMsg(t("loadingSearch", { n: allQueries.length }));
+      const searchPromises = allQueries.map((qn) =>
         fetch("/api/landscape/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
