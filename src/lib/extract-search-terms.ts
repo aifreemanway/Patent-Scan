@@ -3,17 +3,20 @@ const GEMINI_URL =
 
 const SYSTEM_PROMPT = `Ты — патентный поисковик. На вход: описание изобретения (может быть длинным, на любом языке).
 
-Задача: извлечь компактный поисковый запрос для патентной базы PatSearch (Роспатент), которая использует семантический neural-search по полю qn. Длинные зашумлённые тексты PatSearch обрабатывает плохо — нужен короткий, плотный запрос из ключевых технических терминов.
+Задача: извлечь компактный поисковый запрос для патентной базы PatSearch (Роспатент, 150 млн патентов). База содержит патенты RU, CIS (на русском) и US, EP, JP, CN (на английском). Нужны ДВА параллельных запроса — русский для русскоязычных датасетов и английский для англоязычных. PatSearch использует семантический neural-search по полю qn; длинные зашумлённые тексты обрабатывает плохо — нужен короткий плотный запрос из ключевых технических терминов.
 
 Верни СТРОГО валидный JSON:
 {
-  "qn": "короткая фраза 5–15 слов на русском, концентрирующая суть изобретения — устройство/метод + ключевые технические признаки. Без вводных, без воды, без брендов/моделей контроллеров, без номеров стандартов",
+  "qn": "короткая фраза 5–15 слов на РУССКОМ, концентрирующая суть изобретения — устройство/метод + ключевые технические признаки",
+  "qnEn": "точный перевод qn на АНГЛИЙСКИЙ той же длины и смысла",
   "ipcCodes": ["G01R 31/34", "H02H 7/09"]
 }
 
-Правила qn:
+Правила qn и qnEn:
+- qn — на РУССКОМ (для датасетов ru_since_1994, ru_till_1994, cis)
+- qnEn — точный перевод qn на АНГЛИЙСКИЙ (для датасетов us, ep, jp, cn)
+- Оба поля покрывают один и тот же смысл, одну и ту же суть — просто разные языки
 - Только существительные и ключевые прилагательные, через пробел или запятую
-- Русский язык даже если описание на английском (PatSearch лучше работает с русским)
 - Не включай конкретные модели чипов (STM32F407), номера стандартов (RS-485), бренды
 - Включи: тип устройства, метод, объект измерения, ключевые отличительные признаки
 
@@ -24,7 +27,11 @@ const SYSTEM_PROMPT = `Ты — патентный поисковик. На вх
 
 Примеры:
 Вход: "устройство для диагностики асинхронных двигателей методом MCSA на базе STM32F407 с RS-485... МПК G01R 31/34, H02H 7/09"
-→ {"qn": "диагностика асинхронного электродвигателя сигнатурный анализ тока MCSA", "ipcCodes": ["G01R 31/34", "H02H 7/09"]}`;
+→ {
+  "qn": "диагностика асинхронного электродвигателя сигнатурный анализ тока MCSA",
+  "qnEn": "asynchronous motor diagnostics current signature analysis MCSA",
+  "ipcCodes": ["G01R 31/34", "H02H 7/09"]
+}`;
 
 type GeminiResponse = {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
@@ -32,6 +39,7 @@ type GeminiResponse = {
 
 export type SearchTerms = {
   qn: string;
+  qnEn: string;
   ipcCodes: string[];
 };
 
@@ -73,18 +81,23 @@ export async function extractSearchTerms(
   const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
 
-  const parsed = JSON.parse(cleaned) as { qn?: unknown; ipcCodes?: unknown };
+  const parsed = JSON.parse(cleaned) as {
+    qn?: unknown;
+    qnEn?: unknown;
+    ipcCodes?: unknown;
+  };
 
   const qn = typeof parsed.qn === "string" ? parsed.qn.trim() : "";
+  const qnEn = typeof parsed.qnEn === "string" ? parsed.qnEn.trim() : "";
   const ipcCodes = Array.isArray(parsed.ipcCodes)
     ? parsed.ipcCodes.filter(
         (c): c is string => typeof c === "string" && c.trim().length > 0
       )
     : [];
 
-  if (qn.length < 3) {
-    throw new Error("Gemini returned empty qn");
+  if (qn.length < 3 || qnEn.length < 3) {
+    throw new Error("Gemini returned empty qn/qnEn");
   }
 
-  return { qn, ipcCodes };
+  return { qn, qnEn, ipcCodes };
 }
