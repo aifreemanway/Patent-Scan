@@ -81,7 +81,14 @@ export async function synthesizeLandscape(
   apiKey: string,
   timeoutMs = 50_000
 ): Promise<LandscapeSynthesis> {
-  const validIds = new Set(patents.map((p) => p.id));
+  // PatSearch returns ids with date suffix (e.g. "RU2709604C1_20191218")
+  // but Gemini strips it to base form ("RU2709604C1") in its response.
+  // Map baseId → fullId so we can match Gemini output back to full ids.
+  const stripDate = (id: string) => id.replace(/_\d{8}$/, "");
+  const baseToFull = new Map<string, string>();
+  for (const p of patents) {
+    baseToFull.set(stripDate(p.id), p.id);
+  }
 
   const userText = [
     `Тема: ${topic}`,
@@ -89,7 +96,7 @@ export async function synthesizeLandscape(
     `Патенты (${patents.length}):`,
     ...patents.map(
       (p) =>
-        `- ${p.id} | ${p.country} ${p.year} | IPC: ${p.ipc.slice(0, 4).join(", ")} | ${p.title}\n  ${p.abstract}`
+        `- ${stripDate(p.id)} | ${p.country} ${p.year} | IPC: ${p.ipc.slice(0, 4).join(", ")} | ${p.title}\n  ${p.abstract}`
     ),
   ].join("\n");
 
@@ -149,9 +156,10 @@ export async function synthesizeLandscape(
             typeof obj.description === "string" ? obj.description.trim() : "";
           const patentIds = Array.isArray(obj.patentIds)
             ? obj.patentIds
-                .filter(
-                  (id): id is string => typeof id === "string" && validIds.has(id)
+                .map((id) =>
+                  typeof id === "string" ? baseToFull.get(stripDate(id)) : undefined
                 )
+                .filter((id): id is string => id !== undefined)
                 .slice(0, 30)
             : [];
           if (!name || patentIds.length === 0) return null;
@@ -174,9 +182,10 @@ export async function synthesizeLandscape(
           const body = typeof obj.body === "string" ? obj.body.trim() : "";
           const patentIds = Array.isArray(obj.patentIds)
             ? obj.patentIds
-                .filter(
-                  (id): id is string => typeof id === "string" && validIds.has(id)
+                .map((id) =>
+                  typeof id === "string" ? baseToFull.get(stripDate(id)) : undefined
                 )
+                .filter((id): id is string => id !== undefined)
                 .slice(0, 10)
             : [];
           if (!title || !body) return null;
