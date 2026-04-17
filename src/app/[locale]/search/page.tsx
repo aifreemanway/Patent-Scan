@@ -21,18 +21,58 @@ export default function SearchPage() {
     questions.map(() => "")
   );
   const [loadingMsg, setLoadingMsg] = useState("");
+  const [loadingHintMsg, setLoadingHintMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
   const canContinue = description.trim().length >= 80;
 
-  function handleNext() {
+  async function handleNext() {
     if (!canContinue) return;
-    setStep("clarify");
+
+    setStep("loading");
+    setLoadingMsg(t("loadingGate"));
+    setLoadingHintMsg(t("loadingGateHint"));
+
+    try {
+      const resp = await fetch("/api/search/gate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: description.trim() }),
+      });
+
+      if (!resp.ok) {
+        setStep("clarify");
+        return;
+      }
+
+      const data = (await resp.json()) as {
+        sufficient?: boolean;
+        reason?: string;
+      };
+
+      if (data.sufficient === true) {
+        const reason = data.reason ?? "";
+        setLoadingMsg(t("gateReason", { reason }));
+        setLoadingHintMsg(t("loadingHint"));
+        await new Promise((r) => setTimeout(r, 1100));
+        await runSearch();
+        return;
+      }
+
+      setStep("clarify");
+    } catch {
+      setStep("clarify");
+    }
   }
 
   async function handleSubmit() {
+    await runSearch();
+  }
+
+  async function runSearch() {
     setStep("loading");
     setLoadingMsg(t("loadingSearch"));
+    setLoadingHintMsg(t("loadingHint"));
 
     try {
       const searchResp = await fetch("/api/search-rospatent", {
@@ -190,7 +230,9 @@ export default function SearchPage() {
               <p className="mt-6 text-lg font-semibold text-slate-900">
                 {loadingMsg || t("loading")}
               </p>
-              <p className="mt-2 text-sm text-slate-500">{t("loadingHint")}</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {loadingHintMsg || t("loadingHint")}
+              </p>
             </section>
           )}
 

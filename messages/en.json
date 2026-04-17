@@ -90,8 +90,11 @@
     "back": "Back",
     "loading": "Building queries and polling patent databases…",
     "loadingHint": "Usually takes 1–2 minutes. Please keep this tab open.",
-    "loadingSearch": "Searching Rospatent…",
+    "loadingGate": "AI is reviewing your description…",
+    "loadingGateHint": "Checking technical features, application area and the problem solved.",
+    "loadingSearch": "Searching Rospatent, EPO, USPTO, JP, CN…",
     "loadingAnalyze": "Analyzing the matches…",
+    "gateReason": "Description accepted: {reason}. Skipping follow-up and starting the search.",
     "errorTitle": "Request failed",
     "errorRetry": "Retry"
   },
