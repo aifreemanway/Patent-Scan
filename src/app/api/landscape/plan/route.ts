@@ -22,9 +22,9 @@ export async function POST(req: Request) {
   }
 
   const topic = (body.topic ?? "").trim();
-  if (topic.length < 40) {
+  if (topic.length < 60) {
     return NextResponse.json(
-      { error: "topic must be at least 40 characters" },
+      { error: "topic must be at least 60 characters" },
       { status: 400 }
     );
   }
