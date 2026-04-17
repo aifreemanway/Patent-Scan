@@ -106,7 +106,7 @@ export async function synthesizeLandscape(
     generationConfig: {
       temperature: 0.4,
       responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 2048 },
+      thinkingConfig: { thinkingBudget: 1024 },
     },
   };
 

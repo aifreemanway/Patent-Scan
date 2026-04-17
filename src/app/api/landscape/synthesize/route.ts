@@ -8,7 +8,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_PATENTS = 200;
+const MAX_PATENTS = 150;
 
 type IncomingPatent = {
   id?: unknown;
@@ -31,7 +31,7 @@ function normalize(p: IncomingPatent): SynthesisPatent | null {
     country: typeof p.country === "string" ? p.country.trim() : "",
     ipc,
     abstract:
-      typeof p.abstract === "string" ? p.abstract.trim().slice(0, 400) : "",
+      typeof p.abstract === "string" ? p.abstract.trim().slice(0, 200) : "",
   };
 }
 
