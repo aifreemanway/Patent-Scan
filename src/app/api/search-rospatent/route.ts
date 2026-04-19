@@ -1,59 +1,29 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { extractSearchTerms } from "@/lib/extract-search-terms";
+import {
+  normalizeHit,
+  resolveIdAndCountry,
+  type NormalizedHit,
+  type PatSearchHit,
+} from "@/lib/patsearch-normalize";
 
 export const runtime = "nodejs";
 
 const TIMEOUT_MS = 30_000;
+const ABSTRACT_LIMIT = 600;
 
 const PATSEARCH_URL =
   "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
 const RU_DATASETS = ["ru_since_1994", "ru_till_1994", "cis"];
 const EN_DATASETS = ["us", "ep", "jp", "cn"];
 
-type PatSearchHit = {
-  id?: string;
-  biblio?: {
-    ru?: { title?: string; abstract?: string };
-    en?: { title?: string; abstract?: string };
-  };
-  common?: {
-    publication_date?: string;
-    classifications?: { ipc?: { fullname?: string }[] };
-  };
-};
-
 type PatSearchResponse = {
   hits?: PatSearchHit[];
   total?: number;
 };
 
-type NormalizedHit = {
-  id: string;
-  title: string;
-  titleRu: string;
-  titleEn: string;
-  year: string;
-  country: string;
-  ipc: string[];
-  url: string;
-  abstract: string;
-  source: string;
-};
-
-function countryFromId(id: string): string {
-  const m = /^([A-Z]{2})/.exec(id);
-  return m ? m[1] : "";
-}
-
-function buildUrl(id: string, country: string): string {
-  if (!id) return "";
-  if (country === "RU") {
-    const num = (/^RU(\d+)/.exec(id)?.[1]) ?? id.replace(/\D/g, "");
-    return `https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=${num}&TypeFile=html`;
-  }
-  return `https://searchplatform.rospatent.gov.ru/docs/${encodeURIComponent(id)}`;
-}
+type EnrichedHit = NormalizedHit & { source: string };
 
 function ipcSubclasses(codes: string[]): string[] {
   const out: string[] = [];
@@ -64,32 +34,11 @@ function ipcSubclasses(codes: string[]): string[] {
   return out;
 }
 
-function normalizeHits(hits: PatSearchHit[]): NormalizedHit[] {
-  return hits.map((h) => {
-    const id = h.id ?? "";
-    const country = countryFromId(id);
-    const pubDate = h.common?.publication_date ?? "";
-    const ipc = (h.common?.classifications?.ipc ?? [])
-      .map((c) => c.fullname ?? "")
-      .filter(Boolean);
-    const titleRu = h.biblio?.ru?.title?.trim() ?? "";
-    const titleEn = h.biblio?.en?.title?.trim() ?? "";
-    const abstract = (h.biblio?.ru?.abstract ?? h.biblio?.en?.abstract ?? "")
-      .trim()
-      .slice(0, 600);
-    return {
-      id,
-      title: titleRu || titleEn,
-      titleRu,
-      titleEn,
-      year: pubDate.slice(0, 4),
-      country,
-      ipc,
-      url: buildUrl(id, country),
-      abstract,
-      source: "patsearch",
-    };
-  });
+function normalizeHits(hits: PatSearchHit[]): EnrichedHit[] {
+  return hits.map((h) => ({
+    ...normalizeHit(h, { abstractLimit: ABSTRACT_LIMIT }),
+    source: "patsearch",
+  }));
 }
 
 async function searchPatSearch(
@@ -271,7 +220,7 @@ export async function POST(req: Request) {
     const seen = new Set<string>();
     const combined: PatSearchHit[] = [];
     for (const h of [...ruHits, ...enHits]) {
-      const id = h.id ?? "";
+      const { id } = resolveIdAndCountry(h);
       if (!id || seen.has(id)) continue;
       seen.add(id);
       combined.push(h);

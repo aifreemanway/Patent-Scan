@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  normalizeHit,
+  type PatSearchHit,
+} from "@/lib/patsearch-normalize";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const TIMEOUT_MS = 30_000;
+const ABSTRACT_LIMIT = 400;
 
 const PATSEARCH_URL =
   "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
@@ -18,36 +23,10 @@ const DEFAULT_DATASETS = [
   "cn",
 ];
 
-type PatSearchHit = {
-  id?: string;
-  biblio?: {
-    ru?: { title?: string; abstract?: string };
-    en?: { title?: string; abstract?: string };
-  };
-  common?: {
-    publication_date?: string;
-    classifications?: { ipc?: { fullname?: string }[] };
-  };
-};
-
 type PatSearchResponse = {
   hits?: PatSearchHit[];
   total?: number;
 };
-
-function countryFromId(id: string): string {
-  const m = /^([A-Z]{2})/.exec(id);
-  return m ? m[1] : "";
-}
-
-function buildUrl(id: string, country: string): string {
-  if (!id) return "";
-  if (country === "RU") {
-    const num = /^RU(\d+)/.exec(id)?.[1] ?? id.replace(/\D/g, "");
-    return `https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=${num}&TypeFile=html`;
-  }
-  return `https://searchplatform.rospatent.gov.ru/docs/${encodeURIComponent(id)}`;
-}
 
 export async function POST(req: Request) {
   const rl = rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "landscape-search" });
@@ -138,30 +117,9 @@ export async function POST(req: Request) {
   }
 
   const raw = (await resp.json()) as PatSearchResponse;
-  const hits = (raw.hits ?? []).map((h) => {
-    const id = h.id ?? "";
-    const country = countryFromId(id);
-    const pubDate = h.common?.publication_date ?? "";
-    const ipc = (h.common?.classifications?.ipc ?? [])
-      .map((c) => c.fullname ?? "")
-      .filter(Boolean);
-    const titleRu = h.biblio?.ru?.title?.trim() ?? "";
-    const titleEn = h.biblio?.en?.title?.trim() ?? "";
-    const abstract = (h.biblio?.ru?.abstract ?? h.biblio?.en?.abstract ?? "")
-      .trim()
-      .slice(0, 400);
-    return {
-      id,
-      title: titleRu || titleEn,
-      titleRu,
-      titleEn,
-      year: pubDate.slice(0, 4),
-      country,
-      ipc,
-      url: buildUrl(id, country),
-      abstract,
-    };
-  });
+  const hits = (raw.hits ?? []).map((h) =>
+    normalizeHit(h, { abstractLimit: ABSTRACT_LIMIT })
+  );
 
   return NextResponse.json({
     qn,

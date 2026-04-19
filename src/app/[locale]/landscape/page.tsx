@@ -73,19 +73,35 @@ export default function LandscapePage() {
         throw new Error("Plan returned no queries");
       }
 
-      // Combine Russian queries (for RU/CIS) and English queries (for US/EP/CN/JP)
-      const allQueries = [
-        ...plan.queries,
-        ...(plan.queriesEn || []),
+      // PatSearch sorts ONLY by similarity when multiple datasets are queried
+      // together — CN hits tend to dominate EN embeddings and push JP/EP/US
+      // out of the top-N. To keep per-region coverage, split each EN query
+      // across three dataset buckets and send RU queries only to RU/CIS.
+      // See docs/NEXT_SESSION.md ("PatSearch sort-bias").
+      const ruQueries = plan.queries ?? [];
+      const enQueries = plan.queriesEn ?? [];
+      const datasetBuckets: { datasets: string[]; queries: string[] }[] = [
+        { datasets: ["ru_since_1994", "ru_till_1994", "cis"], queries: ruQueries },
+        { datasets: ["us", "ep"], queries: enQueries },
+        { datasets: ["jp"], queries: enQueries },
+        { datasets: ["cn"], queries: enQueries },
       ];
 
-      setLoadingMsg(t("loadingSearch", { n: allQueries.length }));
-      const searchPromises = allQueries.map((qn) =>
+      const searchTasks: { qn: string; datasets: string[] }[] = [];
+      for (const bucket of datasetBuckets) {
+        for (const qn of bucket.queries) {
+          searchTasks.push({ qn, datasets: bucket.datasets });
+        }
+      }
+
+      setLoadingMsg(t("loadingSearch", { n: searchTasks.length }));
+      const searchPromises = searchTasks.map(({ qn, datasets }) =>
         fetch("/api/landscape/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             qn,
+            datasets,
             ipcSubclasses: plan.ipcSubclasses,
             limit: 30,
           }),

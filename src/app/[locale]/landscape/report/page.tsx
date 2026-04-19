@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { useSessionJSON } from "@/lib/use-session-json";
 
 type LandscapeHit = {
   id: string;
@@ -89,30 +90,20 @@ function buildMatrix(hits: LandscapeHit[]) {
 
 export default function LandscapeReportPage() {
   const t = useTranslations("LandscapeReport");
-  const [data, setData] = useState<LandscapeData | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const { data, loaded } = useSessionJSON<LandscapeData>("ps_landscape");
 
-  useEffect(() => {
-    const raw = sessionStorage.getItem("ps_landscape");
-    if (raw) {
-      try {
-        setData(JSON.parse(raw));
-      } catch {
-        setData(null);
-      }
-    }
-    setLoaded(true);
-  }, []);
-
-  const hits = data?.hits ?? [];
+  // Stable reference so the useMemo deps below don't invalidate on every
+  // render (was flagged by react-hooks/exhaustive-deps).
+  const hits = useMemo(() => data?.hits ?? [], [data]);
   const grouped = useMemo(() => groupByCountry(hits), [hits]);
   const matrix = useMemo(() => buildMatrix(hits), [hits]);
   const counters = useMemo(() => {
     const total = hits.length;
     const ru = hits.filter((h) => h.country === "RU" || h.country === "SU").length;
     const cn = hits.filter((h) => h.country === "CN").length;
+    const jp = hits.filter((h) => h.country === "JP").length;
     const epus = hits.filter((h) => h.country === "EP" || h.country === "US").length;
-    return { total, ru, cn, epus };
+    return { total, ru, cn, jp, epus };
   }, [hits]);
   const hitById = useMemo(() => {
     const m = new Map<string, LandscapeHit>();
@@ -189,12 +180,13 @@ export default function LandscapeReportPage() {
             </p>
           )}
 
-          {/* 4 counters */}
-          <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {/* 5 counters */}
+          <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {[
               { label: t("counterTotal"), value: counters.total },
               { label: t("counterRu"), value: counters.ru },
               { label: t("counterCn"), value: counters.cn },
+              { label: t("counterJp"), value: counters.jp },
               { label: t("counterEpUs"), value: counters.epus },
             ].map((c) => (
               <div

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { useSessionJSON } from "@/lib/use-session-json";
 
 type ReportPatent = {
   id: string;
@@ -40,20 +40,7 @@ const SIMILARITY_STYLES: Record<string, string> = {
 
 export default function ReportPage() {
   const t = useTranslations("Report");
-  const [data, setData] = useState<ReportData | null>(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const raw = sessionStorage.getItem("ps_report");
-    if (raw) {
-      try {
-        setData(JSON.parse(raw));
-      } catch {
-        setData(null);
-      }
-    }
-    setLoaded(true);
-  }, []);
+  const { data, loaded } = useSessionJSON<ReportData>("ps_report");
 
   if (!loaded) {
     return (
