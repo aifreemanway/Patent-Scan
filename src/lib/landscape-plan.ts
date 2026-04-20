@@ -1,4 +1,5 @@
-import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
+import { GEMINI_TIMEOUT_MS } from "./config";
+import { callGeminiJson } from "./gemini";
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: свободное описание технологической темы (на любом языке).
 
@@ -59,10 +60,6 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
   "overviewSeed": "Переработка бедных оловянных концентратов — задача металлургии цветных металлов, совмещающая обогащение, пиро- и гидрометаллургию для извлечения Sn из сырья с низким содержанием металла и сложным составом примесей."
 }`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
 export type LandscapePlan = {
   queries: string[];
   queriesEn: string[];
@@ -73,53 +70,24 @@ export type LandscapePlan = {
 export async function planLandscape(
   topic: string,
   apiKey: string,
-  timeoutMs = GEMINI_TIMEOUT_MS.plan
+  timeoutMs: number = GEMINI_TIMEOUT_MS.plan
 ): Promise<LandscapePlan> {
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: topic }] }],
-    generationConfig: {
-      temperature: 0.3,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 1024 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!resp.ok) {
-    throw new Error(`Gemini plan failed: ${resp.status}`);
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  const parsed = JSON.parse(cleaned) as {
+  const { data } = await callGeminiJson<{
     queries?: unknown;
     queriesEn?: unknown;
     ipcSubclasses?: unknown;
     overviewSeed?: unknown;
-  };
+  }>({
+    apiKey,
+    systemPrompt: SYSTEM_PROMPT,
+    userText: topic,
+    temperature: 0.3,
+    thinkingBudget: 1024,
+    timeoutMs,
+  });
 
-  const queries = Array.isArray(parsed.queries)
-    ? parsed.queries
+  const queries = Array.isArray(data.queries)
+    ? data.queries
         .filter(
           (q): q is string => typeof q === "string" && q.trim().length >= 5
         )
@@ -127,8 +95,8 @@ export async function planLandscape(
         .slice(0, 5)
     : [];
 
-  const queriesEn = Array.isArray(parsed.queriesEn)
-    ? parsed.queriesEn
+  const queriesEn = Array.isArray(data.queriesEn)
+    ? data.queriesEn
         .filter(
           (q): q is string => typeof q === "string" && q.trim().length >= 5
         )
@@ -136,8 +104,8 @@ export async function planLandscape(
         .slice(0, 5)
     : [];
 
-  const ipcSubclasses = Array.isArray(parsed.ipcSubclasses)
-    ? parsed.ipcSubclasses
+  const ipcSubclasses = Array.isArray(data.ipcSubclasses)
+    ? data.ipcSubclasses
         .filter(
           (c): c is string =>
             typeof c === "string" && /^[A-H]\d{2}[A-Z]$/.test(c.trim())
@@ -147,7 +115,7 @@ export async function planLandscape(
     : [];
 
   const overviewSeed =
-    typeof parsed.overviewSeed === "string" ? parsed.overviewSeed.trim() : "";
+    typeof data.overviewSeed === "string" ? data.overviewSeed.trim() : "";
 
   if (queries.length < 2) {
     throw new Error("Gemini returned fewer than 2 queries");

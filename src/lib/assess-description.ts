@@ -1,4 +1,5 @@
-import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
+import { GEMINI_TIMEOUT_MS } from "./config";
+import { callGeminiJson } from "./gemini";
 
 const SYSTEM_PROMPT = `Ты оцениваешь, достаточно ли пользовательского описания изобретения для патентного поиска БЕЗ уточняющих вопросов.
 
@@ -29,10 +30,6 @@ sufficient=false если:
 Вход: "Система очистки воды с мембранами"
 → {"sufficient": false, "reason": "мало технических деталей, не ясна конкретика мембран"}`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
 export type Assessment = {
   sufficient: boolean;
   reason: string;
@@ -41,53 +38,24 @@ export type Assessment = {
 export async function assessDescription(
   description: string,
   apiKey: string,
-  timeoutMs = GEMINI_TIMEOUT_MS.assess
+  timeoutMs: number = GEMINI_TIMEOUT_MS.assess
 ): Promise<Assessment> {
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: description }] }],
-    generationConfig: {
-      temperature: 0.1,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 512 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!resp.ok) {
-    throw new Error(`Gemini assess failed: ${resp.status}`);
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  const parsed = JSON.parse(cleaned) as {
+  const { data } = await callGeminiJson<{
     sufficient?: unknown;
     reason?: unknown;
-  };
+  }>({
+    apiKey,
+    systemPrompt: SYSTEM_PROMPT,
+    userText: description,
+    temperature: 0.1,
+    thinkingBudget: 512,
+    timeoutMs,
+  });
 
-  const sufficient = parsed.sufficient === true;
+  const sufficient = data.sufficient === true;
   const reason =
-    typeof parsed.reason === "string" && parsed.reason.trim().length > 0
-      ? parsed.reason.trim()
+    typeof data.reason === "string" && data.reason.trim().length > 0
+      ? data.reason.trim()
       : sufficient
         ? "описание достаточно полное"
         : "описание недостаточно подробное";

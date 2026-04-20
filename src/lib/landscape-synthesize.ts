@@ -1,4 +1,5 @@
-import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
+import { GEMINI_TIMEOUT_MS } from "./config";
+import { callGeminiJson } from "./gemini";
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: тема (свободный текст на русском) + список реальных патентов с id, title, year, country, ipc, abstract.
 
@@ -43,10 +44,6 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
 
 Если входных патентов мало (<10) — сделай меньше категорий (3–4) и трендов (2–3), но не выдумывай.`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
 export type LandscapeCategory = {
   name: string;
   description: string;
@@ -78,7 +75,7 @@ export async function synthesizeLandscape(
   topic: string,
   patents: SynthesisPatent[],
   apiKey: string,
-  timeoutMs = GEMINI_TIMEOUT_MS.synthesize
+  timeoutMs: number = GEMINI_TIMEOUT_MS.synthesize
 ): Promise<LandscapeSynthesis> {
   // PatSearch returns ids with date suffix (e.g. "RU2709604C1_20191218")
   // but Gemini strips it to base form ("RU2709604C1") in its response.
@@ -99,53 +96,24 @@ export async function synthesizeLandscape(
     ),
   ].join("\n");
 
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: userText }] }],
-    generationConfig: {
-      temperature: 0.4,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 1024 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!resp.ok) {
-    throw new Error(`Gemini synthesize failed: ${resp.status}`);
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  const parsed = JSON.parse(cleaned) as {
+  const { data } = await callGeminiJson<{
     overview?: unknown;
     categories?: unknown;
     trends?: unknown;
-  };
+  }>({
+    apiKey,
+    systemPrompt: SYSTEM_PROMPT,
+    userText,
+    temperature: 0.4,
+    thinkingBudget: 1024,
+    timeoutMs,
+  });
 
   const overview =
-    typeof parsed.overview === "string" ? parsed.overview.trim() : "";
+    typeof data.overview === "string" ? data.overview.trim() : "";
 
-  const categories = Array.isArray(parsed.categories)
-    ? parsed.categories
+  const categories = Array.isArray(data.categories)
+    ? data.categories
         .map((c): LandscapeCategory | null => {
           if (!c || typeof c !== "object") return null;
           const obj = c as {
@@ -171,8 +139,8 @@ export async function synthesizeLandscape(
         .slice(0, 8)
     : [];
 
-  const trends = Array.isArray(parsed.trends)
-    ? parsed.trends
+  const trends = Array.isArray(data.trends)
+    ? data.trends
         .map((t): LandscapeTrend | null => {
           if (!t || typeof t !== "object") return null;
           const obj = t as {

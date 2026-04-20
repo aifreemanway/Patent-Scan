@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import {
-  GEMINI_URL,
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
   MAX_ANSWERS,
@@ -10,6 +9,11 @@ import {
   RATE_WINDOW_MS,
   RATE_MAX,
 } from "@/lib/config";
+import {
+  callGeminiJson,
+  GeminiError,
+  geminiErrorToStatus,
+} from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -54,10 +58,6 @@ const SYSTEM_PROMPT = `Ты — эксперт-патентовед с опыт�
 - Если abstract аналога пуст — оценивай по title и IPC-классам, отметь это.
 - Язык ответа — тот же, что и у описания изобретения.`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
 type InputPatent = {
   id: string;
   title?: string;
@@ -67,7 +67,7 @@ type InputPatent = {
   ipc?: string[];
 };
 
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<NextResponse> {
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.analyze,
@@ -77,7 +77,10 @@ export async function POST(req: Request) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Service configuration error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Service configuration error" },
+      { status: 500 }
+    );
   }
 
   let body: {
@@ -111,59 +114,36 @@ export async function POST(req: Request) {
     .slice(0, MAX_ANSWERS)
     .map((a) => a.slice(0, MAX_ANSWER_LEN));
 
-  const userParts = [
+  const userText = [
     `ОПИСАНИЕ ИЗОБРЕТЕНИЯ:\n${description}`,
-    answers.length > 0 ? `УТОЧНЕНИЯ:\n${answers.map((a, i) => `${i + 1}. ${a}`).join("\n")}` : "",
+    answers.length > 0
+      ? `УТОЧНЕНИЯ:\n${answers.map((a, i) => `${i + 1}. ${a}`).join("\n")}`
+      : "",
     `НАЙДЕННЫЕ ПАТЕНТЫ (JSON):\n${JSON.stringify(patents, null, 2)}`,
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: userParts }] }],
-    generationConfig: {
+  try {
+    const { data } = await callGeminiJson({
+      apiKey,
+      systemPrompt: SYSTEM_PROMPT,
+      userText,
       temperature: 0.3,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 1024 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS.analyze);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
+      thinkingBudget: 1024,
+      timeoutMs: GEMINI_TIMEOUT_MS.analyze,
     });
-  } catch {
-    return NextResponse.json({ error: "Analysis service unavailable" }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!resp.ok) {
-    return NextResponse.json({ error: "Analysis service error" }, { status: 502 });
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
+    return NextResponse.json(data);
+  } catch (e) {
+    if (e instanceof GeminiError) {
+      return NextResponse.json(
+        { error: "Analysis service error" },
+        { status: geminiErrorToStatus(e) }
+      );
+    }
     return NextResponse.json(
-      { error: "Analysis returned invalid response" },
+      { error: "Analysis service unavailable" },
       { status: 502 }
     );
   }
-
-  return NextResponse.json(parsed);
 }
