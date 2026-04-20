@@ -82,3 +82,31 @@ export const RATE_MAX = {
   landscapeSearch: 20,
   landscapeSynthesize: 5,
 } as const;
+
+// --- Per-user quotas (month, by tier) ---
+//
+// Must stay in sync with `public.increment_usage()` function in
+// supabase/migrations/0001_auth_and_quotas.sql. If you change numbers here,
+// update the migration (and run it) too. This constant is for reference only;
+// enforcement happens in Postgres for atomicity.
+
+export const QUOTA_LIMITS = {
+  free: {
+    search: 3,
+    landscape: 3,
+    analyze: 3,
+    questions: Infinity, // cheap, unquota'd
+  },
+  pro: {
+    search: 500,
+    landscape: 100,
+    analyze: 500,
+    questions: Infinity,
+  },
+  enterprise: {
+    search: Infinity,
+    landscape: Infinity,
+    analyze: Infinity,
+    questions: Infinity,
+  },
+} as const;
