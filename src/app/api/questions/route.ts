@@ -6,6 +6,7 @@ export const runtime = "nodejs";
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 const TIMEOUT_MS = 30_000;
+const MAX_DESCRIPTION_LEN = 50_000;
 
 const SYSTEM_PROMPT = `Ты — ассистент патентного поиска. На вход получаешь описание изобретения (на любом языке).
 
@@ -30,7 +31,7 @@ type GeminiResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "questions" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "questions" });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -52,6 +53,12 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+  if (description.length > MAX_DESCRIPTION_LEN) {
+    return NextResponse.json(
+      { error: `description must be at most ${MAX_DESCRIPTION_LEN} characters` },
+      { status: 413 }
+    );
+  }
 
   const payload = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -68,9 +75,12 @@ export async function POST(req: Request) {
 
   let resp: Response;
   try {
-    resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    resp = await fetch(GEMINI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
     });

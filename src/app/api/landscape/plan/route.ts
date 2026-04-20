@@ -5,8 +5,10 @@ import { planLandscape } from "@/lib/landscape-plan";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const MAX_TOPIC_LEN = 50_000;
+
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "landscape-plan" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "landscape-plan" });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -26,6 +28,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "topic must be at least 60 characters" },
       { status: 400 }
+    );
+  }
+  if (topic.length > MAX_TOPIC_LEN) {
+    return NextResponse.json(
+      { error: `topic must be at most ${MAX_TOPIC_LEN} characters` },
+      { status: 413 }
     );
   }
 

@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_PATENTS = 150;
+const MAX_TOPIC_LEN = 50_000;
 
 type IncomingPatent = {
   id?: unknown;
@@ -36,7 +37,7 @@ function normalize(p: IncomingPatent): SynthesisPatent | null {
 }
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, {
+  const rl = await rateLimit(req, {
     windowMs: 60_000,
     max: 5,
     keyPrefix: "landscape-synthesize",
@@ -63,6 +64,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "topic must be at least 40 characters" },
       { status: 400 }
+    );
+  }
+  if (topic.length > MAX_TOPIC_LEN) {
+    return NextResponse.json(
+      { error: `topic must be at most ${MAX_TOPIC_LEN} characters` },
+      { status: 413 }
     );
   }
 
