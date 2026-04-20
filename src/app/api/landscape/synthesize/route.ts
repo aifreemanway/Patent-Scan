@@ -4,12 +4,15 @@ import {
   synthesizeLandscape,
   type SynthesisPatent,
 } from "@/lib/landscape-synthesize";
+import {
+  MAX_DESCRIPTION_LEN,
+  MAX_PATENTS_SYNTHESIZE,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const MAX_PATENTS = 150;
-const MAX_TOPIC_LEN = 50_000;
 
 type IncomingPatent = {
   id?: unknown;
@@ -38,8 +41,8 @@ function normalize(p: IncomingPatent): SynthesisPatent | null {
 
 export async function POST(req: Request) {
   const rl = await rateLimit(req, {
-    windowMs: 60_000,
-    max: 5,
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.landscapeSynthesize,
     keyPrefix: "landscape-synthesize",
   });
   if (rl) return rl;
@@ -66,9 +69,9 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (topic.length > MAX_TOPIC_LEN) {
+  if (topic.length > MAX_DESCRIPTION_LEN) {
     return NextResponse.json(
-      { error: `topic must be at most ${MAX_TOPIC_LEN} characters` },
+      { error: `topic must be at most ${MAX_DESCRIPTION_LEN} characters` },
       { status: 413 }
     );
   }
@@ -87,7 +90,7 @@ export async function POST(req: Request) {
     if (!n || seen.has(n.id)) continue;
     seen.add(n.id);
     patents.push(n);
-    if (patents.length >= MAX_PATENTS) break;
+    if (patents.length >= MAX_PATENTS_SYNTHESIZE) break;
   }
 
   if (patents.length === 0) {

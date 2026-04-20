@@ -4,26 +4,19 @@ import {
   normalizeHit,
   type PatSearchHit,
 } from "@/lib/patsearch-normalize";
+import {
+  PATSEARCH_URL,
+  PATSEARCH_TIMEOUT_MS,
+  PATSEARCH_ABSTRACT_LIMIT,
+  PATSEARCH_DATASETS_ALL,
+  PATSEARCH_DATASETS_ALLOWED,
+  MAX_QN_LEN,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const TIMEOUT_MS = 30_000;
-const ABSTRACT_LIMIT = 400;
-const MAX_QN_LEN = 10_000;
-
-const PATSEARCH_URL =
-  "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
-const DEFAULT_DATASETS = [
-  "ru_since_1994",
-  "ru_till_1994",
-  "cis",
-  "us",
-  "ep",
-  "jp",
-  "cn",
-];
-const ALLOWED_DATASETS = new Set<string>(DEFAULT_DATASETS);
 
 type PatSearchResponse = {
   hits?: PatSearchHit[];
@@ -31,7 +24,11 @@ type PatSearchResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "landscape-search" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.landscapeSearch,
+    keyPrefix: "landscape-search",
+  });
   if (rl) return rl;
 
   const token = process.env.PATSEARCH_TOKEN;
@@ -65,10 +62,10 @@ export async function POST(req: Request) {
   const limit = Math.min(Math.max(body.limit ?? 30, 1), 50);
   const userDatasets = Array.isArray(body.datasets)
     ? body.datasets.filter(
-        (d): d is string => typeof d === "string" && ALLOWED_DATASETS.has(d)
+        (d): d is string => typeof d === "string" && PATSEARCH_DATASETS_ALLOWED.has(d)
       )
     : [];
-  const datasets = userDatasets.length > 0 ? userDatasets : DEFAULT_DATASETS;
+  const datasets = userDatasets.length > 0 ? userDatasets : PATSEARCH_DATASETS_ALL;
   const subclasses = (body.ipcSubclasses ?? [])
     .filter((c) => typeof c === "string" && /^[A-H]\d{2}[A-Z]$/.test(c.trim()))
     .map((c) => c.trim());
@@ -88,7 +85,7 @@ export async function POST(req: Request) {
   }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), PATSEARCH_TIMEOUT_MS);
 
   let resp: Response;
   try {
@@ -130,7 +127,7 @@ export async function POST(req: Request) {
 
   const raw = (await resp.json()) as PatSearchResponse;
   const hits = (raw.hits ?? []).map((h) =>
-    normalizeHit(h, { abstractLimit: ABSTRACT_LIMIT })
+    normalizeHit(h, { abstractLimit: PATSEARCH_ABSTRACT_LIMIT.landscape })
   );
 
   return NextResponse.json({

@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  GEMINI_URL,
+  GEMINI_TIMEOUT_MS,
+  MAX_DESCRIPTION_LEN,
+  MAX_ANSWERS,
+  MAX_ANSWER_LEN,
+  MAX_PATENTS_ANALYZE,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
-
-const TIMEOUT_MS = 90_000;
-const MAX_DESCRIPTION_LEN = 50_000;
-const MAX_ANSWERS = 20;
-const MAX_ANSWER_LEN = 5_000;
-
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
 const SYSTEM_PROMPT = `Ты — эксперт-патентовед с опытом подготовки заключений о патентной чистоте. На вход: описание изобретения и список найденных патентов/публикаций из открытых баз (Роспатент, EPO, USPTO).
 
@@ -66,7 +68,11 @@ type InputPatent = {
 };
 
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "analyze" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.analyze,
+    keyPrefix: "analyze",
+  });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -99,7 +105,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const patents = (body.patents ?? []).slice(0, 30);
+  const patents = (body.patents ?? []).slice(0, MAX_PATENTS_ANALYZE);
   const answers = (body.answers ?? [])
     .filter((a) => a && a.trim().length > 0)
     .slice(0, MAX_ANSWERS)
@@ -122,7 +128,7 @@ export async function POST(req: Request) {
   };
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS.analyze);
 
   let resp: Response;
   try {

@@ -1,5 +1,4 @@
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: свободное описание технологической темы (на любом языке).
 
@@ -74,7 +73,7 @@ export type LandscapePlan = {
 export async function planLandscape(
   topic: string,
   apiKey: string,
-  timeoutMs = 30_000
+  timeoutMs = GEMINI_TIMEOUT_MS.plan
 ): Promise<LandscapePlan> {
   const payload = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },

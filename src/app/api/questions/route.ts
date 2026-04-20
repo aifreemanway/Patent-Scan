@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  GEMINI_URL,
+  GEMINI_TIMEOUT_MS,
+  MAX_DESCRIPTION_LEN,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-const TIMEOUT_MS = 30_000;
-const MAX_DESCRIPTION_LEN = 50_000;
 
 const SYSTEM_PROMPT = `Ты — ассистент патентного поиска. На вход получаешь описание изобретения (на любом языке).
 
@@ -32,7 +34,11 @@ type GeminiResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "questions" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.questions,
+    keyPrefix: "questions",
+  });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -72,7 +78,7 @@ export async function POST(req: Request) {
   };
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS.questions);
 
   let resp: Response;
   try {

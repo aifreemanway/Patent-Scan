@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { planLandscape } from "@/lib/landscape-plan";
+import {
+  MAX_DESCRIPTION_LEN,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const MAX_TOPIC_LEN = 50_000;
-
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "landscape-plan" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.landscapePlan,
+    keyPrefix: "landscape-plan",
+  });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -30,9 +37,9 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (topic.length > MAX_TOPIC_LEN) {
+  if (topic.length > MAX_DESCRIPTION_LEN) {
     return NextResponse.json(
-      { error: `topic must be at most ${MAX_TOPIC_LEN} characters` },
+      { error: `topic must be at most ${MAX_DESCRIPTION_LEN} characters` },
       { status: 413 }
     );
   }

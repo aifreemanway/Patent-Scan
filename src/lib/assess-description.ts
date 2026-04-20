@@ -1,5 +1,4 @@
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
 
 const SYSTEM_PROMPT = `Ты оцениваешь, достаточно ли пользовательского описания изобретения для патентного поиска БЕЗ уточняющих вопросов.
 
@@ -42,7 +41,7 @@ export type Assessment = {
 export async function assessDescription(
   description: string,
   apiKey: string,
-  timeoutMs = 15_000
+  timeoutMs = GEMINI_TIMEOUT_MS.assess
 ): Promise<Assessment> {
   const payload = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
