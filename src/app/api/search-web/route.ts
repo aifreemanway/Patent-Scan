@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import {
+  TAVILY_URL,
+  TAVILY_TIMEOUT_MS,
+  MAX_WEB_QUERY_LEN,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
-
-const TIMEOUT_MS = 30_000;
-const MAX_QUERY_LEN = 2_000;
-
-const TAVILY_URL = "https://api.tavily.com/search";
+export const maxDuration = 60;
 
 const INCLUDE_DOMAINS = [
   "reddit.com",
@@ -33,7 +36,11 @@ type TavilyResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "web" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.searchWeb,
+    keyPrefix: "web",
+  });
   if (rl) return rl;
 
   const apiKey = process.env.TAVILY_API_KEY;
@@ -55,9 +62,9 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (query.length > MAX_QUERY_LEN) {
+  if (query.length > MAX_WEB_QUERY_LEN) {
     return NextResponse.json(
-      { error: `query must be at most ${MAX_QUERY_LEN} characters` },
+      { error: `query must be at most ${MAX_WEB_QUERY_LEN} characters` },
       { status: 413 }
     );
   }
@@ -74,7 +81,7 @@ export async function POST(req: Request) {
   };
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), TAVILY_TIMEOUT_MS);
 
   let resp: Response;
   try {

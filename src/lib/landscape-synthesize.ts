@@ -1,5 +1,4 @@
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: тема (свободный текст на русском) + список реальных патентов с id, title, year, country, ipc, abstract.
 
@@ -79,7 +78,7 @@ export async function synthesizeLandscape(
   topic: string,
   patents: SynthesisPatent[],
   apiKey: string,
-  timeoutMs = 50_000
+  timeoutMs = GEMINI_TIMEOUT_MS.synthesize
 ): Promise<LandscapeSynthesis> {
   // PatSearch returns ids with date suffix (e.g. "RU2709604C1_20191218")
   // but Gemini strips it to base form ("RU2709604C1") in its response.

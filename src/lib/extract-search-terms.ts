@@ -1,5 +1,4 @@
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
 
 const SYSTEM_PROMPT = `Ты — патентный поисковик. На вход: описание изобретения (может быть длинным, на любом языке).
 
@@ -46,7 +45,7 @@ export type SearchTerms = {
 export async function extractSearchTerms(
   description: string,
   apiKey: string,
-  timeoutMs = 20_000
+  timeoutMs = GEMINI_TIMEOUT_MS.extract
 ): Promise<SearchTerms> {
   const payload = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },

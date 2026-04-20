@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { assessDescription } from "@/lib/assess-description";
+import { RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const MIN_LEN_FOR_GEMINI = 150;
 
 export async function POST(req: Request) {
   const limited = await rateLimit(req, {
-    windowMs: 60_000,
-    max: 30,
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.gate,
     keyPrefix: "gate",
   });
   if (limited) return limited;

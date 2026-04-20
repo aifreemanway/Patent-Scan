@@ -7,18 +7,20 @@ import {
   type NormalizedHit,
   type PatSearchHit,
 } from "@/lib/patsearch-normalize";
+import {
+  PATSEARCH_URL,
+  PATSEARCH_TIMEOUT_MS,
+  PATSEARCH_ABSTRACT_LIMIT,
+  PATSEARCH_DATASETS_RU,
+  PATSEARCH_DATASETS_EN,
+  PATSEARCH_DATASETS_ALLOWED,
+  MAX_DESCRIPTION_LEN,
+  RATE_WINDOW_MS,
+  RATE_MAX,
+} from "@/lib/config";
 
 export const runtime = "nodejs";
-
-const TIMEOUT_MS = 30_000;
-const ABSTRACT_LIMIT = 600;
-const MAX_QUERY_LEN = 50_000;
-
-const PATSEARCH_URL =
-  "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
-const RU_DATASETS = ["ru_since_1994", "ru_till_1994", "cis"];
-const EN_DATASETS = ["us", "ep", "jp", "cn"];
-const ALLOWED_DATASETS = new Set<string>([...RU_DATASETS, ...EN_DATASETS]);
+export const maxDuration = 90;
 
 type PatSearchResponse = {
   hits?: PatSearchHit[];
@@ -38,7 +40,7 @@ function ipcSubclasses(codes: string[]): string[] {
 
 function normalizeHits(hits: PatSearchHit[]): EnrichedHit[] {
   return hits.map((h) => ({
-    ...normalizeHit(h, { abstractLimit: ABSTRACT_LIMIT }),
+    ...normalizeHit(h, { abstractLimit: PATSEARCH_ABSTRACT_LIMIT.search }),
     source: "patsearch",
   }));
 }
@@ -83,7 +85,11 @@ async function searchPatSearch(
 }
 
 export async function POST(req: Request) {
-  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "search" });
+  const rl = await rateLimit(req, {
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX.searchRospatent,
+    keyPrefix: "search",
+  });
   if (rl) return rl;
 
   const token = process.env.PATSEARCH_TOKEN;
@@ -112,9 +118,9 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  if (query.length > MAX_QUERY_LEN) {
+  if (query.length > MAX_DESCRIPTION_LEN) {
     return NextResponse.json(
-      { error: `query must be at most ${MAX_QUERY_LEN} characters` },
+      { error: `query must be at most ${MAX_DESCRIPTION_LEN} characters` },
       { status: 413 }
     );
   }
@@ -151,13 +157,13 @@ export async function POST(req: Request) {
 
   const userDatasets = Array.isArray(body.datasets)
     ? body.datasets.filter(
-        (d): d is string => typeof d === "string" && ALLOWED_DATASETS.has(d)
+        (d): d is string => typeof d === "string" && PATSEARCH_DATASETS_ALLOWED.has(d)
       )
     : [];
   const useUserDatasets = userDatasets.length > 0;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), PATSEARCH_TIMEOUT_MS);
 
   try {
     if (useUserDatasets) {
@@ -194,7 +200,7 @@ export async function POST(req: Request) {
       qn,
       limit: perBranchLimit,
       offset: 0,
-      datasets: RU_DATASETS,
+      datasets: PATSEARCH_DATASETS_RU,
       include_facets: false,
       highlight,
     };
@@ -202,7 +208,7 @@ export async function POST(req: Request) {
       qn: qnEn,
       limit: perBranchLimit,
       offset: 0,
-      datasets: EN_DATASETS,
+      datasets: PATSEARCH_DATASETS_EN,
       include_facets: false,
       highlight,
     };
