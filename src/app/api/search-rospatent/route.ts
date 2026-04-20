@@ -12,11 +12,13 @@ export const runtime = "nodejs";
 
 const TIMEOUT_MS = 30_000;
 const ABSTRACT_LIMIT = 600;
+const MAX_QUERY_LEN = 50_000;
 
 const PATSEARCH_URL =
   "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
 const RU_DATASETS = ["ru_since_1994", "ru_till_1994", "cis"];
 const EN_DATASETS = ["us", "ep", "jp", "cn"];
+const ALLOWED_DATASETS = new Set<string>([...RU_DATASETS, ...EN_DATASETS]);
 
 type PatSearchResponse = {
   hits?: PatSearchHit[];
@@ -81,7 +83,7 @@ async function searchPatSearch(
 }
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "search" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "search" });
   if (rl) return rl;
 
   const token = process.env.PATSEARCH_TOKEN;
@@ -108,6 +110,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "query must be at least 2 characters" },
       { status: 400 }
+    );
+  }
+  if (query.length > MAX_QUERY_LEN) {
+    return NextResponse.json(
+      { error: `query must be at most ${MAX_QUERY_LEN} characters` },
+      { status: 413 }
     );
   }
 
@@ -141,15 +149,18 @@ export async function POST(req: Request) {
     ? { "classification.ipc_subclass": { values: subclasses } }
     : undefined;
 
-  const userDatasets = body.datasets && body.datasets.length > 0
-    ? body.datasets
-    : null;
+  const userDatasets = Array.isArray(body.datasets)
+    ? body.datasets.filter(
+        (d): d is string => typeof d === "string" && ALLOWED_DATASETS.has(d)
+      )
+    : [];
+  const useUserDatasets = userDatasets.length > 0;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
   try {
-    if (userDatasets) {
+    if (useUserDatasets) {
       const payload: Record<string, unknown> = {
         qn,
         limit,

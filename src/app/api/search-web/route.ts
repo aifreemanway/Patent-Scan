@@ -4,6 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 
 const TIMEOUT_MS = 30_000;
+const MAX_QUERY_LEN = 2_000;
 
 const TAVILY_URL = "https://api.tavily.com/search";
 
@@ -32,7 +33,7 @@ type TavilyResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "web" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "web" });
   if (rl) return rl;
 
   const apiKey = process.env.TAVILY_API_KEY;
@@ -52,6 +53,12 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "query must be at least 3 characters" },
       { status: 400 }
+    );
+  }
+  if (query.length > MAX_QUERY_LEN) {
+    return NextResponse.json(
+      { error: `query must be at most ${MAX_QUERY_LEN} characters` },
+      { status: 413 }
     );
   }
 

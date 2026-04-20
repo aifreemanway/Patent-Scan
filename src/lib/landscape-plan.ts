@@ -91,9 +91,12 @@ export async function planLandscape(
 
   let resp: Response;
   try {
-    resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    resp = await fetch(GEMINI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
     });

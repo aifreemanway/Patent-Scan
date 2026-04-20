@@ -10,6 +10,7 @@ export const maxDuration = 60;
 
 const TIMEOUT_MS = 30_000;
 const ABSTRACT_LIMIT = 400;
+const MAX_QN_LEN = 10_000;
 
 const PATSEARCH_URL =
   "https://searchplatform.rospatent.gov.ru/patsearch/v0.2/search";
@@ -22,6 +23,7 @@ const DEFAULT_DATASETS = [
   "jp",
   "cn",
 ];
+const ALLOWED_DATASETS = new Set<string>(DEFAULT_DATASETS);
 
 type PatSearchResponse = {
   hits?: PatSearchHit[];
@@ -29,7 +31,7 @@ type PatSearchResponse = {
 };
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "landscape-search" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 20, keyPrefix: "landscape-search" });
   if (rl) return rl;
 
   const token = process.env.PATSEARCH_TOKEN;
@@ -53,10 +55,20 @@ export async function POST(req: Request) {
   if (qn.length < 3) {
     return NextResponse.json({ error: "qn must be at least 3 characters" }, { status: 400 });
   }
+  if (qn.length > MAX_QN_LEN) {
+    return NextResponse.json(
+      { error: `qn must be at most ${MAX_QN_LEN} characters` },
+      { status: 413 }
+    );
+  }
 
   const limit = Math.min(Math.max(body.limit ?? 30, 1), 50);
-  const datasets =
-    body.datasets && body.datasets.length > 0 ? body.datasets : DEFAULT_DATASETS;
+  const userDatasets = Array.isArray(body.datasets)
+    ? body.datasets.filter(
+        (d): d is string => typeof d === "string" && ALLOWED_DATASETS.has(d)
+      )
+    : [];
+  const datasets = userDatasets.length > 0 ? userDatasets : DEFAULT_DATASETS;
   const subclasses = (body.ipcSubclasses ?? [])
     .filter((c) => typeof c === "string" && /^[A-H]\d{2}[A-Z]$/.test(c.trim()))
     .map((c) => c.trim());

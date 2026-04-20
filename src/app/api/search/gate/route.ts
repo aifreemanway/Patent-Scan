@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const MIN_LEN_FOR_GEMINI = 150;
 
 export async function POST(req: Request) {
-  const limited = rateLimit(req, {
+  const limited = await rateLimit(req, {
     windowMs: 60_000,
     max: 30,
     keyPrefix: "gate",

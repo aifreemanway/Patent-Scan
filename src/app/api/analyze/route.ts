@@ -4,6 +4,9 @@ import { rateLimit } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 
 const TIMEOUT_MS = 90_000;
+const MAX_DESCRIPTION_LEN = 50_000;
+const MAX_ANSWERS = 20;
+const MAX_ANSWER_LEN = 5_000;
 
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -62,7 +65,7 @@ type InputPatent = {
 };
 
 export async function POST(req: Request) {
-  const rl = rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "analyze" });
+  const rl = await rateLimit(req, { windowMs: 60_000, max: 5, keyPrefix: "analyze" });
   if (rl) return rl;
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -88,9 +91,18 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+  if (description.length > MAX_DESCRIPTION_LEN) {
+    return NextResponse.json(
+      { error: `description must be at most ${MAX_DESCRIPTION_LEN} characters` },
+      { status: 413 }
+    );
+  }
 
   const patents = (body.patents ?? []).slice(0, 30);
-  const answers = (body.answers ?? []).filter((a) => a && a.trim().length > 0);
+  const answers = (body.answers ?? [])
+    .filter((a) => a && a.trim().length > 0)
+    .slice(0, MAX_ANSWERS)
+    .map((a) => a.slice(0, MAX_ANSWER_LEN));
 
   const userParts = [
     `ОПИСАНИЕ ИЗОБРЕТЕНИЯ:\n${description}`,
@@ -113,9 +125,12 @@ export async function POST(req: Request) {
 
   let resp: Response;
   try {
-    resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    resp = await fetch(GEMINI_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
     });
