@@ -1,4 +1,5 @@
-import { GEMINI_URL, GEMINI_TIMEOUT_MS } from "./config";
+import { GEMINI_TIMEOUT_MS } from "./config";
+import { callGeminiJson } from "./gemini";
 
 const SYSTEM_PROMPT = `Ты — патентный поисковик. На вход: описание изобретения (может быть длинным, на любом языке).
 
@@ -32,10 +33,6 @@ const SYSTEM_PROMPT = `Ты — патентный поисковик. На вх
   "ipcCodes": ["G01R 31/34", "H02H 7/09"]
 }`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
 export type SearchTerms = {
   qn: string;
   qnEn: string;
@@ -45,54 +42,25 @@ export type SearchTerms = {
 export async function extractSearchTerms(
   description: string,
   apiKey: string,
-  timeoutMs = GEMINI_TIMEOUT_MS.extract
+  timeoutMs: number = GEMINI_TIMEOUT_MS.extract
 ): Promise<SearchTerms> {
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: description }] }],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 512 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-
-  if (!resp.ok) {
-    throw new Error(`Gemini extract failed: ${resp.status}`);
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  const parsed = JSON.parse(cleaned) as {
+  const { data } = await callGeminiJson<{
     qn?: unknown;
     qnEn?: unknown;
     ipcCodes?: unknown;
-  };
+  }>({
+    apiKey,
+    systemPrompt: SYSTEM_PROMPT,
+    userText: description,
+    temperature: 0.2,
+    thinkingBudget: 512,
+    timeoutMs,
+  });
 
-  const qn = typeof parsed.qn === "string" ? parsed.qn.trim() : "";
-  const qnEn = typeof parsed.qnEn === "string" ? parsed.qnEn.trim() : "";
-  const ipcCodes = Array.isArray(parsed.ipcCodes)
-    ? parsed.ipcCodes.filter(
+  const qn = typeof data.qn === "string" ? data.qn.trim() : "";
+  const qnEn = typeof data.qnEn === "string" ? data.qnEn.trim() : "";
+  const ipcCodes = Array.isArray(data.ipcCodes)
+    ? data.ipcCodes.filter(
         (c): c is string => typeof c === "string" && c.trim().length > 0
       )
     : [];

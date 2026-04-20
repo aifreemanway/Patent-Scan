@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import {
-  GEMINI_URL,
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
   RATE_WINDOW_MS,
   RATE_MAX,
 } from "@/lib/config";
+import {
+  callGeminiJson,
+  GeminiError,
+  geminiErrorToStatus,
+} from "@/lib/gemini";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,11 +33,7 @@ const SYSTEM_PROMPT = `Ты — ассистент патентного поис
 Верни СТРОГО валидный JSON:
 { "questions": ["вопрос 1", "вопрос 2", "вопрос 3"] }`;
 
-type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-};
-
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<NextResponse> {
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.questions,
@@ -43,7 +43,10 @@ export async function POST(req: Request) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "Service configuration error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Service configuration error" },
+      { status: 500 }
+    );
   }
 
   let body: { description?: string };
@@ -67,58 +70,40 @@ export async function POST(req: Request) {
     );
   }
 
-  const payload = {
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts: [{ text: description }] }],
-    generationConfig: {
+  try {
+    const { data } = await callGeminiJson<{ questions?: unknown }>({
+      apiKey,
+      systemPrompt: SYSTEM_PROMPT,
+      userText: description,
       temperature: 0.4,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget: 512 },
-    },
-  };
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS.questions);
-
-  let resp: Response;
-  try {
-    resp = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
+      thinkingBudget: 512,
+      timeoutMs: GEMINI_TIMEOUT_MS.questions,
     });
-  } catch {
-    return NextResponse.json({ error: "Questions service unavailable" }, { status: 502 });
-  } finally {
-    clearTimeout(timer);
+
+    const questions = Array.isArray(data.questions)
+      ? data.questions.filter(
+          (q): q is string => typeof q === "string" && q.trim().length > 0
+        )
+      : [];
+
+    if (questions.length === 0) {
+      return NextResponse.json(
+        { error: "No questions generated" },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({ questions });
+  } catch (e) {
+    if (e instanceof GeminiError) {
+      return NextResponse.json(
+        { error: "Questions service error" },
+        { status: geminiErrorToStatus(e) }
+      );
+    }
+    return NextResponse.json(
+      { error: "Questions service unavailable" },
+      { status: 502 }
+    );
   }
-
-  if (!resp.ok) {
-    return NextResponse.json({ error: "Questions service error" }, { status: 502 });
-  }
-
-  const raw = (await resp.json()) as GeminiResponse;
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
-  let parsed: { questions?: unknown };
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    return NextResponse.json({ error: "Invalid response from questions service" }, { status: 502 });
-  }
-
-  const questions = Array.isArray(parsed.questions)
-    ? parsed.questions.filter((q): q is string => typeof q === "string" && q.trim().length > 0)
-    : [];
-
-  if (questions.length === 0) {
-    return NextResponse.json({ error: "No questions generated" }, { status: 502 });
-  }
-
-  return NextResponse.json({ questions });
 }
