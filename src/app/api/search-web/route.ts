@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const TIMEOUT_MS = 30_000;
 const MAX_QUERY_LEN = 2_000;

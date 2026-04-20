@@ -3,6 +3,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { assessDescription } from "@/lib/assess-description";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const MIN_LEN_FOR_GEMINI = 150;
 

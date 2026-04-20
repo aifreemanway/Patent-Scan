@@ -9,6 +9,7 @@ import {
 } from "@/lib/patsearch-normalize";
 
 export const runtime = "nodejs";
+export const maxDuration = 90;
 
 const TIMEOUT_MS = 30_000;
 const ABSTRACT_LIMIT = 600;
