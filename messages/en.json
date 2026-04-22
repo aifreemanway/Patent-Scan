@@ -180,7 +180,7 @@
       "subtitle": "Enter your email — we'll send a sign-in link. No password needed.",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
-      "consent": "I agree to the processing of personal data and accept the terms of use.",
+      "consent": "I agree to the processing of personal data for the purpose of sign-in and service delivery.",
       "consentRequired": "Please confirm your consent to continue.",
       "captchaLoading": "Verifying you're human…",
       "submit": "Send sign-in link",
