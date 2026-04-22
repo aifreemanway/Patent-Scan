@@ -173,5 +173,40 @@
     "emptyTitle": "No patents found",
     "emptyBody": "Patent databases returned no relevant publications for this topic. Try rephrasing — add key terms or the application area.",
     "emptyCta": "New search"
+  },
+  "Auth": {
+    "login": {
+      "title": "Sign in to Patent-Scan",
+      "subtitle": "Enter your email — we'll send a sign-in link. No password needed.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@example.com",
+      "consent": "I agree to the processing of personal data and accept the terms of use.",
+      "consentRequired": "Please confirm your consent to continue.",
+      "captchaLoading": "Verifying you're human…",
+      "submit": "Send sign-in link",
+      "submitting": "Sending…",
+      "successTitle": "Check your email",
+      "successBody": "We sent a sign-in link to {email}. Open it in the same browser — you'll be signed in automatically.",
+      "errors": {
+        "generic": "Couldn't send the link. Please try again.",
+        "invalid_format": "Invalid email format.",
+        "disposable_email": "Disposable email addresses aren't supported. Please use a regular email.",
+        "no_mx_record": "This domain can't receive mail. Please check the address.",
+        "captcha_missing": "Bot check failed to load. Please refresh the page.",
+        "captcha_failed": "Bot check failed. Please refresh the page.",
+        "otp_send_failed": "Email service temporarily unavailable. Try again in a minute.",
+        "rate_limited": "Too many attempts from this IP. Try again tomorrow."
+      }
+    },
+    "callback": {
+      "verifying": "Completing sign-in…",
+      "errorTitle": "Link is invalid",
+      "errorBody": "The link may have expired or already been used. Please try again.",
+      "retry": "Request a new link"
+    },
+    "header": {
+      "login": "Sign in",
+      "logout": "Sign out"
+    }
   }
 }

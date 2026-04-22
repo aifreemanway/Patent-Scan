@@ -2,7 +2,7 @@
 
 **Единая точка входа для любого AI-агента или нового разработчика.** Если ты только открыл репозиторий — прочитай этот файл целиком, потом переходи к ссылкам ниже. Файл версионируется в git, читается независимо от cwd или памяти агента.
 
-**Последнее обновление:** 2026-04-20
+**Последнее обновление:** 2026-04-22
 
 ---
 
@@ -19,8 +19,9 @@
 - **Next.js 16.2.3** (App Router, Turbopack) — `web/`
 - **React 19.2.4**, **next-intl 4.9.1** для i18n (ru + en)
 - **TypeScript strict**, **Tailwind 4**, **ESLint 9**
-- **Vercel** — хостинг + CDN + serverless functions
+- **Хостинг:** Vercel (временно до B1), далее **Timeweb VPS МСК** (2CPU/4GB/50GB NVMe, ~1300₽/мес). Решение 2026-04-22 — см. раздел 8.
 - **Supabase** — auth (magic link) + Postgres + RLS
+- **Resend** — transactional email для magic-link (custom SMTP в Supabase Auth). Free 3000/мес.
 - **Upstash Redis** — persistent rate-limit
 - **Cloudflare Turnstile** — анти-бот на signup (Managed mode)
 - **Gemini 2.5-flash** — AI (анализ, извлечение запросов, синтез)
@@ -102,21 +103,37 @@
 ## 8. Что осталось до платного запуска
 
 ### B1 Этапы 3 + 3.5 + 4 (~1.5-2 дня)
-1. **Этап 3** — magic-link login UI + middleware guard + logout
-2. **Этап 3.5 — Анти-абуз:** Turnstile + disposable-email blocklist + per-IP signup throttle + verified-email check в `requireVerifiedUser`
-3. **Этап 4** — миграция `sessionStorage` → `searches` table + `requireVerifiedUser` + `checkAndChargeQuota` во всех API routes (402 при превышении квоты)
+1. **Custom SMTP (обязательно)** — Resend account + DNS (SPF/DKIM) + Supabase Auth SMTP settings. Без этого Supabase Free даёт 3 email/час = блокер.
+2. **Этап 3** — magic-link login UI + middleware guard + logout
+3. **Этап 3.5 — Анти-абуз:** Turnstile + disposable-email blocklist + per-IP signup throttle + verified-email check в `requireVerifiedUser`
+4. **Этап 4** — миграция `sessionStorage` → `searches` table + `requireVerifiedUser` + `checkAndChargeQuota` во всех API routes (402 при превышении квоты)
 
 **План:** `Moy-proekt/patent-scan-review/B1-supabase-auth-plan.md`
+
+### Migrate to Timeweb VPS (~6-10ч) — отдельная сессия между B1 и Legal
+
+**Причины ухода с Vercel** (решено 2026-04-22):
+- Vercel Pro `maxDuration` 60 сек < наших 90 сек на `/api/analyze` и `/api/search-rospatent`. Урезать до 60 — риск 504 на сложных запросах.
+- Экономия ~500-800₽/мес ($20 Vercel Pro vs ~1300₽ Timeweb).
+- 152-ФЗ — РФ-резидент упрощает РКН-регистрацию и локализацию ПДн.
+- Опыт есть: SellerForge VPS `sf-prod-msk` на Timeweb.
+
+**Тариф:** Timeweb VPS 2CPU / 4GB RAM / 50GB NVMe, МСК. Hostname `ps-prod-msk`.
+
+**Процедура:** заказ VPS → Ubuntu 22.04 + Node 20 + pm2 + Nginx + Certbot → GitHub Actions deploy → Cloudflare DNS (`patent-scan.ru` primary + `.com` canonical) → env vars → smoke → DNS switch → Vercel заморозить.
+
+После миграции: убрать `maxDuration` constraints из кода (VPS без потолка).
 
 ### Legal pre-launch (~3-4ч + 3-5 дней ожидания РКН)
 - Страницы `/privacy` + `/terms` (Ru + En)
 - Чекбокс согласия на login
-- Регистрация ИП Кобзарь В.Ю. как оператора ПДн на https://pd.rkn.gov.ru
+- Регистрация ИП Кобзарь В.Ю. как оператора ПДн на https://pd.rkn.gov.ru (упрощается после переезда на РФ-хостинг)
 
 **План:** `Moy-proekt/patent-scan-review/legal-prelaunch-plan.md`
 
 ### После
-- Домены в Vercel
+- Sentry + uptime monitoring (UptimeRobot/Better Stack)
+- CSP headers
 - Stripe/ЮKassa (отдельная большая задача)
 - Important-фиксы из review (I1-I10)
 
@@ -156,7 +173,8 @@
 - **OneDrive sync.** Проект живёт в `c:/Users/kobzar/OneDrive - ООО NDIGITAL/VK/VK/Claude/patent-scan/`. Это **осознанное решение** пользователя — не флагать как security-риск, не предлагать "вынести из OneDrive". Документ решения: память `feedback_onedrive_env.md`.
 - **IPC имеет только секции A-H** (не I). Regex `/^[A-H]\d{2}[A-Z]$/` корректен. Один из ревью-агентов ошибочно предложил расширить до `[A-I]` — это галлюцинация, не применять.
 - **`sessionStorage` blob между страницами** — deprecate'ится в B1 Этап 4 в пользу БД. Не добавлять новое в `sessionStorage` — сразу в БД через `searches.state`.
-- **Vercel kills requests at 60s (Pro) / 10s (Hobby) если нет `maxDuration`.** Все тяжёлые routes должны иметь `export const maxDuration = N;`. Уже сделано на 5 routes (analyze=90, search-rospatent=90, остальные=60).
+- **Vercel kills requests at 60s (Pro) / 10s (Hobby) если нет `maxDuration`.** Все тяжёлые routes должны иметь `export const maxDuration = N;`. Уже сделано на 5 routes (analyze=90, search-rospatent=90, остальные=60). **Для Vercel Pro 90 > потолка 60 → уезжаем на Timeweb VPS после B1.**
+- **Supabase Free SMTP = 3 email/час** — блокер для magic-link flow. Custom SMTP через Resend обязателен до B1 Этап 3.
 - **Gemini иногда возвращает JSON в markdown fence** `` ```json...``` ``. `callGeminiJson` очищает автоматически, не городить свой parser.
 - **patent-scan/CLAUDE.md указывает на docs/NEXT_SESSION.md** (не на root). Конвенция проекта — NEXT_SESSION в docs/.
 - **Git repo — только в `web/`.** Файлы в `patent-scan/` (включая `.sessions/`, `docs/NEXT_SESSION.md`, `CLAUDE.md`) — **не в git**, хранятся через OneDrive sync. Для bulletproof версионирования — считай что они могут быть потеряны, и используй этот `web/CONTEXT.md` как single-source-of-truth для переустановок/клонов.
@@ -195,4 +213,4 @@ curl -s "https://ycwtxilrkswlzjhvyiea.supabase.co/rest/v1/profiles?select=id" \
 
 ---
 
-**Если есть сомнения или что-то поменялось после 2026-04-20 — сначала смотри `git log --oneline -10` и `patent-scan/.sessions/` для последних обновлений. Если файл устарел — обнови перед работой.**
+**Если есть сомнения или что-то поменялось после 2026-04-22 — сначала смотри `git log --oneline -10` и `patent-scan/.sessions/` для последних обновлений. Если файл устарел — обнови перед работой.**
