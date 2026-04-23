@@ -89,8 +89,10 @@ export async function POST(req: NextRequest) {
   });
 
   if (error) {
+    // Log server-side only — client gets a generic code so we don't leak
+    // upstream SMTP / Supabase internals (e.g. API key messages, bounce reasons).
     console.error("[auth/login] signInWithOtp failed:", error.message);
-    return fail("otp_send_failed", 502, { detail: error.message });
+    return fail("otp_send_failed", 502);
   }
 
   return NextResponse.json({ ok: true });

@@ -8,13 +8,25 @@ export type TurnstileResult =
   | { ok: false; reason: "missing_token" | "missing_secret" | "network" | "rejected"; codes?: string[] };
 
 /** Verify a Turnstile token against Cloudflare siteverify. */
+let warnedMissingSecret = false;
+
 export async function verifyTurnstile(
   token: string | null | undefined,
   remoteIp: string | null
 ): Promise<TurnstileResult> {
   if (!token) return { ok: false, reason: "missing_token" };
   const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) return { ok: false, reason: "missing_secret" };
+  if (!secret) {
+    // Surface misconfiguration loudly — silent fallback hides the fact that
+    // anti-bot protection is effectively disabled on this deployment.
+    if (!warnedMissingSecret) {
+      console.error(
+        "[turnstile] TURNSTILE_SECRET_KEY is not set — captcha check is disabled. Add env var to Vercel."
+      );
+      warnedMissingSecret = true;
+    }
+    return { ok: false, reason: "missing_secret" };
+  }
 
   const params = new URLSearchParams({ secret, response: token });
   if (remoteIp) params.set("remoteip", remoteIp);

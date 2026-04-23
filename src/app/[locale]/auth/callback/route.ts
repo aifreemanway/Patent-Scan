@@ -23,7 +23,10 @@ export async function GET(
 
   // Prefix paths with locale unless it's the default (`as-needed` in routing config).
   const prefix = locale === routing.defaultLocale ? "" : `/${locale}`;
-  const safeNext = next && next.startsWith("/") ? next : "/search";
+  // Reject protocol-relative (`//evil.com`) as defense-in-depth even though
+  // the subsequent `${origin}${prefix}${next}` concat would keep it same-origin.
+  const safeNext =
+    next && next.startsWith("/") && !next.startsWith("//") ? next : "/search";
   const successUrl = `${origin}${prefix}${safeNext}`;
   const errorUrl = `${origin}${prefix}/login?error=invalid_link`;
 
