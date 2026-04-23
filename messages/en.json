@@ -207,6 +207,74 @@
     "header": {
       "login": "Sign in",
       "logout": "Sign out"
+    },
+    "quota": {
+      "title": "Monthly limit reached",
+      "body": "You've used {used} of {limit} {operation} operations this month on the {tier} plan.",
+      "proComingTitle": "Pro plan coming soon",
+      "proComingBody": "500 searches/month, landscapes, and reports. Help us shape it — answer 3 quick questions and get +1 {operation} slot right now.",
+      "startFeedback": "Take survey → +1 slot",
+      "close": "Got it",
+      "operationLabel": {
+        "analyze": "analyze",
+        "search": "search",
+        "landscape": "landscape"
+      },
+      "alreadyGrantedBanner": {
+        "title": "Bonus for this operation already used",
+        "body": "Thanks for your earlier feedback! The {operation} bonus has already been applied. Bonuses for other operations remain available."
+      }
+    },
+    "feedback": {
+      "title": "Quick feedback (2 minutes)",
+      "subtitle": "Your answers help us ship Pro with the right features and pricing.",
+      "q1": {
+        "label": "What did you use before Antepatent?",
+        "options": {
+          "nothing": "Nothing — first time checking prior art",
+          "patent_attorney": "Patent attorney / consultant",
+          "google_patents": "Google Patents",
+          "espacenet": "Espacenet (EPO)",
+          "fips": "FIPS / Rospatent directly",
+          "other": "Something else"
+        }
+      },
+      "q2": {
+        "label": "What was this search for?",
+        "options": {
+          "before_patent_reg": "Checking novelty before filing a patent",
+          "competitive_analysis": "Competitive intelligence / market scan",
+          "academic": "Academic research",
+          "due_diligence": "M&A / investment due diligence",
+          "other": "Something else"
+        }
+      },
+      "q3": {
+        "label": "How much would you pay for 500 searches/month?",
+        "options": {
+          "free_only": "Free only",
+          "under_1000_rub": "Up to $10 / ₽1,000",
+          "1000_2500_rub": "$10–25 / ₽1,000–2,500",
+          "2500_5000_rub": "$25–50 / ₽2,500–5,000",
+          "over_5000_rub": "Over $50 / ₽5,000",
+          "custom": "Custom amount (write below)"
+        },
+        "customPlaceholder": "Your number"
+      },
+      "freeText": {
+        "label": "What would make Antepatent more useful? (optional)",
+        "placeholder": "Missing features, frustrating UX, comparisons to other tools..."
+      },
+      "submit": "Submit and get +1 slot",
+      "submitting": "Submitting...",
+      "successTitle": "Thanks! +1 slot added.",
+      "successBody": "Try again — the next {operation} is on us.",
+      "tryAgain": "Try again",
+      "errors": {
+        "generic": "Couldn't submit. Please try again.",
+        "already_granted": "You already submitted feedback for this operation.",
+        "missing_q3_custom": "Write your amount in the field below."
+      }
     }
   }
 }

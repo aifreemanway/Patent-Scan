@@ -4,10 +4,43 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
+import type { FeedbackOperation } from "@/lib/feedback-schema";
 
 type Question = { q: string; placeholder: string };
 
-type Step = "input" | "clarify" | "loading" | "error";
+type Step = "input" | "clarify" | "loading" | "error" | "quota";
+
+type QuotaInfo = {
+  operation: FeedbackOperation;
+  limit: number;
+  used: number;
+  tier: string;
+};
+
+async function parseQuotaResponse(
+  resp: Response
+): Promise<QuotaInfo | null> {
+  if (resp.status !== 402) return null;
+  const data = (await resp.json().catch(() => null)) as
+    | {
+        error?: string;
+        operation?: string;
+        limit?: number;
+        used?: number;
+        tier?: string;
+      }
+    | null;
+  if (!data || data.error !== "quota_exceeded") return null;
+  const op = data.operation;
+  if (op !== "analyze" && op !== "search" && op !== "landscape") return null;
+  return {
+    operation: op,
+    limit: typeof data.limit === "number" ? data.limit : 0,
+    used: typeof data.used === "number" ? data.used : 0,
+    tier: typeof data.tier === "string" ? data.tier : "free",
+  };
+}
 
 export default function SearchPage() {
   const t = useTranslations("Search");
@@ -23,6 +56,7 @@ export default function SearchPage() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadingHintMsg, setLoadingHintMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
 
   const canContinue = description.trim().length >= 80;
 
@@ -82,6 +116,12 @@ export default function SearchPage() {
       });
 
       if (!searchResp.ok) {
+        const q = await parseQuotaResponse(searchResp);
+        if (q) {
+          setQuota(q);
+          setStep("quota");
+          return;
+        }
         const err = await searchResp.json().catch(() => ({}));
         throw new Error(err.error || `Search failed (${searchResp.status})`);
       }
@@ -108,6 +148,12 @@ export default function SearchPage() {
       });
 
       if (!analyzeResp.ok) {
+        const q = await parseQuotaResponse(analyzeResp);
+        if (q) {
+          setQuota(q);
+          setStep("quota");
+          return;
+        }
         const err = await analyzeResp.json().catch(() => ({}));
         throw new Error(err.error || `Analyze failed (${analyzeResp.status})`);
       }
@@ -233,6 +279,21 @@ export default function SearchPage() {
               <p className="mt-2 text-sm text-slate-500">
                 {loadingHintMsg || t("loadingHint")}
               </p>
+            </section>
+          )}
+
+          {step === "quota" && quota && (
+            <section className="py-12">
+              <QuotaExceededBlock
+                operation={quota.operation}
+                limit={quota.limit}
+                used={quota.used}
+                tier={quota.tier}
+                onRetry={() => {
+                  setQuota(null);
+                  runSearch();
+                }}
+              />
             </section>
           )}
 
