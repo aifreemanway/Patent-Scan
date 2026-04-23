@@ -83,6 +83,18 @@ export const RATE_MAX = {
   landscapeSynthesize: 5,
 } as const;
 
+// --- Auth / anti-abuse ---
+
+/** Turnstile siteverify endpoint. Override only for testing. */
+export const TURNSTILE_VERIFY_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+/** Per-IP signup/login throttle — 3 magic-link requests per 24h from one IP. */
+export const SIGNUP_IP_LIMIT = {
+  windowMs: 24 * 60 * 60 * 1000,
+  max: 3,
+} as const;
+
 // --- Per-user quotas (month, by tier) ---
 //
 // Must stay in sync with `public.increment_usage()` function in
