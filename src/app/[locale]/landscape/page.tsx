@@ -4,8 +4,41 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
+import type { FeedbackOperation } from "@/lib/feedback-schema";
 
-type Step = "input" | "loading" | "error";
+type Step = "input" | "loading" | "error" | "quota";
+
+type QuotaInfo = {
+  operation: FeedbackOperation;
+  limit: number;
+  used: number;
+  tier: string;
+};
+
+async function parseQuotaResponse(
+  resp: Response
+): Promise<QuotaInfo | null> {
+  if (resp.status !== 402) return null;
+  const data = (await resp.json().catch(() => null)) as
+    | {
+        error?: string;
+        operation?: string;
+        limit?: number;
+        used?: number;
+        tier?: string;
+      }
+    | null;
+  if (!data || data.error !== "quota_exceeded") return null;
+  const op = data.operation;
+  if (op !== "analyze" && op !== "search" && op !== "landscape") return null;
+  return {
+    operation: op,
+    limit: typeof data.limit === "number" ? data.limit : 0,
+    used: typeof data.used === "number" ? data.used : 0,
+    tier: typeof data.tier === "string" ? data.tier : "free",
+  };
+}
 
 type LandscapeHit = {
   id: string;
@@ -49,6 +82,7 @@ export default function LandscapePage() {
   const [topic, setTopic] = useState("");
   const [loadingMsg, setLoadingMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [quota, setQuota] = useState<QuotaInfo | null>(null);
 
   const canSubmit = topic.trim().length >= 60;
 
@@ -64,6 +98,12 @@ export default function LandscapePage() {
         body: JSON.stringify({ topic: topic.trim() }),
       });
       if (!planResp.ok) {
+        const q = await parseQuotaResponse(planResp);
+        if (q) {
+          setQuota(q);
+          setStep("quota");
+          return;
+        }
         const err = await planResp.json().catch(() => ({}));
         throw new Error(err.error || `Plan failed (${planResp.status})`);
       }
@@ -226,6 +266,21 @@ export default function LandscapePage() {
                 {loadingMsg || t("loading")}
               </p>
               <p className="mt-2 text-sm text-slate-500">{t("loadingHint")}</p>
+            </section>
+          )}
+
+          {step === "quota" && quota && (
+            <section className="py-12">
+              <QuotaExceededBlock
+                operation={quota.operation}
+                limit={quota.limit}
+                used={quota.used}
+                tier={quota.tier}
+                onRetry={() => {
+                  setQuota(null);
+                  handleSubmit();
+                }}
+              />
             </section>
           )}
 

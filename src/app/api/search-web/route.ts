@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   TAVILY_URL,
   TAVILY_TIMEOUT_MS,
@@ -68,6 +69,10 @@ export async function POST(req: Request) {
       { status: 413 }
     );
   }
+
+  // Auth gate — web search is free but requires login (Tavily costs).
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
 
   const maxResults = Math.min(Math.max(body.maxResults ?? 10, 1), 20);
 

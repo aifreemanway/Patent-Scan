@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuthAndQuota } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
@@ -113,6 +114,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     .filter((a) => a && a.trim().length > 0)
     .slice(0, MAX_ANSWERS)
     .map((a) => a.slice(0, MAX_ANSWER_LEN));
+
+  // Auth + quota charge AFTER body validation — malformed requests don't burn a slot.
+  const guard = await requireAuthAndQuota("analyze");
+  if (!guard.ok) return guard.response;
 
   const userText = [
     `ОПИСАНИЕ ИЗОБРЕТЕНИЯ:\n${description}`,
