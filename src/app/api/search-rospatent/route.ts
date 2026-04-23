@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuthAndQuota } from "@/lib/auth-quota";
 import { extractSearchTerms } from "@/lib/extract-search-terms";
 import {
   normalizeHit,
@@ -124,6 +125,10 @@ export async function POST(req: Request) {
       { status: 413 }
     );
   }
+
+  // Auth + quota charge AFTER body validation, BEFORE Gemini term extraction.
+  const guard = await requireAuthAndQuota("search");
+  if (!guard.ok) return guard.response;
 
   let qn: string;
   let qnEn: string;

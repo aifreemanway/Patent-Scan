@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuthAndQuota } from "@/lib/auth-quota";
 import { planLandscape } from "@/lib/landscape-plan";
 import {
   MAX_DESCRIPTION_LEN,
@@ -43,6 +44,11 @@ export async function POST(req: Request) {
       { status: 413 }
     );
   }
+
+  // Auth + quota charge: landscape is charged once at plan step, downstream
+  // search/synthesize within same session don't double-charge.
+  const guard = await requireAuthAndQuota("landscape");
+  if (!guard.ok) return guard.response;
 
   try {
     const plan = await planLandscape(topic, apiKey);

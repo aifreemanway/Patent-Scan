@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   synthesizeLandscape,
   type SynthesisPatent,
@@ -99,6 +100,11 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
+  // Auth gate — synthesis is the expensive back-half of the landscape flow
+  // (already quota-charged at /plan), but we still gate it behind login.
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
 
   try {
     const result = await synthesizeLandscape(topic, patents, apiKey);

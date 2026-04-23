@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
@@ -69,6 +70,10 @@ export async function POST(req: Request): Promise<NextResponse> {
       { status: 413 }
     );
   }
+
+  // Auth gate — questions are free (no quota) but still behind login.
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
 
   try {
     const { data } = await callGeminiJson<{ questions?: unknown }>({

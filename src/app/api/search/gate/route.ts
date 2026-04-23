@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import { assessDescription } from "@/lib/assess-description";
 import { RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
 
@@ -35,6 +36,10 @@ export async function POST(req: Request) {
       skippedGemini: true,
     });
   }
+
+  // Auth gate — gate is free but requires login.
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

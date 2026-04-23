@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   normalizeHit,
   type PatSearchHit,
@@ -58,6 +59,11 @@ export async function POST(req: Request) {
       { status: 413 }
     );
   }
+
+  // Auth gate — landscape sub-calls aren't quota-charged (billed at plan step)
+  // but still need login so we don't burn Rospatent budget on anonymous traffic.
+  const auth = await requireAuth();
+  if (!auth.ok) return auth.response;
 
   const limit = Math.min(Math.max(body.limit ?? 30, 1), 50);
   const userDatasets = Array.isArray(body.datasets)
