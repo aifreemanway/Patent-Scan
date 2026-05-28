@@ -167,6 +167,8 @@
     "trendsTitle": "Актуальные тренды",
     "appendixTitle": "Сводный список патентов",
     "appendixCount": "{n} записей",
+    "exportHtml": "Сохранить в HTML",
+    "exportPdf": "Сохранить в PDF",
     "ctaPrimary": "Новый ландшафт",
     "missingTitle": "Нет данных для отчёта",
     "missingBody": "Похоже, вы открыли страницу отчёта напрямую. Начните с описания темы.",

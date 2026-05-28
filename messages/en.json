@@ -167,6 +167,8 @@
     "trendsTitle": "Current trends",
     "appendixTitle": "Full patent list",
     "appendixCount": "{n} entries",
+    "exportHtml": "Save as HTML",
+    "exportPdf": "Save as PDF",
     "ctaPrimary": "New landscape",
     "missingTitle": "No report data",
     "missingBody": "Looks like you opened this page directly. Start from a topic description.",
