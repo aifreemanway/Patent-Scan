@@ -125,7 +125,19 @@
     "errorBody": "One of the services returned an error. Please retry or adjust the description.",
     "missingTitle": "No report data",
     "missingBody": "Looks like you opened this page directly. Start from the invention description.",
-    "openLink": "Open"
+    "openLink": "Open",
+    "coverageTitle": "Where we searched",
+    "coverageSubtitle": "The search ran across global patent databases — not just Russia.",
+    "coverageBases": "Russia (RU + SU); CIS; United States (US); Europe (EP); China (CN); Japan (JP)",
+    "coverageNote": "Coverage depth is the same on every plan, including the free one.",
+    "coverageScanned": "Publications scanned: {n}",
+    "verdictCaptionHigh": "No close analogs found in the databases we checked. This is not a guarantee of patentability — see what we did not check below.",
+    "verdictCaptionMedium": "There are partially similar patents. Patentability depends on how substantial your solution's differences are.",
+    "verdictCaptionLow": "Close analogs were found. High risk of rejection without substantial refinement. We recommend a review with a patent attorney before filing.",
+    "notCheckedTitle": "What we did not check",
+    "notCheckedItems": "Scientific papers, dissertations, conference proceedings (non-patent sources).|Applications filed but not yet published (publication lag — up to 18 months).|This is a novelty prior-art search — not a freedom-to-operate (FTO) check, trademarks, or industrial designs.|Completeness depends on how precisely the invention is described.",
+    "disclaimerTitle": "This is a preliminary screening",
+    "disclaimerBody": "This report is based on automated analysis of open patent databases and is not a legal opinion. It does not replace the expertise of a patent attorney. Make the final decision to file after consulting a specialist."
   },
   "Landscape": {
     "title": "Patent landscape",

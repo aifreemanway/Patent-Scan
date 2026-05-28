@@ -26,10 +26,12 @@ type ReportData = {
   searchTotal?: number;
 };
 
-const UNIQUENESS_STYLES: Record<string, string> = {
-  High: "text-emerald-700",
-  Medium: "text-amber-700",
-  Low: "text-rose-700",
+// Subtle per-level accent only (a small dot) — never a big green "all clear",
+// which reads as automation-bias permission to skip a real attorney review.
+const UNIQUENESS_DOT: Record<string, string> = {
+  High: "bg-emerald-500",
+  Medium: "bg-amber-500",
+  Low: "bg-rose-500",
 };
 
 const SIMILARITY_STYLES: Record<string, string> = {
@@ -254,6 +256,20 @@ export default function ReportPage() {
   const uniqueness = data.uniqueness ?? "Medium";
   const uniquenessLabel = t(`uniqueness${uniqueness}` as "uniquenessHigh" | "uniquenessMedium" | "uniquenessLow");
   const headers = t.raw("patentsHeaders") as Record<string, string>;
+  const verdictCaption = t(
+    `verdictCaption${uniqueness}` as
+      | "verdictCaptionHigh"
+      | "verdictCaptionMedium"
+      | "verdictCaptionLow"
+  );
+  const notCheckedItems = t("notCheckedItems")
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const coverageBases = t("coverageBases")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const fileBase = `patent-uniqueness-${new Date().toISOString().slice(0, 10)}`;
 
@@ -300,20 +316,79 @@ export default function ReportPage() {
           </h1>
           <p className="mt-3 max-w-3xl text-slate-600">{t("subtitle")}</p>
 
-          {/* Uniqueness indicator */}
+          {/* Uniqueness indicator — neutral label + small accent dot (no big
+              green "all clear"), always shown next to its calibration caption
+              and the explicit limits of what we did NOT check. */}
           <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="text-sm font-medium text-slate-500">
                   {t("uniquenessLabel")}
                 </div>
-                <div className={`mt-1 text-4xl font-bold ${UNIQUENESS_STYLES[uniqueness] ?? "text-slate-900"}`}>
-                  {uniquenessLabel}
+                <div className="mt-1 flex items-center gap-2.5">
+                  <span
+                    className={`inline-block h-3 w-3 shrink-0 rounded-full ${UNIQUENESS_DOT[uniqueness] ?? "bg-slate-400"}`}
+                    aria-hidden
+                  />
+                  <span className="text-4xl font-bold text-slate-900">
+                    {uniquenessLabel}
+                  </span>
                 </div>
               </div>
-              <p className="max-w-xl text-sm text-slate-600">
-                {data.uniquenessDetail ?? ""}
-              </p>
+              {data.uniquenessDetail && (
+                <p className="max-w-xl text-sm text-slate-600">
+                  {data.uniquenessDetail}
+                </p>
+              )}
+            </div>
+
+            <p className="mt-4 text-sm leading-6 text-slate-600">
+              {verdictCaption}
+            </p>
+
+            <div className="mt-5 rounded-xl bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-800">
+                {t("notCheckedTitle")}
+              </div>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
+                {notCheckedItems.map((item, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-slate-400" aria-hidden>
+                      —
+                    </span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          {/* Disclaimer — prominent card (not petit subtitle), accent but not
+              panic-red. Honesty of limits is part of the verdict. */}
+          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <div className="flex gap-3">
+              <svg
+                className="mt-0.5 h-5 w-5 shrink-0 text-amber-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.8}
+                stroke="currentColor"
+                aria-hidden
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
+                />
+              </svg>
+              <div>
+                <div className="font-semibold text-amber-900">
+                  {t("disclaimerTitle")}
+                </div>
+                <p className="mt-1 text-sm leading-6 text-amber-800">
+                  {t("disclaimerBody")}
+                </p>
+              </div>
             </div>
           </section>
 
@@ -404,19 +479,29 @@ export default function ReportPage() {
             </section>
           )}
 
-          {/* Sources */}
-          <section className="mt-8">
+          {/* Coverage — make the breadth of bases searched visible (the
+              "coverage" axis of the honest-verdict positioning). Bases are a
+              static fact of what the engine queried, not a per-country hit
+              count — 0 hits in a country still means "searched here". */}
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold text-slate-900">
-              {t("sourcesTitle")}
+              {t("coverageTitle")}
             </h2>
-            <ul className="mt-4 grid gap-4 sm:grid-cols-3">
-              <li className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="font-semibold text-slate-900">{t("sourceRospatent")}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {t("sourceCount", { n: data.searchTotal ?? patents.length })}
-                </div>
-              </li>
-            </ul>
+            <p className="mt-1 text-sm text-slate-600">{t("coverageSubtitle")}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {coverageBases.map((base, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700"
+                >
+                  {base}
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-slate-500">{t("coverageNote")}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {t("coverageScanned", { n: data.searchTotal ?? patents.length })}
+            </p>
           </section>
 
           {/* Recommendation */}
