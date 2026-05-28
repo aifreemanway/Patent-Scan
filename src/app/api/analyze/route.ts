@@ -65,6 +65,25 @@ type InputPatent = {
   country?: string;
   abstract?: string;
   ipc?: string[];
+  url?: string;
+};
+
+type VerdictPatent = {
+  id?: string;
+  title?: string;
+  year?: string;
+  country?: string;
+  similarity?: "High" | "Medium" | "Low";
+  match?: string;
+  diff?: string;
+};
+
+type AnalyzeVerdict = {
+  uniqueness?: "High" | "Medium" | "Low";
+  uniquenessDetail?: string;
+  overview?: string;
+  patents?: VerdictPatent[];
+  recommendation?: string;
 };
 
 export async function POST(req: Request): Promise<NextResponse> {
@@ -125,7 +144,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     .join("\n\n");
 
   try {
-    const { data } = await callGeminiJson({
+    const { data } = await callGeminiJson<AnalyzeVerdict>({
       apiKey,
       systemPrompt: SYSTEM_PROMPT,
       userText,
@@ -133,7 +152,52 @@ export async function POST(req: Request): Promise<NextResponse> {
       thinkingBudget: 1024,
       timeoutMs: GEMINI_TIMEOUT_MS.analyze,
     });
-    return NextResponse.json(data);
+
+    // Anti-fabrication: a uniqueness verdict is legally consequential, so every
+    // cited patent must be a REAL document the search actually retrieved — not
+    // an id the model paraphrased into existence. The input patents are all real
+    // PatSearch hits (each already carries a working source URL), so the ground
+    // truth is membership in that retrieved set. Keep only verdict patents whose
+    // id was in the input, and stamp each with the authoritative id/title/year/
+    // country/url from the retrieved hit (never the model's, which it can mangle)
+    // — this also gives the report a working link for every row. A live GET /docs
+    // recheck would add latency and could drop a real analog on a transient
+    // error, so membership is both safer and sufficient here.
+    // Match on a normalized key (uppercase, alphanumerics only) so a model that
+    // echoes an id with cosmetic drift (spaces, punctuation, case) still matches
+    // its real retrieved hit instead of being wrongly dropped. A fabricated id
+    // still matches nothing, so this stays fabrication-proof.
+    const normKey = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const byId = new Map(
+      patents
+        .filter((p) => p.id)
+        .map((p) => [normKey(p.id), p] as const)
+    );
+    const verdictPatents = Array.isArray(data.patents) ? data.patents : [];
+    const verified = verdictPatents.flatMap((p) => {
+      const src =
+        p && typeof p.id === "string" ? byId.get(normKey(p.id)) : undefined;
+      if (!src) return [];
+      return [
+        {
+          ...p,
+          id: src.id,
+          title: src.title || p.title || "",
+          year: src.year || p.year || "",
+          country: src.country || p.country || "",
+          url: src.url ?? "",
+        },
+      ];
+    });
+    const dropped = verdictPatents.length - verified.length;
+    if (dropped > 0) {
+      console.warn("[analyze] dropped unverified verdict patents", {
+        dropped,
+        kept: verified.length,
+      });
+    }
+
+    return NextResponse.json({ ...data, patents: verified });
   } catch (e) {
     if (e instanceof GeminiError) {
       return NextResponse.json(
