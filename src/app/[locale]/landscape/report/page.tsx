@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
@@ -88,8 +88,225 @@ function buildMatrix(hits: LandscapeHit[]) {
   return matrix;
 }
 
+function esc(s: string | undefined | null): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Only emit href for real http(s) links — keeps the standalone file free of
+// javascript:/data: URLs while preserving every working patent link.
+function safeHref(url: string | undefined | null): string | null {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? esc(url) : null;
+}
+
+const REPORT_CSS = `
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a;background:#fff;margin:0;padding:32px;line-height:1.5}
+.wrap{max-width:1000px;margin:0 auto}
+h1{font-size:28px;font-weight:700;margin:0 0 4px}
+h2{font-size:20px;font-weight:600;margin:32px 0 12px}
+h3{font-size:16px;font-weight:600;margin:0}
+.topic{color:#475569;font-size:14px;margin:0 0 8px}
+.counters{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+.counter{border:1px solid #e2e8f0;border-radius:12px;padding:16px 20px;min-width:150px}
+.counter .label{font-size:13px;color:#64748b}
+.counter .value{font-size:28px;font-weight:700}
+.card{border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin:12px 0}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+th{background:#f8fafc;font-weight:600}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+a{color:#2563eb}
+.chips{margin-top:8px}
+.chip{display:inline-block;border:1px solid #e2e8f0;border-radius:6px;padding:1px 6px;margin:2px 2px 0 0;font-family:ui-monospace,monospace;font-size:12px;text-decoration:none;color:#334155}
+.muted{color:#64748b}
+.cat{border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin:8px 0}
+.trend{border-left:4px solid #0f172a;background:#f8fafc;padding:12px 16px;margin:8px 0}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.zero{color:#cbd5e1}
+ul{margin:8px 0;padding-left:20px}
+.appendix li{margin:2px 0}
+@media print{body{padding:0}.card,.counter,.cat,.trend{break-inside:avoid}a{text-decoration:underline}}
+`;
+
+type ReportT = (key: string, values?: Record<string, string | number>) => string;
+
+function buildReportHtml(args: {
+  data: LandscapeData;
+  hits: LandscapeHit[];
+  grouped: Record<string, LandscapeHit[]>;
+  matrix: Record<string, Record<string, number>>;
+  counters: { total: number; ru: number; cn: number; jp: number; epus: number };
+  hitById: Map<string, LandscapeHit>;
+  t: ReportT;
+  locale: string;
+  autoPrint: boolean;
+}): string {
+  const { data, hits, grouped, matrix, counters, hitById, t, locale, autoPrint } = args;
+  const synthesis = data.synthesis;
+  const overviewParas = synthesis?.overview.split(/\n\n+/).filter(Boolean) ?? [];
+  const groupKeys = [...COUNTRY_GROUPS.map((g) => g.key), "OTHER"];
+
+  const idLink = (id: string, url: string | undefined | null) => {
+    const href = safeHref(url);
+    return href
+      ? `<a class="mono" href="${href}" target="_blank" rel="noopener noreferrer">${esc(id)}</a>`
+      : `<span class="mono">${esc(id)}</span>`;
+  };
+
+  const chip = (id: string) => {
+    const href = safeHref(hitById.get(id)?.url);
+    return href
+      ? `<a class="chip" href="${href}" target="_blank" rel="noopener noreferrer">${esc(id)}</a>`
+      : `<span class="chip">${esc(id)}</span>`;
+  };
+
+  const countersHtml = `<div class="counters">${[
+    { label: t("counterTotal"), value: counters.total },
+    { label: t("counterRu"), value: counters.ru },
+    { label: t("counterCn"), value: counters.cn },
+    { label: t("counterJp"), value: counters.jp },
+    { label: t("counterEpUs"), value: counters.epus },
+  ]
+    .map(
+      (c) =>
+        `<div class="counter"><div class="label">${esc(c.label)}</div><div class="value">${c.value}</div></div>`,
+    )
+    .join("")}</div>`;
+
+  const overviewHtml = overviewParas.length
+    ? `<section class="card"><h2>${esc(t("overviewTitle"))}</h2>${overviewParas
+        .map((p) => `<p>${esc(p)}</p>`)
+        .join("")}</section>`
+    : "";
+
+  const planHtml = data.plan
+    ? `<section class="card"><h2>${esc(t("planTitle"))}</h2>` +
+      `<div><strong>${esc(t("planQueries"))}:</strong><ul>${data.plan.queries
+        .map((q) => `<li>${esc(q)}</li>`)
+        .join("")}</ul></div>` +
+      (data.plan.ipcSubclasses.length
+        ? `<div><strong>${esc(t("planIpc"))}:</strong> <span class="mono">${esc(
+            data.plan.ipcSubclasses.join(", "),
+          )}</span></div>`
+        : "") +
+      `</section>`
+    : "";
+
+  const byCountryHtml = `<h2>${esc(t("byCountryTitle"))}</h2>${groupKeys
+    .filter((k) => grouped[k] && grouped[k].length > 0)
+    .map((key) => {
+      const rows = grouped[key]
+        .map(
+          (h) =>
+            `<tr><td>${idLink(h.id, h.url)}</td><td>${esc(
+              h.title || h.titleEn || h.titleRu,
+            )}</td><td>${esc(h.year)}</td><td class="mono">${esc(
+              h.ipc.slice(0, 3).join(", "),
+            )}</td></tr>`,
+        )
+        .join("");
+      return `<section class="card"><div class="card-head"><h3>${
+        key === "OTHER" ? esc(t("countryOther")) : esc(key)
+      }</h3><span class="muted">${esc(
+        t("countryCount", { n: grouped[key].length }),
+      )}</span></div><table><thead><tr><th>${esc(t("colId"))}</th><th>${esc(
+        t("colTitle"),
+      )}</th><th>${esc(t("colYear"))}</th><th>${esc(
+        t("colIpc"),
+      )}</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+    })
+    .join("")}`;
+
+  const categoriesHtml =
+    synthesis && synthesis.categories.length
+      ? `<section class="card"><h2>${esc(t("categoriesTitle"))}</h2>${synthesis.categories
+          .map(
+            (c) =>
+              `<div class="cat"><h3>${esc(c.name)}</h3><p class="muted">${esc(
+                c.description,
+              )}</p><div class="chips">${c.patentIds.map(chip).join("")}</div></div>`,
+          )
+          .join("")}</section>`
+      : "";
+
+  const matrixHtml = `<section class="card"><h2>${esc(t("matrixTitle"))}</h2><table><thead><tr><th>${esc(
+    t("matrixPeriod"),
+  )}</th>${groupKeys
+    .map((k) => `<th class="num">${k === "OTHER" ? esc(t("countryOther")) : esc(k)}</th>`)
+    .join("")}</tr></thead><tbody>${PERIODS.map((p) => {
+    const cells = groupKeys
+      .map((k) => {
+        const v = matrix[p.label][k];
+        return `<td class="num${v > 0 ? "" : " zero"}">${v}</td>`;
+      })
+      .join("");
+    return `<tr><td><strong>${esc(p.label)}</strong></td>${cells}</tr>`;
+  }).join("")}</tbody></table></section>`;
+
+  const trendsHtml =
+    synthesis && synthesis.trends.length
+      ? `<section class="card"><h2>${esc(t("trendsTitle"))}</h2>${synthesis.trends
+          .map(
+            (tr) =>
+              `<div class="trend"><h3>${esc(tr.title)}</h3><p>${esc(tr.body)}</p>${
+                tr.patentIds.length
+                  ? `<div class="chips">${tr.patentIds.map(chip).join("")}</div>`
+                  : ""
+              }</div>`,
+          )
+          .join("")}</section>`
+      : "";
+
+  const appendixHtml = `<section class="card"><h2>${esc(t("appendixTitle"))}</h2><p class="muted">${esc(
+    t("appendixCount", { n: hits.length }),
+  )}</p><ul class="appendix">${hits
+    .map(
+      (h) =>
+        `<li>${idLink(h.id, h.url)} <span class="muted">· ${esc(h.year)} ·</span> ${esc(
+          h.title,
+        )}</li>`,
+    )
+    .join("")}</ul></section>`;
+
+  const printScript = autoPrint
+    ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});</script>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="${esc(locale)}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(t("title"))}${data.topic ? " — " + esc(data.topic) : ""}</title>
+<style>${REPORT_CSS}</style>
+</head>
+<body>
+<div class="wrap">
+<h1>${esc(t("title"))}</h1>
+${data.topic ? `<p class="topic"><strong>${esc(t("topicLabel"))}:</strong> ${esc(data.topic)}</p>` : ""}
+${countersHtml}
+${overviewHtml}
+${planHtml}
+${byCountryHtml}
+${categoriesHtml}
+${matrixHtml}
+${trendsHtml}
+${appendixHtml}
+</div>
+${printScript}
+</body>
+</html>`;
+}
+
 export default function LandscapeReportPage() {
   const t = useTranslations("LandscapeReport");
+  const locale = useLocale();
   const { data, loaded } = useSessionJSON<LandscapeData>("ps_landscape");
 
   // Stable reference so the useMemo deps below don't invalidate on every
@@ -164,6 +381,47 @@ export default function LandscapeReportPage() {
 
   const synthesis = data.synthesis;
   const overviewParas = synthesis?.overview.split(/\n\n+/).filter(Boolean) ?? [];
+
+  const fileBase = `patent-landscape-${new Date().toISOString().slice(0, 10)}`;
+
+  const handleExportHtml = () => {
+    const html = buildReportHtml({
+      data,
+      hits,
+      grouped,
+      matrix,
+      counters,
+      hitById,
+      t,
+      locale,
+      autoPrint: false,
+    });
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileBase}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
+  const handleExportPdf = () => {
+    const html = buildReportHtml({
+      data,
+      hits,
+      grouped,
+      matrix,
+      counters,
+      hitById,
+      t,
+      locale,
+      autoPrint: true,
+    });
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
 
   return (
     <>
@@ -471,6 +729,20 @@ export default function LandscapeReportPage() {
 
           {/* Actions */}
           <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={handleExportHtml}
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              {t("exportHtml")}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            >
+              {t("exportPdf")}
+            </button>
             <Link
               href="/landscape"
               className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
