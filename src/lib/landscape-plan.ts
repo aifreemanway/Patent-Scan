@@ -18,6 +18,8 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
     "short phrase 5–15 words in English — same aspect 3"
   ],
   "ipcSubclasses": ["C22B", "C01G"],
+  "functionQuery": "ОДНА фраза 6–12 слов на РУССКОМ — чистая ФУНКЦИЯ изобретения без главного «фирменного» существительного",
+  "functionQueryEn": "перевод functionQuery на АНГЛИЙСКИЙ",
   "overviewSeed": "1–2 предложения: суть темы и её технологический контекст (для затравки итогового обзора)"
 }
 
@@ -25,15 +27,26 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
 - queries — на РУССКОМ (для поиска RU/CIS патентов)
 - queriesEn — точный перевод каждого queries на АНГЛИЙСКИЙ (для поиска US/EP/CN/JP патентов)
 - queries и queriesEn должны быть одинаковой длины и соответствовать по индексу
-- 3–5 запросов, каждый покрывает РАЗНЫЙ аспект темы: метод / объект / применение / альтернативная технология / вторичное использование
-- 5–15 значимых слов в каждом запросе (существительные + ключевые прилагательные)
+- 4–5 запросов. КРИТИЧНО для полноты поиска: разложи тему на ОТДЕЛЬНЫЕ технические признаки и сделай запрос на КАЖДЫЙ. Семантический поиск находит аналог, только если запрос пересказывает его суть, поэтому покрой РАЗНЫЕ грани:
+  - конструкция/устройство (например, охлаждаемый элемент, фурма, сопло)
+  - функция/действие (например, вдувание/подача газа и порошкового материала в расплав)
+  - объект воздействия (например, ванна расплавленного металла)
+  - применяемый процесс/среда (например, продувка, барботаж, плавка)
+- Каждый запрос — ПЛОТНАЯ техническая фраза в духе патентной формулы: {устройство/способ} + {действие} + {объект} + {отличительный признак}. Называй конкретные технические существительные (кислород, порошковый материал, расплав металла, фурма, охлаждение), а не общие слова.
+- ВАЖНО (де-якорение): минимум 2 запроса опиши ТОЛЬКО через функцию/действие, НЕ повторяя главное «фирменное» существительное темы (например, если тема про «кессон» — в этих запросах слова «кессон» быть НЕ должно). Семантический поиск цепляется за самое яркое слово и прячет функционально-эквивалентные аналоги, названные иначе. Пример: вместо «водоохлаждаемый кессон для вдувания порошка» дай «вдувание кислорода и порошкового материала в ванну расплавленного металла».
+- 6–12 значимых слов в каждом запросе. Не сокращай до 3–4 слов — слишком короткий запрос даёт размытую выдачу и пропускает релевантные аналоги.
 - Без вводных слов, без воды, без брендов
-- Если тема широкая (например «переработка оловянных концентратов») — 5 запросов. Если узкая — 3.
+- Если тема узкая, но многопризнаковая — всё равно 4–5 запросов, по запросу на признак.
 
 Правила ipcSubclasses:
 - 2–5 самых релевантных IPC-subclass (формат: 4 символа, например "C22B", "G01R", "H02H")
 - Только subclass (4 символа), НЕ group (как "C22B 25/00")
 - Если тема пересекает несколько областей — покрыть основные
+
+Правила functionQuery / functionQueryEn:
+- ОДНА короткая фраза, описывающая ТОЛЬКО суть-функцию изобретения (что оно делает с чем), БЕЗ главного «фирменного» существительного темы (например, без «кессон», если тема про кессон)
+- Это «зонд» для поиска функционально-эквивалентных аналогов, названных совсем иначе — поэтому максимально нейтральные родовые термины действия и объекта
+- Пример (тема про водоохлаждаемый кессон с подачей газа/порошка): functionQuery = "вдувание кислорода и порошкового материала в ванну расплавленного металла", functionQueryEn = "injection of oxygen and powdered material into molten metal bath"
 
 Правила overviewSeed:
 - 1–2 предложения на русском
@@ -43,20 +56,22 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
 Вход: "Технологии переработки бедных оловянных концентратов: пирометаллургия, гидрометаллургия, обогащение касситерита"
 → {
   "queries": [
-    "плавка оловянных концентратов восстановление касситерита",
-    "флотационное обогащение касситерита тонкие фракции",
-    "гидрометаллургическое выщелачивание олова из шлаков",
-    "извлечение олова из хвостов обогащения и вторичного сырья",
-    "вакуумное рафинирование олова от мышьяка и свинца"
+    "восстановительная плавка бедных оловянных концентратов касситерита в печи",
+    "флотационное обогащение тонких фракций касситерита из оловянных руд",
+    "гидрометаллургическое выщелачивание олова из металлургических шлаков",
+    "извлечение олова из хвостов обогащения и вторичного оловосодержащего сырья",
+    "вакуумное рафинирование чернового олова от мышьяка свинца висмута"
   ],
   "queriesEn": [
-    "smelting tin concentrates cassiterite reduction",
-    "flotation beneficiation cassiterite fine fractions",
-    "hydrometallurgical leaching tin from slags",
-    "tin recovery from tailings and secondary raw materials",
-    "vacuum refining tin removal arsenic lead impurities"
+    "reduction smelting of low-grade tin cassiterite concentrates in furnace",
+    "flotation beneficiation of fine cassiterite fractions from tin ores",
+    "hydrometallurgical leaching of tin from metallurgical slags",
+    "recovery of tin from beneficiation tailings and secondary tin-bearing feedstock",
+    "vacuum refining of crude tin removing arsenic lead bismuth impurities"
   ],
   "ipcSubclasses": ["C22B", "B03D", "B03B"],
+  "functionQuery": "извлечение олова из низкосортного сырья и металлургических отходов",
+  "functionQueryEn": "recovery of tin from low-grade feedstock and metallurgical waste",
   "overviewSeed": "Переработка бедных оловянных концентратов — задача металлургии цветных металлов, совмещающая обогащение, пиро- и гидрометаллургию для извлечения Sn из сырья с низким содержанием металла и сложным составом примесей."
 }`;
 
@@ -64,6 +79,8 @@ export type LandscapePlan = {
   queries: string[];
   queriesEn: string[];
   ipcSubclasses: string[];
+  functionQuery: string;
+  functionQueryEn: string;
   overviewSeed: string;
 };
 
@@ -76,6 +93,8 @@ export async function planLandscape(
     queries?: unknown;
     queriesEn?: unknown;
     ipcSubclasses?: unknown;
+    functionQuery?: unknown;
+    functionQueryEn?: unknown;
     overviewSeed?: unknown;
   }>({
     apiKey,
@@ -114,6 +133,11 @@ export async function planLandscape(
         .slice(0, 6)
     : [];
 
+  const functionQuery =
+    typeof data.functionQuery === "string" ? data.functionQuery.trim() : "";
+  const functionQueryEn =
+    typeof data.functionQueryEn === "string" ? data.functionQueryEn.trim() : "";
+
   const overviewSeed =
     typeof data.overviewSeed === "string" ? data.overviewSeed.trim() : "";
 
@@ -121,5 +145,12 @@ export async function planLandscape(
     throw new Error("Gemini returned fewer than 2 queries");
   }
 
-  return { queries, queriesEn, ipcSubclasses, overviewSeed };
+  return {
+    queries,
+    queriesEn,
+    ipcSubclasses,
+    functionQuery,
+    functionQueryEn,
+    overviewSeed,
+  };
 }

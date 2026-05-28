@@ -39,6 +39,7 @@ export async function POST(req: Request) {
   let body: {
     qn?: string;
     ipcSubclasses?: string[];
+    ipcGroups?: string[];
     limit?: number;
     datasets?: string[];
   };
@@ -69,6 +70,14 @@ export async function POST(req: Request) {
   const subclasses = (body.ipcSubclasses ?? [])
     .filter((c) => typeof c === "string" && /^[A-H]\d{2}[A-Z]$/.test(c.trim()))
     .map((c) => c.trim());
+  // Full IPC group, e.g. "C21C5/46" (no space). A group filter is far more
+  // precise than a subclass and is what makes the prior-art class-sweep
+  // surface in-class analogs that semantic ranking alone buries.
+  const groups = (body.ipcGroups ?? [])
+    .filter(
+      (g) => typeof g === "string" && /^[A-H]\d{2}[A-Z]\d{1,4}\/\d{1,6}$/.test(g.trim())
+    )
+    .map((g) => g.trim());
 
   const payload: Record<string, unknown> = {
     qn,
@@ -78,7 +87,9 @@ export async function POST(req: Request) {
     include_facets: false,
     highlight: false,
   };
-  if (subclasses.length > 0) {
+  if (groups.length > 0) {
+    payload.filter = { "classification.ipc": { values: groups } };
+  } else if (subclasses.length > 0) {
     payload.filter = {
       "classification.ipc_subclass": { values: subclasses },
     };
