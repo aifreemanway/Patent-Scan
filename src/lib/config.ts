@@ -17,6 +17,7 @@ export const GEMINI_TIMEOUT_MS = {
   extract: 30_000,
   plan: 30_000,
   synthesize: 50_000,
+  rank: 40_000,
 } as const;
 
 // --- Rospatent PatSearch ---
@@ -63,7 +64,9 @@ export const MAX_ANSWERS = 20;
 export const MAX_ANSWER_LEN = 5_000;
 
 /** Patents passed into Gemini prompts — tuned to token budget. */
-export const MAX_PATENTS_ANALYZE = 30;
+// Raised from 30: novelty now retrieves a wide multi-query union (landscape
+// parity), so analyze needs a deeper window to see region-balanced prior-art.
+export const MAX_PATENTS_ANALYZE = 60;
 export const MAX_PATENTS_SYNTHESIZE = 150;
 
 // --- Rate limit ---
@@ -79,8 +82,15 @@ export const RATE_MAX = {
   searchWeb: 5,
   gate: 30,
   landscapePlan: 5,
-  landscapeSearch: 20,
+  // Both landscape and novelty fan out many search calls per run. Novelty's
+  // class-sweep probes ~10 IPC groups × 4 region buckets × several phrasings, so
+  // one run reaches ~180 calls; this must clear a single run with headroom.
+  // Per-user abuse is metered by the auth quota layer, not this per-IP limit.
+  landscapeSearch: 200,
   landscapeSynthesize: 5,
+  // Novelty's two-pass ranking makes up to ~6 calls per run (chunk maps +
+  // reduce), so this must clear a couple of runs/min per IP.
+  priorArtRank: 30,
 } as const;
 
 // --- Auth / anti-abuse ---

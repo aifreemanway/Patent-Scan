@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
 
 type Question = { q: string; placeholder: string };
 
@@ -75,21 +76,14 @@ export default function SearchPage() {
     setLoadingHintMsg(t("loadingHint"));
 
     try {
-      const searchResp = await fetch("/api/search-rospatent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: description.trim(), limit: 20 }),
+      const cleanAnswers = answers.filter((a) => a.trim().length > 0);
+
+      const { hits, total } = await retrieveNoveltyPriorArt({
+        description: description.trim(),
+        answers: cleanAnswers,
       });
 
-      if (!searchResp.ok) {
-        const err = await searchResp.json().catch(() => ({}));
-        throw new Error(err.error || `Search failed (${searchResp.status})`);
-      }
-
-      const searchData = await searchResp.json();
-      const patents = searchData.hits ?? [];
-
-      if (patents.length === 0) {
+      if (hits.length === 0) {
         sessionStorage.setItem("ps_report", JSON.stringify({ empty: true }));
         router.push("/report");
         return;
@@ -102,8 +96,8 @@ export default function SearchPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           description: description.trim(),
-          answers: answers.filter((a) => a.trim().length > 0),
-          patents,
+          answers: cleanAnswers,
+          patents: hits,
         }),
       });
 
@@ -113,7 +107,7 @@ export default function SearchPage() {
       }
 
       const report = await analyzeResp.json();
-      report.searchTotal = searchData.total ?? patents.length;
+      report.searchTotal = total || hits.length;
 
       sessionStorage.setItem("ps_report", JSON.stringify(report));
       router.push("/report");
