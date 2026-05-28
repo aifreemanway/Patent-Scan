@@ -4,67 +4,11 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
 
 type Question = { q: string; placeholder: string };
 
 type Step = "input" | "clarify" | "loading" | "error";
-
-type PatentHit = {
-  id: string;
-  title?: string;
-  titleRu?: string;
-  titleEn?: string;
-  year?: string;
-  country?: string;
-  ipc?: string[];
-  url?: string;
-  abstract?: string;
-};
-
-// Full IPC group, e.g. "C21C5/46" (no space).
-const IPC_GROUP_RE = /^[A-H]\d{2}[A-Z]\d{1,4}\/\d{1,6}$/;
-
-async function searchLandscape(
-  qn: string,
-  datasets: string[],
-  ipcGroups?: string[]
-): Promise<{ hits: PatentHit[]; total: number }> {
-  try {
-    const r = await fetch("/api/landscape/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        qn,
-        datasets,
-        limit: 30,
-        ...(ipcGroups && ipcGroups.length ? { ipcGroups } : {}),
-      }),
-    });
-    if (!r.ok) return { hits: [], total: 0 };
-    const j = (await r.json()) as { hits?: PatentHit[]; total?: number };
-    return { hits: j.hits ?? [], total: j.total ?? 0 };
-  } catch {
-    return { hits: [], total: 0 };
-  }
-}
-
-// Interleave per-task result lists so the merged prefix stays balanced.
-function roundRobinMerge(results: { hits: PatentHit[] }[]): PatentHit[] {
-  const lists = results.map((r) => r.hits ?? []);
-  const out: PatentHit[] = [];
-  const seen = new Set<string>();
-  const maxLen = lists.reduce((m, l) => Math.max(m, l.length), 0);
-  for (let i = 0; i < maxLen; i++) {
-    for (const l of lists) {
-      const h = l[i];
-      if (h && h.id && !seen.has(h.id)) {
-        seen.add(h.id);
-        out.push(h);
-      }
-    }
-  }
-  return out;
-}
 
 export default function SearchPage() {
   const t = useTranslations("Search");
@@ -126,21 +70,6 @@ export default function SearchPage() {
     await runSearch();
   }
 
-  // Single-query fallback used when multi-aspect planning is unavailable.
-  async function legacySearch(): Promise<{ hits: PatentHit[]; total: number }> {
-    const resp = await fetch("/api/search-rospatent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: description.trim(), limit: 20 }),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || `Search failed (${resp.status})`);
-    }
-    const data = await resp.json();
-    return { hits: data.hits ?? [], total: data.total ?? (data.hits?.length ?? 0) };
-  }
-
   async function runSearch() {
     setStep("loading");
     setLoadingMsg(t("loadingSearch"));
@@ -149,157 +78,15 @@ export default function SearchPage() {
     try {
       const cleanAnswers = answers.filter((a) => a.trim().length > 0);
 
-      // Prior-art recall is a two-stage problem. PatSearch ranks a doc highly
-      // only for a query that paraphrases it, so a single description query
-      // misses analogs worded differently. We therefore (1) cast a wide
-      // semantic net with aspect-diverse queries, then (2) run an examiner-style
-      // class-sweep: derive the IPC groups where the neighbours cluster and
-      // re-search each group with the pure-function query — the group filter
-      // shrinks competition so functionally-equivalent prior-art floats up.
-      let hits: PatentHit[] = [];
-      let total = 0;
-
-      const topic = [description.trim(), ...cleanAnswers].join("\n");
-      const planResp = await fetch("/api/landscape/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic }),
+      const { hits, total } = await retrieveNoveltyPriorArt({
+        description: description.trim(),
+        answers: cleanAnswers,
       });
-
-      if (planResp.ok) {
-        const plan = (await planResp.json()) as {
-          queries?: string[];
-          queriesEn?: string[];
-          functionQuery?: string;
-          functionQueryEn?: string;
-        };
-        const ruQueries = plan.queries ?? [];
-        const enQueries = plan.queriesEn ?? [];
-        // Per-region buckets: CN crowds out US/EP/JP when datasets are queried
-        // together, so each English query is run against [us,ep], [jp], [cn]
-        // separately; Russian queries hit RU/CIS.
-        const regionBuckets: { datasets: string[]; lang: "ru" | "en" }[] = [
-          { datasets: ["ru_since_1994", "ru_till_1994", "cis"], lang: "ru" },
-          { datasets: ["us", "ep"], lang: "en" },
-          { datasets: ["jp"], lang: "en" },
-          { datasets: ["cn"], lang: "en" },
-        ];
-
-        // Stage 1 — semantic multi-query (recall breadth).
-        const semanticTasks: { qn: string; datasets: string[] }[] = [];
-        for (const b of regionBuckets) {
-          for (const qn of b.lang === "ru" ? ruQueries : enQueries) {
-            semanticTasks.push({ qn, datasets: b.datasets });
-          }
-        }
-        const semanticResults = semanticTasks.length
-          ? await Promise.all(
-              semanticTasks.map((t) => searchLandscape(t.qn, t.datasets))
-            )
-          : [];
-        total += semanticResults.reduce((acc, r) => acc + r.total, 0);
-        const poolSemantic = roundRobinMerge(semanticResults);
-
-        // Stage 2 — prior-art class-sweep over the IPC groups where neighbours
-        // cluster, probed with the de-anchored pure-function query.
-        const groupFreq = new Map<string, number>();
-        for (const h of poolSemantic) {
-          for (const g of h.ipc ?? []) {
-            if (IPC_GROUP_RE.test(g)) {
-              groupFreq.set(g, (groupFreq.get(g) ?? 0) + 1);
-            }
-          }
-        }
-        const topGroups = [...groupFreq.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 6)
-          .map(([g]) => g);
-        // Probe each group with BOTH a function query and a structure query —
-        // the invention spans aspects (e.g. injection function vs cooled
-        // structure) and a doc surfaces only for the query that paraphrases it.
-        const uniq = (xs: string[]) =>
-          [...new Set(xs.filter((x) => x && x.length >= 3))];
-        const ruSweepQs = uniq([plan.functionQuery ?? "", ruQueries[0] ?? ""]);
-        const enSweepQs = uniq([plan.functionQueryEn ?? "", enQueries[0] ?? ""]);
-        const sweepTasks: {
-          qn: string;
-          datasets: string[];
-          ipcGroups: string[];
-        }[] = [];
-        for (const g of topGroups) {
-          for (const b of regionBuckets) {
-            for (const qn of b.lang === "ru" ? ruSweepQs : enSweepQs) {
-              sweepTasks.push({ qn, datasets: b.datasets, ipcGroups: [g] });
-            }
-          }
-        }
-        const sweepResults = sweepTasks.length
-          ? await Promise.all(
-              sweepTasks.map((t) =>
-                searchLandscape(t.qn, t.datasets, t.ipcGroups)
-              )
-            )
-          : [];
-        const poolSweep = roundRobinMerge(sweepResults);
-
-        // In-class sweep first (high precision), then the broad semantic pool,
-        // so the precise analogs land inside the analyze window.
-        const seen = new Set<string>();
-        for (const h of [...poolSweep, ...poolSemantic]) {
-          if (h.id && !seen.has(h.id)) {
-            seen.add(h.id);
-            hits.push(h);
-          }
-        }
-      }
-
-      // Fallback to the single-query search if planning yielded nothing.
-      if (hits.length === 0) {
-        const legacy = await legacySearch();
-        hits = legacy.hits;
-        total = legacy.total;
-      }
 
       if (hits.length === 0) {
         sessionStorage.setItem("ps_report", JSON.stringify({ empty: true }));
         router.push("/report");
         return;
-      }
-
-      // LLM relevance filter: pick the analogs that match by technical meaning
-      // from the whole pool, so the analyze window holds real prior-art rather
-      // than just the top retrieval hits. Falls back to retrieval order on error.
-      try {
-        const rankResp = await fetch("/api/prior-art-rank", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            description: description.trim(),
-            // Cap the pool the ranker reads — the sweep-prioritised prefix
-            // already holds the in-class analogs, and an oversized list times
-            // the model out.
-            candidates: hits.slice(0, 400).map((h) => ({
-              id: h.id,
-              title: h.title || h.titleEn || h.titleRu,
-              year: h.year,
-              country: h.country,
-            })),
-            limit: 60,
-          }),
-        });
-        if (rankResp.ok) {
-          const { ids } = (await rankResp.json()) as { ids?: string[] };
-          if (ids && ids.length > 0) {
-            const byId = new Map(hits.map((h) => [h.id, h]));
-            const ranked = ids
-              .map((id) => byId.get(id))
-              .filter((h): h is PatentHit => Boolean(h));
-            const rankedIds = new Set(ids);
-            hits = [...ranked, ...hits.filter((h) => !rankedIds.has(h.id))];
-          }
-        }
-      } catch {
-        // keep retrieval order
       }
 
       setLoadingMsg(t("loadingAnalyze"));

@@ -20,6 +20,10 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
   "ipcSubclasses": ["C22B", "C01G"],
   "functionQuery": "ОДНА фраза 6–12 слов на РУССКОМ — чистая ФУНКЦИЯ изобретения без главного «фирменного» существительного",
   "functionQueryEn": "перевод functionQuery на АНГЛИЙСКИЙ",
+  "functionQuery2": "ВТОРАЯ фраза той же функции, ИНАЧЕ сформулированная (синонимы действия/объекта)",
+  "functionQuery2En": "перевод functionQuery2 на АНГЛИЙСКИЙ",
+  "structureQuery": "ОДНА фраза 6–12 слов на РУССКОМ — главный рабочий ЭЛЕМЕНТ/устройство родовыми терминами + его действие, без «фирменного» существительного",
+  "structureQueryEn": "перевод structureQuery на АНГЛИЙСКИЙ",
   "overviewSeed": "1–2 предложения: суть темы и её технологический контекст (для затравки итогового обзора)"
 }
 
@@ -46,7 +50,15 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
 Правила functionQuery / functionQueryEn:
 - ОДНА короткая фраза, описывающая ТОЛЬКО суть-функцию изобретения (что оно делает с чем), БЕЗ главного «фирменного» существительного темы (например, без «кессон», если тема про кессон)
 - Это «зонд» для поиска функционально-эквивалентных аналогов, названных совсем иначе — поэтому максимально нейтральные родовые термины действия и объекта
-- Пример (тема про водоохлаждаемый кессон с подачей газа/порошка): functionQuery = "вдувание кислорода и порошкового материала в ванну расплавленного металла", functionQueryEn = "injection of oxygen and powdered material into molten metal bath"
+- КАНОНИЧНОСТЬ: используй самые ОБЩИЕ, частотные глаголы действия (вдувание, подача, инжекция, продувка / injection, feeding, blowing) и РОДОВОЙ объект (расплав металла, ванна расплава / molten metal, molten bath). Избегай редких/узких формулировок — зонд должен матчить как можно больше аналогов
+- functionQuery2 / functionQuery2En — ВТОРАЯ формулировка ТОЙ ЖЕ функции другими словами (синонимы глагола и объекта), чтобы поймать аналоги, которые первая формулировка пропускает. Не копия functionQuery, а парафраз
+- Пример (тема про водоохлаждаемый кессон с подачей газа/порошка): functionQuery = "вдувание кислорода и порошкового материала в ванну расплавленного металла", functionQueryEn = "injection of oxygen and powdered material into molten metal bath"; functionQuery2 = "продувка расплава металла газом и подача твёрдых реагентов", functionQuery2En = "blowing gas and solid reagents into liquid metal melt"
+
+Правила structureQuery / structureQueryEn:
+- ОДНА короткая фраза про главный рабочий ЭЛЕМЕНТ/узел изобретения (ЧЕМ оно является конструктивно) + его действие, родовыми терминами, БЕЗ «фирменного» существительного темы
+- Это второй «зонд» — для аналогов, у которых совпадает КОНСТРУКЦИЯ, а не функция (их находит другая формулировка, чем functionQuery). Называй родовой класс элемента (фурма, сопло, копьё, охлаждаемый наконечник, водоохлаждаемая панель и т.п.), а не «фирменное» слово темы
+- КАНОНИЧНОСТЬ: родовой элемент + общий глагол (фурма/сопло + продувка/вдувание/охлаждение; tuyere/lance/nozzle + blowing/injection/cooling). Бери самое частотное название элемента, не редкое
+- Пример (тема про водоохлаждаемый кессон с фурмами): structureQuery = "водоохлаждаемая фурма для продувки и вдувания в металлургическую печь", structureQueryEn = "water-cooled tuyere for blowing into metallurgical furnace"
 
 Правила overviewSeed:
 - 1–2 предложения на русском
@@ -72,6 +84,10 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
   "ipcSubclasses": ["C22B", "B03D", "B03B"],
   "functionQuery": "извлечение олова из низкосортного сырья и металлургических отходов",
   "functionQueryEn": "recovery of tin from low-grade feedstock and metallurgical waste",
+  "functionQuery2": "выделение олова из шлаков хвостов и вторичного сырья",
+  "functionQuery2En": "extraction of tin from slags tailings and secondary raw materials",
+  "structureQuery": "печь и аппарат для восстановительной плавки металлсодержащих концентратов",
+  "structureQueryEn": "furnace and apparatus for reduction smelting of metal-bearing concentrates",
   "overviewSeed": "Переработка бедных оловянных концентратов — задача металлургии цветных металлов, совмещающая обогащение, пиро- и гидрометаллургию для извлечения Sn из сырья с низким содержанием металла и сложным составом примесей."
 }`;
 
@@ -81,6 +97,10 @@ export type LandscapePlan = {
   ipcSubclasses: string[];
   functionQuery: string;
   functionQueryEn: string;
+  functionQuery2: string;
+  functionQuery2En: string;
+  structureQuery: string;
+  structureQueryEn: string;
   overviewSeed: string;
 };
 
@@ -95,12 +115,20 @@ export async function planLandscape(
     ipcSubclasses?: unknown;
     functionQuery?: unknown;
     functionQueryEn?: unknown;
+    functionQuery2?: unknown;
+    functionQuery2En?: unknown;
+    structureQuery?: unknown;
+    structureQueryEn?: unknown;
     overviewSeed?: unknown;
   }>({
     apiKey,
     systemPrompt: SYSTEM_PROMPT,
     userText: topic,
-    temperature: 0.3,
+    // Low temperature: the de-anchored probes must land on canonical, reliable
+    // phrasing run-to-run (high temp drifts them into wordings that miss the
+    // analog within its own IPC class). Aspect diversity comes from the prompt's
+    // explicit per-facet instructions, not from sampling randomness.
+    temperature: 0.1,
     thinkingBudget: 1024,
     timeoutMs,
   });
@@ -137,6 +165,14 @@ export async function planLandscape(
     typeof data.functionQuery === "string" ? data.functionQuery.trim() : "";
   const functionQueryEn =
     typeof data.functionQueryEn === "string" ? data.functionQueryEn.trim() : "";
+  const functionQuery2 =
+    typeof data.functionQuery2 === "string" ? data.functionQuery2.trim() : "";
+  const functionQuery2En =
+    typeof data.functionQuery2En === "string" ? data.functionQuery2En.trim() : "";
+  const structureQuery =
+    typeof data.structureQuery === "string" ? data.structureQuery.trim() : "";
+  const structureQueryEn =
+    typeof data.structureQueryEn === "string" ? data.structureQueryEn.trim() : "";
 
   const overviewSeed =
     typeof data.overviewSeed === "string" ? data.overviewSeed.trim() : "";
@@ -151,6 +187,10 @@ export async function planLandscape(
     ipcSubclasses,
     functionQuery,
     functionQueryEn,
+    functionQuery2,
+    functionQuery2En,
+    structureQuery,
+    structureQueryEn,
     overviewSeed,
   };
 }

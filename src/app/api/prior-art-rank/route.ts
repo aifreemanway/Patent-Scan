@@ -20,9 +20,9 @@ export const maxDuration = 60;
 // differently can sit deep in the pool. This pass reads every candidate's title
 // and selects the ones that match by technical MEANING, regardless of rank — so
 // the analyze window contains the real analogs, not just the top retrieval hits.
-const SYSTEM_PROMPT = `Ты — патентный эксперт по оценке новизны. На вход: описание изобретения и список патентов-кандидатов (id + страна + год + название).
+const SYSTEM_PROMPT = `Ты — патентный эксперт по оценке новизны. На вход: описание изобретения и список патентов-кандидатов (id + страна + год + название + фрагмент реферата).
 
-Задача: отобрать кандидатов, которые ПО ТЕХНИЧЕСКОМУ СМЫСЛУ являются вероятными аналогами (prior-art) для оценки новизны изобретения — даже если названы совсем другими словами.
+Задача: отобрать кандидатов, которые ПО ТЕХНИЧЕСКОМУ СМЫСЛУ являются вероятными аналогами (prior-art) для оценки новизны изобретения — даже если названы совсем другими словами. Суди по СМЫСЛУ названия И реферата вместе: у близкого аналога название бывает общим, а суть раскрыта в реферате — не отбрасывай такой из-за невыразительного названия.
 
 Верни СТРОГО валидный JSON без преамбул:
 { "ids": ["<id точно как во входе>", ...] }
@@ -39,6 +39,7 @@ type Candidate = {
   title?: unknown;
   titleEn?: unknown;
   titleRu?: unknown;
+  abstract?: unknown;
   year?: unknown;
   country?: unknown;
 };
@@ -88,6 +89,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         (typeof c.titleEn === "string" && c.titleEn) ||
         (typeof c.titleRu === "string" && c.titleRu) ||
         "",
+      abstract:
+        typeof c.abstract === "string" ? c.abstract.slice(0, 300) : "",
       year: typeof c.year === "string" ? c.year : "",
       country: typeof c.country === "string" ? c.country : "",
     }))
@@ -103,8 +106,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   const systemPrompt = SYSTEM_PROMPT.replace("{{N}}", String(n));
   const userText = [
     `ОПИСАНИЕ ИЗОБРЕТЕНИЯ:\n${description}`,
-    `КАНДИДАТЫ (id | страна год | название):\n${candidates
-      .map((c) => `${c.id} | ${c.country} ${c.year} | ${c.title}`)
+    `КАНДИДАТЫ (id | страна год | название :: реферат):\n${candidates
+      .map(
+        (c) =>
+          `${c.id} | ${c.country} ${c.year} | ${c.title}${
+            c.abstract ? ` :: ${c.abstract}` : ""
+          }`
+      )
       .join("\n")}`,
   ].join("\n\n");
 

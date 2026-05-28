@@ -82,11 +82,15 @@ export const RATE_MAX = {
   searchWeb: 5,
   gate: 30,
   landscapePlan: 5,
-  // Both landscape and novelty fan out many search calls per run (novelty's
-  // class-sweep can reach ~50), so this must cover a couple of runs/min per IP.
-  landscapeSearch: 80,
+  // Both landscape and novelty fan out many search calls per run. Novelty's
+  // class-sweep probes ~10 IPC groups × 4 region buckets × several phrasings, so
+  // one run reaches ~180 calls; this must clear a single run with headroom.
+  // Per-user abuse is metered by the auth quota layer, not this per-IP limit.
+  landscapeSearch: 200,
   landscapeSynthesize: 5,
-  priorArtRank: 10,
+  // Novelty's two-pass ranking makes up to ~6 calls per run (chunk maps +
+  // reduce), so this must clear a couple of runs/min per IP.
+  priorArtRank: 30,
 } as const;
 
 // --- Auth / anti-abuse ---
