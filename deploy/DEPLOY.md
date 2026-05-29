@@ -4,7 +4,7 @@
 
 The VPS is a **stateless app server**: code comes from GitHub, all data lives in Supabase. No VPS backups needed (re-provision + redeploy on loss). Backups only become relevant if Postgres is ever self-hosted here.
 
-Fill these before starting: `VPS_IP`, the `web/.env.production` values.
+Fill these before starting: `VPS_IP`, the `.env.production` values.
 
 ## 1. First login + hardening
 ```bash
@@ -29,13 +29,13 @@ sudo npm install -g pm2
 ```bash
 sudo mkdir -p /var/www/patent-scan && sudo chown deploy:deploy /var/www/patent-scan
 git clone https://github.com/aifreemanway/Patent-Scan.git /var/www/patent-scan
-cd /var/www/patent-scan/web
+cd /var/www/patent-scan
 npm ci
-# create web/.env.production (see checklist below) BEFORE build
+# create .env.production (see checklist below) BEFORE build
 npm run build
 ```
 
-## 4. `web/.env.production` checklist (NOT in git)
+## 4. `.env.production` checklist (NOT in git)
 ```
 GEMINI_API_KEY=            TIMEWEB_AI_KEY=            # Deep Analysis (Sonnet)
 PATSEARCH_TOKEN=           TAVILY_API_KEY=

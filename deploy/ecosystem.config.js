@@ -1,5 +1,5 @@
 // pm2 process config for Patent-Scan (Next.js `next start`).
-// Run `npm run build` BEFORE `pm2 reload`. Env: Next auto-loads `web/.env.production`
+// Run `npm run build` BEFORE `pm2 reload`. Env: Next auto-loads `.env.production`
 // from the app dir — keep it OUT of git, create it on the server (see DEPLOY.md).
 //
 //   pm2 start deploy/ecosystem.config.js   # first run
@@ -9,7 +9,7 @@ module.exports = {
   apps: [
     {
       name: "patent-scan",
-      cwd: "/var/www/patent-scan/web",
+      cwd: "/var/www/patent-scan",
       // Run the Next binary directly so pm2 manages the node process (clean signals).
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3000",
