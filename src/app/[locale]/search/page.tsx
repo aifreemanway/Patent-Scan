@@ -124,6 +124,12 @@ export default function SearchPage() {
       const report = await analyzeResp.json();
       report.searchTotal = total || hits.length;
 
+      report._input = {
+        description: description.trim(),
+        answers: cleanAnswers,
+        patents: hits.slice(0, 60),
+      };
+
       sessionStorage.setItem("ps_report", JSON.stringify(report));
       router.push("/report");
     } catch (e) {
