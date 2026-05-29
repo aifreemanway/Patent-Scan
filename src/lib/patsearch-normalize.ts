@@ -49,28 +49,35 @@ export function buildUrl(id: string, country: string): string {
   // Foreign patents → Google Patents (human-readable), NOT the PatSearch /docs
   // endpoint (it returns raw JSON — the bug we're fixing). PatSearch ids are
   // `{CC}{number}{kind}_{date}` where the number is zero-padded to a fixed width
-  // and the kind code is unreliable for some offices (e.g. US grants tagged `A1`
-  // when Google indexes them as `A`). Both quirks break a literal link.
+  // and the kind code is unreliable for US grants (PatSearch tags them `A1` where
+  // Google has them as `A`). For non-US offices the kind code IS reliable.
   //
-  // General rule (US/CN/JP/EP/…): strip date, strip leading-zero padding off
-  // the number, DROP the kind code, search Google Patents by bare publication
-  // number. Verified: US0004572482A1 → "US4572482" → US4572482A; CN102077046B →
-  // "CN102077046"; US20190276906A1 stays whole.
-  //
-  // EA (Eurasian) is the exception: canonical EA numbers are zero-padded to 6
-  // digits, and EA's kind code IS reliable, so stripping zeros + dropping kind
-  // empties the Google search. For EA we re-pad to 6 digits and keep the kind.
-  // Verified: EA0000029772B1 → "EA029772B1" → EA029772B1.
+  // Strategy — strip the date and the leading-zero padding off the number, then
+  // build a DIRECT doc URL (`/patent/{pn}`) so the user lands on the single
+  // patent page, not a search-results page with multiple kind codes + family
+  // noise. Office-specific rules:
+  //   • US — drop the kind code (Google resolves the bare PN to the canonical
+  //     kind, sidestepping PatSearch's unreliable grant kind). Verified:
+  //     US0004572482A1 → "US4572482" → US4572482A.
+  //   • EA — canonical EA numbers are 6-digit zero-padded; re-pad to 6 and keep
+  //     the kind. Verified: EA0000029772B1 → "EA029772B1".
+  //   • CN / JP / EP / SU / etc. — keep the kind (PatSearch's is correct).
+  //     Verified: CN102077046B and CN1250747C resolve directly.
+  // Fallback for ids that don't match the {CC}{digits}{kind?} shape: search.
   const m = /^([A-Z]{2})0*(\d+)([A-Z]\d?)?/.exec(id);
   if (!m) {
     return `https://patents.google.com/?q=${encodeURIComponent(id.replace(/_\d+$/, ""))}`;
   }
   const [, cc, numCore, kind] = m;
-  const pn =
-    cc === "EA"
-      ? `${cc}${numCore.padStart(6, "0")}${kind ?? ""}`
-      : `${cc}${numCore}`;
-  return `https://patents.google.com/?q=${encodeURIComponent(pn)}`;
+  let pn: string;
+  if (cc === "EA") {
+    pn = `${cc}${numCore.padStart(6, "0")}${kind ?? ""}`;
+  } else if (cc === "US") {
+    pn = `${cc}${numCore}`;
+  } else {
+    pn = `${cc}${numCore}${kind ?? ""}`;
+  }
+  return `https://patents.google.com/patent/${encodeURIComponent(pn)}`;
 }
 
 export function resolveIdAndCountry(h: PatSearchHit): {
