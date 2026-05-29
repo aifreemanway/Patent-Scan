@@ -73,7 +73,16 @@ export async function POST(req: NextRequest) {
 
   // 4. Magic link.
   const supabase = await createSupabaseServer();
-  const origin = new URL(req.url).origin;
+  // Behind the nginx TLS proxy, `req.url` carries the INTERNAL origin
+  // (http://127.0.0.1:3000) — so `${origin}/auth/callback` wouldn't match the
+  // Supabase redirect allow-list, and Supabase silently falls back to the Site
+  // URL root (dropping our /auth/callback path → the code lands on `/` and is
+  // never exchanged). Derive the public origin from the headers nginx sets.
+  const fwdHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const fwdProto =
+    req.headers.get("x-forwarded-proto") ??
+    new URL(req.url).protocol.replace(":", "");
+  const origin = fwdHost ? `${fwdProto}://${fwdHost}` : new URL(req.url).origin;
   const callbackPath =
     locale === routing.defaultLocale
       ? "/auth/callback"
