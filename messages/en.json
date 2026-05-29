@@ -172,6 +172,8 @@
     "deepFreeHint": "Your first review is free with registration.",
     "deepLoading": "Preparing the in-depth review… This may take 1–2 minutes.",
     "deepResultTitle": "In-depth review",
+    "crossCheckTitle": "The in-depth review refined the verdict",
+    "crossCheckBody": "The initial screening rated it “{fast}”, while the feature-by-feature review rated it “{deep}”. A shift like this is a signal of uncertainty — we recommend reviewing the result with a patent attorney before filing.",
     "deepFeaturesTitle": "Breakdown by feature",
     "deepStatusKnown": "Already exists",
     "deepStatusPartial": "Partially",

@@ -633,6 +633,33 @@ export default function ReportPage() {
                 {t("deepResultTitle")}
               </h2>
 
+              {/* cross-check #4: when the deep (Sonnet) verdict differs from the
+                  fast (Gemini) report verdict, surface it honestly as a
+                  "needs a human" signal — framed as the deep pass refining the
+                  initial read, not as the engines conflicting. */}
+              {(() => {
+                const fast = data.uniqueness;
+                const deep = deepResult.uniqueness;
+                if (!fast || !deep || fast === deep) return null;
+                const label = (u: "High" | "Medium" | "Low") =>
+                  t(
+                    `uniqueness${u}` as
+                      | "uniquenessHigh"
+                      | "uniquenessMedium"
+                      | "uniquenessLow"
+                  );
+                return (
+                  <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-semibold text-amber-900">
+                      {t("crossCheckTitle")}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-amber-800">
+                      {t("crossCheckBody", { fast: label(fast), deep: label(deep) })}
+                    </p>
+                  </div>
+                );
+              })()}
+
               {deepResult.overview && (
                 <p className="mt-3 text-sm leading-6 text-slate-700">
                   {deepResult.overview}
