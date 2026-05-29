@@ -121,13 +121,18 @@ export async function callGeminiJson<T>(
     });
   } catch (e) {
     const isTimeout = e instanceof DOMException && e.name === "AbortError";
-    throw new GeminiError(
-      "network",
-      isTimeout
-        ? `Gemini timeout after ${timeoutMs}ms`
-        : `Gemini fetch failed: ${e instanceof Error ? e.message : String(e)}`,
-      { traceId }
-    );
+    const msg = isTimeout
+      ? `Gemini timeout after ${timeoutMs}ms`
+      : `Gemini fetch failed: ${e instanceof Error ? e.message : String(e)}`;
+    // Log BEFORE throwing — same reason as timeweb.ts: otherwise a Gemini
+    // network timeout is silent in pm2 logs and looks like nothing happened.
+    console.error("[gemini] network error", {
+      label: opts.label,
+      timeoutMs,
+      isTimeout,
+      traceId,
+    });
+    throw new GeminiError("network", msg, { traceId });
   } finally {
     clearTimeout(timer);
   }

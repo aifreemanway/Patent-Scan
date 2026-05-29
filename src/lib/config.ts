@@ -28,8 +28,12 @@ export const TIMEWEB_URL =
 /** Deep Analysis judge model (premium, transactional). Routed via Timeweb gateway. */
 export const DEEP_ANALYSIS_MODEL = "anthropic/claude-sonnet-4-6";
 
-/** Deep Analysis is a long claim-by-claim + cross-check pass. */
-export const DEEP_ANALYSIS_TIMEOUT_MS = 120_000;
+/** Deep Analysis is a long claim-by-claim + cross-check pass.
+ *  120s was too tight (verified: Sonnet via Timeweb on ~60 patents repeatedly
+ *  overran, killed by the AbortController, refund + 504). Bumped to 300s so the
+ *  hard ceiling matches a generous real-world tail. Nginx proxy_read_timeout
+ *  MUST stay > this (currently 310s in deploy/nginx/patent-scan.conf). */
+export const DEEP_ANALYSIS_TIMEOUT_MS = 300_000;
 
 // --- Rospatent PatSearch ---
 

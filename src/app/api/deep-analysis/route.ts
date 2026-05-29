@@ -21,7 +21,9 @@ import {
 export const runtime = "nodejs";
 // Sonnet claim-by-claim is long. Exceeds Vercel Pro's 60s cap → needs a no-cap
 // host (Timeweb VPS) in prod; fine locally and on the deferred deploy target.
-export const maxDuration = 120;
+// 300s mirrors DEEP_ANALYSIS_TIMEOUT_MS (the real kill switch on the self-hosted
+// node runtime is the AbortController; maxDuration is here for parity).
+export const maxDuration = 300;
 
 // Premium "deep" judge: a claim-by-claim novelty read over the SAME retrieved
 // prior-art pool the free pass used — broken down by the distinguishing

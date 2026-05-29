@@ -96,12 +96,15 @@ export async function callTimewebJson<T>(opts: {
     });
   } catch (e) {
     const isTimeout = e instanceof DOMException && e.name === "AbortError";
-    throw new TimewebError(
-      "network",
-      isTimeout
-        ? `Timeweb timeout after ${timeoutMs}ms`
-        : `Timeweb fetch failed: ${e instanceof Error ? e.message : String(e)}`
-    );
+    const msg = isTimeout
+      ? `Timeweb timeout after ${timeoutMs}ms`
+      : `Timeweb fetch failed: ${e instanceof Error ? e.message : String(e)}`;
+    // Log BEFORE throwing — otherwise this entire failure mode is silent in pm2
+    // logs (a Sonnet timeout would surface as an empty error log section and
+    // confuse triage). The upstream_http / empty_response / invalid_json paths
+    // each have their own console.error; this one needs the same treatment.
+    console.error("[timeweb] network error", { model, timeoutMs, isTimeout });
+    throw new TimewebError("network", msg);
   } finally {
     clearTimeout(timer);
   }
