@@ -46,7 +46,21 @@ export function buildUrl(id: string, country: string): string {
     const num = /^RU(\d+)/.exec(id)?.[1] ?? id.replace(/\D/g, "");
     return `https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=${num}&TypeFile=html`;
   }
-  return `https://searchplatform.rospatent.gov.ru/docs/${encodeURIComponent(id)}`;
+  // Foreign patents → Google Patents (human-readable), NOT the PatSearch /docs
+  // endpoint (it returns raw JSON — the bug we're fixing). PatSearch ids are
+  // `{CC}{number}{kind}_{date}` where the number is zero-padded to a fixed width
+  // and the kind code is unreliable (e.g. US grants are tagged `A1` though Google
+  // indexes them as `A`). Both quirks break a literal link: Google returns 0
+  // results for the padded number and 404s a direct `/patent/{id}` on the kind
+  // mismatch. So we strip the date, strip the leading-zero padding off the number,
+  // drop the kind, and hand the bare publication number to Google Patents SEARCH,
+  // which resolves it to the right document. Verified: US0004572482A1 →
+  // "US4572482" → US4572482A; CN102077046B → "CN102077046"; US20190276906A1 stays.
+  // (Eurasian "EA" numbers are canonically 6-digit zero-padded, so a stripped EA
+  // number can under-resolve — a known edge case to refine if it surfaces.)
+  const m = /^([A-Z]{2})0*(\d+)/.exec(id);
+  const pn = m ? `${m[1]}${m[2]}` : id.replace(/_\d+$/, "");
+  return `https://patents.google.com/?q=${encodeURIComponent(pn)}`;
 }
 
 export function resolveIdAndCountry(h: PatSearchHit): {
