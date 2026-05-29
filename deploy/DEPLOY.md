@@ -37,7 +37,7 @@ npm run build
 
 ## 4. `.env.production` checklist (NOT in git)
 ```
-GEMINI_API_KEY=            TIMEWEB_AI_KEY=            # Deep Analysis (Sonnet)
+TIMEWEB_AI_KEY=            # ALL models via gateway: Gemini (search/analysis) + Sonnet (Deep Analysis)
 PATSEARCH_TOKEN=           TAVILY_API_KEY=
 EPO_KEY=                   EPO_SECRET=
 NEXT_PUBLIC_SUPABASE_URL=  NEXT_PUBLIC_SUPABASE_ANON_KEY=  SUPABASE_SERVICE_ROLE_KEY=
@@ -45,7 +45,7 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=  TURNSTILE_SECRET_KEY=
 RESEND_API_KEY=
 UPSTASH_REDIS_REST_URL=    UPSTASH_REDIS_REST_TOKEN=
 ```
-(Rotate `TIMEWEB_AI_KEY` + the chat-exposed Turnstile secret at this step — they leaked earlier.)
+(`TIMEWEB_AI_KEY` is the SINGLE AI-gateway key — it powers Gemini AND Sonnet, so there is no separate `GEMINI_API_KEY` anymore. A fresh gateway key was created 2026-05-29; since keys have been pasted in chat, do one FINAL rotation right before public launch and set it directly here on the server — never commit it or paste it in chat. Same for the Turnstile secret.)
 
 ## 5. Run under pm2
 ```bash

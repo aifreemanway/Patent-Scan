@@ -97,7 +97,7 @@ export async function POST(req: Request) {
   if (!guard.ok) return guard.response;
 
   const token = process.env.PATSEARCH_TOKEN;
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = process.env.TIMEWEB_AI_KEY;
   if (!token || !geminiKey) {
     return NextResponse.json({ error: "Service configuration error" }, { status: 500 });
   }

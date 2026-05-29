@@ -1,20 +1,13 @@
-// Unified Gemini generateContent caller with AbortController timeout,
+// Unified Gemini caller — routes every Gemini-model request through the Timeweb
+// gateway (OpenAI-compatible /chat/completions), with AbortController timeout,
 // markdown-fence cleanup, shape validation, and structured error codes.
 // Every Gemini-using file in this repo should go through this helper.
 
-import { GEMINI_URL } from "./config";
+import { TIMEWEB_URL, GEMINI_MODEL } from "./config";
 
-type GeminiResponseRaw = {
-  candidates?: {
-    content?: {
-      parts?: { text?: string }[];
-    };
-  }[];
-  usageMetadata?: {
-    promptTokenCount?: number;
-    candidatesTokenCount?: number;
-    thoughtsTokenCount?: number;
-  };
+type ChatResponseRaw = {
+  choices?: { message?: { content?: string } }[];
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 };
 
 export type GeminiUsage = {
@@ -58,7 +51,8 @@ export type CallGeminiJsonOptions = {
   userText: string;
   /** 0.0–1.0, default 0.3 */
   temperature?: number;
-  /** thinking tokens budget, default 512 */
+  /** Accepted for source compatibility but ignored: the OpenAI-compatible gateway
+   *  exposes no thinking-budget control (gemini-2.5-flash reasons at its default). */
   thinkingBudget?: number;
   /** Client-side abort timeout, default 30s */
   timeoutMs?: number;
@@ -67,12 +61,13 @@ export type CallGeminiJsonOptions = {
 };
 
 /**
- * Call Gemini `generateContent` expecting JSON response.
+ * Call Gemini (via the Timeweb gateway) expecting a JSON response.
  *
  * Behavior:
- * - Sends x-goog-api-key header (never URL query — keeps secrets out of logs/Referer).
+ * - Sends an `Authorization: Bearer` header (gateway auth; keeps the key out of the URL).
  * - Aborts the request after `timeoutMs`.
- * - Strips ```json``` fence if Gemini wraps the response in markdown.
+ * - Strips a ```json``` fence if the model wraps the response in markdown, then
+ *   falls back to a first-'{' … last-'}' slice before giving up.
  * - Parses JSON with try/catch; throws `GeminiError("invalid_json")` on bad shape.
  * - Distinguishes network timeout vs HTTP error vs empty response vs bad JSON
  *   via `GeminiError.code`, so callers can surface 504 vs 502 vs 500 correctly.
@@ -87,19 +82,24 @@ export async function callGeminiJson<T>(
     systemPrompt,
     userText,
     temperature = 0.3,
-    thinkingBudget = 512,
     timeoutMs = 30_000,
     traceId,
   } = opts;
 
+  // OpenAI-compatible chat payload for the gateway.
+  // - `thinkingBudget` (in opts) is intentionally NOT sent: the gateway has no
+  //   thinking-budget control; gemini-2.5-flash reasons at the gateway default.
+  // - `max_tokens` is intentionally omitted: the prior Google-direct calls set no
+  //   output cap, and large landscape syntheses (≤150 patents) must not truncate
+  //   (verified: the gateway returns finish_reason "stop", not "length", uncapped).
   const payload = {
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: [{ text: userText }] }],
-    generationConfig: {
-      temperature,
-      responseMimeType: "application/json",
-      thinkingConfig: { thinkingBudget },
-    },
+    model: GEMINI_MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userText },
+    ],
+    temperature,
+    response_format: { type: "json_object" },
   };
 
   const ctrl = new AbortController();
@@ -107,11 +107,11 @@ export async function callGeminiJson<T>(
 
   let resp: Response;
   try {
-    resp = await fetch(GEMINI_URL, {
+    resp = await fetch(TIMEWEB_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
@@ -141,9 +141,9 @@ export async function callGeminiJson<T>(
     });
   }
 
-  const raw = (await resp.json()) as GeminiResponseRaw;
+  const raw = (await resp.json()) as ChatResponseRaw;
 
-  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = raw.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) {
     console.error("[gemini] empty response", {
       traceId,
@@ -154,27 +154,35 @@ export async function callGeminiJson<T>(
     });
   }
 
+  // Strip a ```json fence if present; if that still won't parse, fall back to the
+  // first '{' … last '}' slice (the gateway's json_object mode can wrap in prose).
   const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-
   let data: T;
   try {
     data = JSON.parse(cleaned) as T;
   } catch {
-    console.error("[gemini] invalid JSON", {
-      traceId,
-      cleanedPreview: cleaned.slice(0, 200),
-    });
-    throw new GeminiError(
-      "invalid_json",
-      `Gemini returned invalid JSON (len=${cleaned.length})`,
-      { traceId }
-    );
+    const s = cleaned.indexOf("{");
+    const e = cleaned.lastIndexOf("}");
+    const slice = s >= 0 && e > s ? cleaned.slice(s, e + 1) : "";
+    try {
+      data = JSON.parse(slice) as T;
+    } catch {
+      console.error("[gemini] invalid JSON", {
+        traceId,
+        cleanedPreview: cleaned.slice(0, 200),
+      });
+      throw new GeminiError(
+        "invalid_json",
+        `Gemini returned invalid JSON (len=${cleaned.length})`,
+        { traceId }
+      );
+    }
   }
 
   const usage: GeminiUsage = {
-    input: raw.usageMetadata?.promptTokenCount ?? 0,
-    output: raw.usageMetadata?.candidatesTokenCount ?? 0,
-    thinking: raw.usageMetadata?.thoughtsTokenCount ?? 0,
+    input: raw.usage?.prompt_tokens ?? 0,
+    output: raw.usage?.completion_tokens ?? 0,
+    thinking: 0, // gateway doesn't report a separate thinking-token count
   };
 
   return { data, text, usage };

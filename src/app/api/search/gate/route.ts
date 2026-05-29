@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
     return NextResponse.json({
       sufficient: false,
