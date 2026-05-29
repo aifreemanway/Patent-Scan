@@ -701,11 +701,19 @@ export default function ReportPage() {
                   type="button"
                   onClick={runDeepAnalysis}
                   disabled={deepStatus === "loading"}
-                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  className="inline-flex items-center justify-center gap-3 rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-700 disabled:hover:bg-slate-700"
                 >
-                  {deepStatus === "loading"
-                    ? deepRotating ?? deepPhrases[0]
-                    : t("deepButtonFree")}
+                  {deepStatus === "loading" ? (
+                    <>
+                      <span
+                        className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                        aria-hidden
+                      />
+                      <span>{deepRotating ?? deepPhrases[0]}</span>
+                    </>
+                  ) : (
+                    t("deepButtonFree")
+                  )}
                 </button>
                 <p className="mt-2 text-xs text-slate-500">
                   {deepStatus === "loading"
