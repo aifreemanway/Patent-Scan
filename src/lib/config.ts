@@ -20,6 +20,18 @@ export const GEMINI_TIMEOUT_MS = {
   rank: 40_000,
 } as const;
 
+// --- Timeweb LLM gateway (Deep Analysis) ---
+
+/** Timeweb OpenAI-compatible chat-completions endpoint. Override via `TIMEWEB_URL`. */
+export const TIMEWEB_URL =
+  process.env.TIMEWEB_URL ?? "https://api.timeweb.ai/v1/chat/completions";
+
+/** Deep Analysis judge model (premium, transactional). Routed via Timeweb gateway. */
+export const DEEP_ANALYSIS_MODEL = "anthropic/claude-sonnet-4-6";
+
+/** Deep Analysis is a long claim-by-claim + cross-check pass. */
+export const DEEP_ANALYSIS_TIMEOUT_MS = 120_000;
+
 // --- Rospatent PatSearch ---
 
 /** PatSearch endpoint. Override via env `PATSEARCH_URL`. */
@@ -91,6 +103,9 @@ export const RATE_MAX = {
   // Novelty's two-pass ranking makes up to ~6 calls per run (chunk maps +
   // reduce), so this must clear a couple of runs/min per IP.
   priorArtRank: 30,
+  // Premium Sonnet judge — expensive + metered by the per-account free credit,
+  // so the per-IP limit is just an abuse backstop.
+  deepAnalysis: 3,
 } as const;
 
 // --- Auth / anti-abuse ---
