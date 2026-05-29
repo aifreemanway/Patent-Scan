@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   normalizeHit,
   type PatSearchHit,
@@ -30,6 +31,9 @@ export async function POST(req: Request) {
     keyPrefix: "landscape-search",
   });
   if (rl) return rl;
+
+  const guard = await requireAuth();
+  if (!guard.ok) return guard.response;
 
   const token = process.env.PATSEARCH_TOKEN;
   if (!token) {

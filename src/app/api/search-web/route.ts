@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   TAVILY_URL,
   TAVILY_TIMEOUT_MS,
@@ -42,6 +43,9 @@ export async function POST(req: Request) {
     keyPrefix: "web",
   });
   if (rl) return rl;
+
+  const guard = await requireAuth();
+  if (!guard.ok) return guard.response;
 
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {

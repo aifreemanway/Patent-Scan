@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
@@ -40,6 +41,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     keyPrefix: "questions",
   });
   if (rl) return rl;
+
+  const guard = await requireAuth();
+  if (!guard.ok) return guard.response;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
