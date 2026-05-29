@@ -257,6 +257,7 @@
       "emailPlaceholder": "you@example.com",
       "consent": "I agree to the processing of personal data for the purpose of sign-in and service delivery.",
       "consentRequired": "Please confirm your consent to continue.",
+      "marketingConsent": "I agree to receive informational emails from Patent-Scan: product news, patent-search tips, customer cases. You can unsubscribe via the link in each email.",
       "captchaLoading": "Verifying you're human…",
       "submit": "Send sign-in link",
       "submitting": "Sending…",

@@ -22,6 +22,10 @@ type LoginBody = {
   email?: unknown;
   turnstileToken?: unknown;
   locale?: unknown;
+  /** Optional opt-in for marketing channel (separate from the required primary
+   *  consent). When true, the signup trigger stamps profiles.marketing_consent_at;
+   *  false / omitted leaves it null. Defaults to false. */
+  marketingConsent?: unknown;
 };
 
 function clientIp(req: NextRequest): string | null {
@@ -51,6 +55,7 @@ export async function POST(req: NextRequest) {
   const locale = (routing.locales as readonly string[]).includes(rawLocale)
     ? rawLocale
     : routing.defaultLocale;
+  const marketingConsent = body.marketingConsent === true;
 
   // 1. Turnstile.
   const captcha = await verifyTurnstile(turnstileToken, clientIp(req));
@@ -94,6 +99,12 @@ export async function POST(req: NextRequest) {
     options: {
       emailRedirectTo,
       shouldCreateUser: true,
+      // Lands in auth.users.raw_user_meta_data on signup; handle_new_user()
+      // reads it and stamps profiles.marketing_consent_at atomically with the
+      // profile row creation. For existing users (login, not signup) the
+      // trigger doesn't fire, so this value is ignored on re-logins —
+      // existing consent state is preserved exactly as it was.
+      data: { marketing_consent: marketingConsent },
     },
   });
 

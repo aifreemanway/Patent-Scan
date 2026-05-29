@@ -55,6 +55,11 @@ export function LoginForm({
   const t = useTranslations("Auth.login");
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
+  // Optional marketing opt-in (NOT pre-checked, NOT required to submit).
+  // Value is sent on every login; the signup trigger acts on it only when
+  // creating the profile row — re-logins by existing users don't overwrite
+  // a previously-set consent state.
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [errorCode, setErrorCode] = useState<ErrorCode | "generic" | null>(null);
@@ -107,6 +112,7 @@ export function LoginForm({
           email,
           turnstileToken: token,
           locale,
+          marketingConsent,
         }),
       });
 
@@ -197,6 +203,16 @@ export function LoginForm({
         {consentError && (
           <p className="mt-1 text-xs text-red-600">{t("consentRequired")}</p>
         )}
+
+        <label className="mt-3 flex items-start gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+          />
+          <span>{t("marketingConsent")}</span>
+        </label>
 
         <div className="mt-5 min-h-[70px]" ref={widgetRef} />
         {!siteKey && (
