@@ -82,7 +82,7 @@
 - Fallback на in-memory если не настроен (для local dev)
 
 ### Прочее
-- **Gemini API key** — `GEMINI_API_KEY` в Vercel env vars
+- **AI-шлюз (все модели)** — `TIMEWEB_AI_KEY` (Timeweb, OpenAI-совместимый `api.timeweb.ai`): Gemini 2.5 Flash (поиск/анализ) + Claude Sonnet 4.6 (Deep Analysis) на одном ключе. Опц. `GEMINI_MODEL` — сменить модель Gemini без правки кода. Локально `web/.env.local`, на VPS `web/.env.production`
 - **PatSearch token** — `PATSEARCH_TOKEN`
 - **Tavily** — `TAVILY_API_KEY`
 - **EPO** — `EPO_KEY` + `EPO_SECRET` (пока не используется, оставлено на будущее)

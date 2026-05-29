@@ -45,7 +45,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
     return NextResponse.json(
       { error: "Service configuration error" },

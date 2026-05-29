@@ -2,12 +2,11 @@
 // Override via env vars where indicated; other values are tuning knobs that
 // require a redeploy on change.
 
-// --- Gemini ---
+// --- Gemini (routed via the Timeweb gateway — see lib/gemini.ts) ---
 
-/** Gemini generateContent endpoint. Override via env `GEMINI_URL` (e.g. to switch model). */
-export const GEMINI_URL =
-  process.env.GEMINI_URL ??
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+/** Gemini model id on the Timeweb gateway. Override via env `GEMINI_MODEL`
+ *  (e.g. "gemini/gemini-2.5-pro" or a newer flash) without a code change. */
+export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini/gemini-2.5-flash";
 
 /** Per-route Gemini timeouts (ms). Must be ≤ route's `maxDuration`. */
 export const GEMINI_TIMEOUT_MS = {
