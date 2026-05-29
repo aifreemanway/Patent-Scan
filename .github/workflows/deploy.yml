@@ -25,7 +25,6 @@ jobs:
             cd /var/www/patent-scan
             git fetch origin main
             git reset --hard origin/main
-            cd web
             npm ci
             npm run build
             pm2 reload deploy/ecosystem.config.js --update-env
