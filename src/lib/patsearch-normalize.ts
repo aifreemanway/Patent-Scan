@@ -49,17 +49,27 @@ export function buildUrl(id: string, country: string): string {
   // Foreign patents → Google Patents (human-readable), NOT the PatSearch /docs
   // endpoint (it returns raw JSON — the bug we're fixing). PatSearch ids are
   // `{CC}{number}{kind}_{date}` where the number is zero-padded to a fixed width
-  // and the kind code is unreliable (e.g. US grants are tagged `A1` though Google
-  // indexes them as `A`). Both quirks break a literal link: Google returns 0
-  // results for the padded number and 404s a direct `/patent/{id}` on the kind
-  // mismatch. So we strip the date, strip the leading-zero padding off the number,
-  // drop the kind, and hand the bare publication number to Google Patents SEARCH,
-  // which resolves it to the right document. Verified: US0004572482A1 →
-  // "US4572482" → US4572482A; CN102077046B → "CN102077046"; US20190276906A1 stays.
-  // (Eurasian "EA" numbers are canonically 6-digit zero-padded, so a stripped EA
-  // number can under-resolve — a known edge case to refine if it surfaces.)
-  const m = /^([A-Z]{2})0*(\d+)/.exec(id);
-  const pn = m ? `${m[1]}${m[2]}` : id.replace(/_\d+$/, "");
+  // and the kind code is unreliable for some offices (e.g. US grants tagged `A1`
+  // when Google indexes them as `A`). Both quirks break a literal link.
+  //
+  // General rule (US/CN/JP/EP/…): strip date, strip leading-zero padding off
+  // the number, DROP the kind code, search Google Patents by bare publication
+  // number. Verified: US0004572482A1 → "US4572482" → US4572482A; CN102077046B →
+  // "CN102077046"; US20190276906A1 stays whole.
+  //
+  // EA (Eurasian) is the exception: canonical EA numbers are zero-padded to 6
+  // digits, and EA's kind code IS reliable, so stripping zeros + dropping kind
+  // empties the Google search. For EA we re-pad to 6 digits and keep the kind.
+  // Verified: EA0000029772B1 → "EA029772B1" → EA029772B1.
+  const m = /^([A-Z]{2})0*(\d+)([A-Z]\d?)?/.exec(id);
+  if (!m) {
+    return `https://patents.google.com/?q=${encodeURIComponent(id.replace(/_\d+$/, ""))}`;
+  }
+  const [, cc, numCore, kind] = m;
+  const pn =
+    cc === "EA"
+      ? `${cc}${numCore.padStart(6, "0")}${kind ?? ""}`
+      : `${cc}${numCore}`;
   return `https://patents.google.com/?q=${encodeURIComponent(pn)}`;
 }
 
