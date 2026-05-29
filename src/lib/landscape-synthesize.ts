@@ -102,6 +102,7 @@ export async function synthesizeLandscape(
     trends?: unknown;
   }>({
     apiKey,
+    label: "landscape-synthesize",
     systemPrompt: SYSTEM_PROMPT,
     userText,
     temperature: 0.4,

@@ -4,6 +4,7 @@
 // Every Gemini-using file in this repo should go through this helper.
 
 import { TIMEWEB_URL, GEMINI_MODEL } from "./config";
+import { logCost } from "./cost";
 
 type ChatResponseRaw = {
   choices?: { message?: { content?: string } }[];
@@ -58,6 +59,8 @@ export type CallGeminiJsonOptions = {
   timeoutMs?: number;
   /** Caller-supplied ID for correlating logs across a user flow */
   traceId?: string;
+  /** Short call-site tag for the `[cost]` telemetry line (e.g. "analyze", "rank"). */
+  label?: string;
 };
 
 /**
@@ -184,6 +187,8 @@ export async function callGeminiJson<T>(
     output: raw.usage?.completion_tokens ?? 0,
     thinking: 0, // gateway doesn't report a separate thinking-token count
   };
+
+  logCost({ label: opts.label ?? "gemini", model: GEMINI_MODEL, usage });
 
   return { data, text, usage };
 }

@@ -123,6 +123,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const { data } = await callGeminiJson<{ ids?: unknown }>({
       apiKey,
+      label: "rank",
       systemPrompt,
       userText,
       temperature: 0.2,

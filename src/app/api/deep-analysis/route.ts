@@ -197,6 +197,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const { data } = await callTimewebJson<DeepVerdict>({
       apiKey,
+      label: "deep-analysis",
       model: DEEP_ANALYSIS_MODEL,
       systemPrompt: SYSTEM_PROMPT,
       userText,

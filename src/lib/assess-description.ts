@@ -45,6 +45,7 @@ export async function assessDescription(
     reason?: unknown;
   }>({
     apiKey,
+    label: "gate",
     systemPrompt: SYSTEM_PROMPT,
     userText: description,
     temperature: 0.1,

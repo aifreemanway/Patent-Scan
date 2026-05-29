@@ -150,6 +150,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const { data } = await callGeminiJson<AnalyzeVerdict>({
       apiKey,
+      label: "analyze",
       systemPrompt: SYSTEM_PROMPT,
       userText,
       temperature: 0.3,

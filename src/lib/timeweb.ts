@@ -9,6 +9,7 @@
 //    trusting clean JSON.
 
 import { TIMEWEB_URL } from "./config";
+import { logCost } from "./cost";
 
 export type TimewebModel =
   | "anthropic/claude-sonnet-4-6"
@@ -54,6 +55,8 @@ export async function callTimewebJson<T>(opts: {
   temperature?: number;
   maxTokens?: number;
   timeoutMs?: number;
+  /** Short call-site tag for the `[cost]` telemetry line. */
+  label?: string;
 }): Promise<TimewebJsonResult<T>> {
   const {
     apiKey,
@@ -137,14 +140,14 @@ export async function callTimewebJson<T>(opts: {
     );
   }
 
-  return {
-    data,
-    text,
-    usage: {
-      input: raw.usage?.prompt_tokens ?? 0,
-      output: raw.usage?.completion_tokens ?? 0,
-    },
+  const usage: TimewebUsage = {
+    input: raw.usage?.prompt_tokens ?? 0,
+    output: raw.usage?.completion_tokens ?? 0,
   };
+
+  logCost({ label: opts.label ?? "timeweb", model, usage });
+
+  return { data, text, usage };
 }
 
 /** network timeout → 504, everything else → 502. */

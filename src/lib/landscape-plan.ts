@@ -122,6 +122,7 @@ export async function planLandscape(
     overviewSeed?: unknown;
   }>({
     apiKey,
+    label: "landscape-plan",
     systemPrompt: SYSTEM_PROMPT,
     userText: topic,
     // Low temperature: the de-anchored probes must land on canonical, reliable

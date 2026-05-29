@@ -50,6 +50,7 @@ export async function extractSearchTerms(
     ipcCodes?: unknown;
   }>({
     apiKey,
+    label: "extract",
     systemPrompt: SYSTEM_PROMPT,
     userText: description,
     temperature: 0.2,

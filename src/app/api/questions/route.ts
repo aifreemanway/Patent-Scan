@@ -77,6 +77,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     const { data } = await callGeminiJson<{ questions?: unknown }>({
       apiKey,
+      label: "questions",
       systemPrompt: SYSTEM_PROMPT,
       userText: description,
       temperature: 0.4,
