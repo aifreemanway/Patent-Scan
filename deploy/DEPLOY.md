@@ -12,6 +12,10 @@ ssh root@VPS_IP                      # key auth (no password)
 adduser deploy && usermod -aG sudo deploy
 rsync --archive ~/.ssh /home/deploy/   # copy authorized_keys to deploy user
 ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw enable
+# AFTER confirming key login works (open a 2nd session as `deploy` first!),
+# lock SSH to keys only — password auth was left on at order time as a safety net:
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo systemctl reload ssh
 ```
 
 ## 2. Install stack (as deploy)
