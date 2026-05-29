@@ -119,6 +119,7 @@
   "Report": {
     "title": "Uniqueness check report",
     "subtitle": "Preview version of the report. A reference point, not a legal opinion.",
+    "queryLabel": "What was checked",
     "uniquenessLabel": "Uniqueness score",
     "uniquenessHigh": "High",
     "uniquenessMedium": "Medium",
@@ -165,7 +166,7 @@
     "disclaimerTitle": "This is a preliminary screening",
     "disclaimerBody": "This report is based on automated analysis of open patent databases and is not a legal opinion. It does not replace the expertise of a patent attorney. Make the final decision to file after consulting a specialist.",
     "deepTitle": "In-depth expert review",
-    "deepBody": "The same results, analysed in more depth on the Sonnet 4.6 model: a claim-by-claim breakdown of the invention's features and distant, non-obvious analogs. A comparable review at a patent firm starts at 50,000 ₽ and takes 7–10 days.",
+    "deepBody": "The same results, analysed in more depth on a frontier model from the Anthropic lab: a claim-by-claim breakdown of the invention's features and distant, non-obvious analogs. A comparable review at a patent firm starts at 50,000 ₽ and takes 7–10 days.",
     "deepBullet1": "Breakdown by distinguishing features: what is already patented and what is new",
     "deepBullet2": "Distant analogs that the standard pass filters out",
     "deepButtonFree": "Get the free review",

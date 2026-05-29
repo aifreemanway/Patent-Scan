@@ -80,6 +80,26 @@ function safeHref(url: string | undefined | null): string | null {
   return /^https?:\/\//i.test(url) ? esc(url) : null;
 }
 
+// Trim a long invention description to a header-friendly length (keeps the
+// "what was checked" line from swallowing the top of the report/export).
+function truncate(s: string, max = 280): string {
+  const t = s.trim();
+  return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t;
+}
+
+// Short, descriptive filename slug from the invention description, so a saved
+// report is identifiable later (Cyrillic is kept — RU filenames are fine).
+function fileSlug(s: string | undefined | null): string {
+  return String(s ?? "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .split("-")
+    .filter(Boolean)
+    .slice(0, 6)
+    .join("-")
+    .slice(0, 60);
+}
+
 const REPORT_CSS = `
 *{box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#0f172a;background:#fff;margin:0;padding:32px;line-height:1.5}
@@ -129,6 +149,14 @@ function buildSearchReportHtml(args: {
       ? `<a class="mono" href="${href}" target="_blank" rel="noopener noreferrer">${esc(id)}</a>`
       : `<span class="mono">${esc(id)}</span>`;
   };
+
+  const queryHtml = data._input?.description
+    ? `<section class="card"><div class="muted">${esc(
+        t("queryLabel"),
+      )}</div><p style="margin:4px 0 0">${esc(
+        truncate(data._input.description),
+      )}</p></section>`
+    : "";
 
   const uniquenessHtml = `<section class="card"><div class="muted">${esc(
     t("uniquenessLabel"),
@@ -249,6 +277,7 @@ function buildSearchReportHtml(args: {
 <div class="wrap">
 <h1>${esc(t("title"))}</h1>
 <p class="subtitle">${esc(t("subtitle"))}</p>
+${queryHtml}
 ${uniquenessHtml}
 ${overviewHtml}
 ${patentsHtml}
@@ -378,7 +407,11 @@ export default function ReportPage() {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const fileBase = `patent-uniqueness-${new Date().toISOString().slice(0, 10)}`;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const slug = fileSlug(data._input?.description);
+  const fileBase = slug
+    ? `patent-${slug}-${dateStr}`
+    : `patent-uniqueness-${dateStr}`;
 
   const handleExportHtml = () => {
     const html = buildSearchReportHtml({
@@ -424,6 +457,13 @@ export default function ReportPage() {
             {t("title")}
           </h1>
           <p className="mt-3 max-w-3xl text-slate-600">{t("subtitle")}</p>
+
+          {data._input?.description ? (
+            <p className="mt-4 max-w-3xl rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              <span className="font-semibold text-slate-800">{t("queryLabel")}:</span>{" "}
+              {truncate(data._input.description)}
+            </p>
+          ) : null}
 
           {/* Uniqueness indicator — neutral label + small accent dot (no big
               green "all clear"), always shown next to its calibration caption
