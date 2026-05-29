@@ -117,8 +117,9 @@ function buildSearchReportHtml(args: {
   uniquenessLabel: string;
   locale: string;
   autoPrint: boolean;
+  deep?: DeepResult | null;
 }): string {
-  const { data, t, headers, uniquenessLabel, locale, autoPrint } = args;
+  const { data, t, headers, uniquenessLabel, locale, autoPrint, deep } = args;
   const patents = data.patents ?? [];
   const uniqueness = data.uniqueness ?? "Medium";
 
@@ -189,6 +190,49 @@ function buildSearchReportHtml(args: {
       )}</p></section>`
     : "";
 
+  const deepHtml = (() => {
+    if (!deep || !deep.uniqueness) return "";
+    const uLabel = (u: string) =>
+      t(`uniqueness${u}` as "uniquenessHigh" | "uniquenessMedium" | "uniquenessLow");
+    const statusLabel = (s?: string) =>
+      s === "novel"
+        ? t("deepStatusNovel")
+        : s === "partially_known"
+          ? t("deepStatusPartial")
+          : t("deepStatusKnown");
+    const crossHtml =
+      deep.uniqueness !== uniqueness
+        ? `<section class="card" style="border-color:#fcd34d;background:#fffbeb"><strong style="color:#92400e">${esc(
+            t("crossCheckTitle"),
+          )}</strong><p style="color:#92400e;margin:4px 0 0">${esc(
+            t("crossCheckBody", { fast: uLabel(uniqueness), deep: uLabel(deep.uniqueness) }),
+          )}</p></section>`
+        : "";
+    const featuresHtml = (deep.features ?? []).length
+      ? `<h3>${esc(t("deepFeaturesTitle"))}</h3>${(deep.features ?? [])
+          .map((f) => {
+            const analogs = (f.analogIds ?? [])
+              .map((id) => idLink(id, deep.patents?.find((p) => p.id === id)?.url))
+              .join(", ");
+            return `<div style="margin:8px 0"><strong>${esc(f.feature)}</strong> <span class="badge s-${
+              f.status === "novel" ? "Low" : "Medium"
+            }">${esc(statusLabel(f.status))}</span>${
+              f.note ? `<div class="sub">${esc(f.note)}</div>` : ""
+            }${analogs ? `<div class="sub">${esc(t("deepFeatureAnalogs"))} ${analogs}</div>` : ""}</div>`;
+          })
+          .join("")}`
+      : "";
+    return `${crossHtml}<section class="card"><h2>${esc(t("deepResultTitle"))}</h2>${
+      deep.overview ? `<p>${esc(deep.overview)}</p>` : ""
+    }${deep.uniquenessDetail ? `<p>${esc(deep.uniquenessDetail)}</p>` : ""}${featuresHtml}${
+      deep.recommendation
+        ? `<p style="margin-top:12px"><strong>${esc(
+            t("recommendationTitle"),
+          )}:</strong> ${esc(deep.recommendation)}</p>`
+        : ""
+    }</section>`;
+  })();
+
   const printScript = autoPrint
     ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});</script>`
     : "";
@@ -210,6 +254,7 @@ ${overviewHtml}
 ${patentsHtml}
 ${sourcesHtml}
 ${recoHtml}
+${deepHtml}
 </div>
 ${printScript}
 </body>
@@ -343,6 +388,7 @@ export default function ReportPage() {
       uniquenessLabel,
       locale,
       autoPrint: false,
+      deep: deepResult,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const a = document.createElement("a");
@@ -362,6 +408,7 @@ export default function ReportPage() {
       uniquenessLabel,
       locale,
       autoPrint: true,
+      deep: deepResult,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     window.open(url, "_blank");
