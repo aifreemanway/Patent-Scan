@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import { planLandscape } from "@/lib/landscape-plan";
 import {
   MAX_DESCRIPTION_LEN,
@@ -17,6 +18,9 @@ export async function POST(req: Request) {
     keyPrefix: "landscape-plan",
   });
   if (rl) return rl;
+
+  const guard = await requireAuth();
+  if (!guard.ok) return guard.response;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

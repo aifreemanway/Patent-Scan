@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuthAndQuota } from "@/lib/auth-quota";
 import {
   synthesizeLandscape,
   type SynthesisPatent,
@@ -46,6 +47,9 @@ export async function POST(req: Request) {
     keyPrefix: "landscape-synthesize",
   });
   if (rl) return rl;
+
+  const guard = await requireAuthAndQuota("landscape");
+  if (!guard.ok) return guard.response;
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

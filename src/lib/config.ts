@@ -107,28 +107,18 @@ export const SIGNUP_IP_LIMIT = {
 
 // --- Per-user quotas (month, by tier) ---
 //
-// Must stay in sync with `public.increment_usage()` function in
-// supabase/migrations/0001_auth_and_quotas.sql. If you change numbers here,
-// update the migration (and run it) too. This constant is for reference only;
-// enforcement happens in Postgres for atomicity.
+// Reference only — enforcement is in Postgres `quota_limit()` /
+// `increment_usage()` (supabase/migrations/0002_subscription_tiers.sql) for
+// atomicity. Keep these numbers in sync with that migration.
+//
+// Semantics: `search` = one user-facing novelty search (charged once at
+// /api/analyze, NOT per internal fan-out call); `landscape` = one landscape
+// build (charged at /api/landscape/synthesize). `questions` is unquota'd.
+// Deep Analysis is a separate transactional counter, not part of these tiers.
 
 export const QUOTA_LIMITS = {
-  free: {
-    search: 3,
-    landscape: 3,
-    analyze: 3,
-    questions: Infinity, // cheap, unquota'd
-  },
-  pro: {
-    search: 500,
-    landscape: 100,
-    analyze: 500,
-    questions: Infinity,
-  },
-  enterprise: {
-    search: Infinity,
-    landscape: Infinity,
-    analyze: Infinity,
-    questions: Infinity,
-  },
+  free: { search: 3, landscape: 3, questions: Infinity },
+  starter: { search: 20, landscape: 10, questions: Infinity },
+  team: { search: 60, landscape: 30, questions: Infinity },
+  enterprise: { search: Infinity, landscape: Infinity, questions: Infinity },
 } as const;

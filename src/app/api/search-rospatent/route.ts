@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { requireAuth } from "@/lib/auth-quota";
 import { extractSearchTerms } from "@/lib/extract-search-terms";
 import {
   normalizeHit,
@@ -91,6 +92,9 @@ export async function POST(req: Request) {
     keyPrefix: "search",
   });
   if (rl) return rl;
+
+  const guard = await requireAuth();
+  if (!guard.ok) return guard.response;
 
   const token = process.env.PATSEARCH_TOKEN;
   const geminiKey = process.env.GEMINI_API_KEY;
