@@ -62,9 +62,18 @@
       "title": "Data sources",
       "subtitle": "Only official open databases. We never fabricate data.",
       "items": [
-        { "name": "Rospatent PatSearch", "meta": "150M patents · RU, SU, CIS, US, EP, WO" },
-        { "name": "EPO Espacenet OPS", "meta": "European and worldwide patents · OAuth2" },
-        { "name": "USPTO PatentsView", "meta": "US patents (in progress)" }
+        {
+          "name": "Rospatent PatSearch",
+          "meta": "150M patents · RU, SU, CIS, US, EP, WO"
+        },
+        {
+          "name": "EPO Espacenet OPS",
+          "meta": "European and worldwide patents · OAuth2"
+        },
+        {
+          "name": "USPTO PatentsView",
+          "meta": "US patents (in progress)"
+        }
       ]
     },
     "ctaBlock": {
@@ -82,9 +91,18 @@
     "clarifyTitle": "Follow-up questions",
     "clarifySubtitle": "AI will ask a few questions to narrow the search. Answers are optional.",
     "questions": [
-      { "q": "What application area?", "placeholder": "e.g. recycling, logistics, medical" },
-      { "q": "What is the key technical technique?", "placeholder": "e.g. neural network, spectral analysis, mechanical gripping" },
-      { "q": "What distinguishes it from known analogs?", "placeholder": "e.g. accuracy, speed, no consumables" }
+      {
+        "q": "What application area?",
+        "placeholder": "e.g. recycling, logistics, medical"
+      },
+      {
+        "q": "What is the key technical technique?",
+        "placeholder": "e.g. neural network, spectral analysis, mechanical gripping"
+      },
+      {
+        "q": "What distinguishes it from known analogs?",
+        "placeholder": "e.g. accuracy, speed, no consumables"
+      }
     ],
     "submit": "Start search",
     "back": "Back",
@@ -107,7 +125,15 @@
     "uniquenessLow": "Low",
     "overviewTitle": "Overview",
     "patentsTitle": "Key analogs",
-    "patentsHeaders": { "id": "ID", "title": "Title", "year": "Year", "country": "Country", "similarity": "Similarity", "match": "Overlap", "diff": "Difference" },
+    "patentsHeaders": {
+      "id": "ID",
+      "title": "Title",
+      "year": "Year",
+      "country": "Country",
+      "similarity": "Similarity",
+      "match": "Overlap",
+      "diff": "Difference"
+    },
     "similarityHigh": "High",
     "similarityMedium": "Medium",
     "similarityLow": "Low",
@@ -223,5 +249,15 @@
       "login": "Sign in",
       "logout": "Sign out"
     }
+  },
+  "Quota": {
+    "title": "Monthly limit reached",
+    "bodySearch": "You've used {used} of {limit} invention checks this month on the {tier} plan.",
+    "bodyLandscape": "You've used {used} of {limit} patent landscapes this month on the {tier} plan.",
+    "resetNote": "The limit resets at the start of next month — checks will be available again then.",
+    "tierLabel": "Plan",
+    "usageLabel": "Used",
+    "backToStart": "Back to start",
+    "newSearch": "New check"
   }
 }

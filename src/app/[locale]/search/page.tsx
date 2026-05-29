@@ -5,10 +5,13 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
+import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
 
 type Question = { q: string; placeholder: string };
 
-type Step = "input" | "clarify" | "loading" | "error";
+type Step = "input" | "clarify" | "loading" | "error" | "quota";
+
+type QuotaInfo = { tier: string; limit: number; used: number };
 
 export default function SearchPage() {
   const t = useTranslations("Search");
@@ -24,6 +27,7 @@ export default function SearchPage() {
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadingHintMsg, setLoadingHintMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
 
   const canContinue = description.trim().length >= 80;
 
@@ -100,6 +104,17 @@ export default function SearchPage() {
           patents: hits,
         }),
       });
+
+      if (analyzeResp.status === 402) {
+        const q = await analyzeResp.json().catch(() => ({}));
+        setQuotaInfo({
+          tier: String(q.tier ?? ""),
+          limit: Number(q.limit ?? 0),
+          used: Number(q.used ?? 0),
+        });
+        setStep("quota");
+        return;
+      }
 
       if (!analyzeResp.ok) {
         const err = await analyzeResp.json().catch(() => ({}));
@@ -246,6 +261,19 @@ export default function SearchPage() {
                 </button>
               </div>
             </section>
+          )}
+
+          {step === "quota" && quotaInfo && (
+            <QuotaExceededBlock
+              operation="search"
+              tier={quotaInfo.tier}
+              limit={quotaInfo.limit}
+              used={quotaInfo.used}
+              onBack={() => {
+                setQuotaInfo(null);
+                setStep("input");
+              }}
+            />
           )}
         </div>
       </main>

@@ -4,8 +4,11 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
+import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
 
-type Step = "input" | "loading" | "error";
+type Step = "input" | "loading" | "error" | "quota";
+
+type QuotaInfo = { tier: string; limit: number; used: number };
 
 type LandscapeHit = {
   id: string;
@@ -49,6 +52,7 @@ export default function LandscapePage() {
   const [topic, setTopic] = useState("");
   const [loadingMsg, setLoadingMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
 
   const canSubmit = topic.trim().length >= 60;
 
@@ -145,6 +149,17 @@ export default function LandscapePage() {
           patents: hits.slice(0, 200),
         }),
       });
+      if (synthResp.status === 402) {
+        const q = await synthResp.json().catch(() => ({}));
+        setQuotaInfo({
+          tier: String(q.tier ?? ""),
+          limit: Number(q.limit ?? 0),
+          used: Number(q.used ?? 0),
+        });
+        setStep("quota");
+        return;
+      }
+
       if (!synthResp.ok) {
         const err = await synthResp.json().catch(() => ({}));
         throw new Error(err.error || `Synthesize failed (${synthResp.status})`);
@@ -245,6 +260,19 @@ export default function LandscapePage() {
                 </button>
               </div>
             </section>
+          )}
+
+          {step === "quota" && quotaInfo && (
+            <QuotaExceededBlock
+              operation="landscape"
+              tier={quotaInfo.tier}
+              limit={quotaInfo.limit}
+              used={quotaInfo.used}
+              onBack={() => {
+                setQuotaInfo(null);
+                setStep("input");
+              }}
+            />
           )}
         </div>
       </main>
