@@ -113,7 +113,7 @@ export default async function LandingPage({
           <p className="mt-3 text-center text-sm text-slate-600">
             {t("sources.subtitle")}
           </p>
-          <ul className="mt-10 grid gap-4 sm:grid-cols-3">
+          <ul className="mx-auto mt-10 grid max-w-xl gap-4">
             {sources.map((s) => (
               <li
                 key={s.name}

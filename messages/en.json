@@ -1,7 +1,7 @@
 {
   "Meta": {
     "title": "Patent-Scan — check your invention's uniqueness",
-    "description": "AI portal for patent clearance: Rospatent + EPO + USPTO in one minute."
+    "description": "AI portal for patent clearance: Russia, US, Europe, Japan, China in one minute."
   },
   "Common": {
     "appName": "Patent-Scan",
@@ -12,7 +12,7 @@
   },
   "Landing": {
     "hero": {
-      "badge": "AI · Rospatent · EPO · USPTO",
+      "badge": "AI · Russia · US · Europe · Japan · China",
       "title": "Check your invention's uniqueness before visiting a patent attorney",
       "subtitle": "Drop a description — AI builds the queries, hits 3 patent databases in parallel, returns a structured report with a recommendation.",
       "disclaimer": "Not legal advice. The report is a reference point: iterate, file, or consult an expert."
@@ -28,7 +28,7 @@
         {
           "n": "02",
           "title": "Parallel search",
-          "body": "Rospatent PatSearch (150M patents), EPO Espacenet OPS, USPTO. Duplicates merged by publication ID."
+          "body": "A single Rospatent PatSearch index covering Russia (RU, SU, CIS), US, Europe, Japan, China. Duplicates merged by publication ID."
         },
         {
           "n": "03",
@@ -64,15 +64,7 @@
       "items": [
         {
           "name": "Rospatent PatSearch",
-          "meta": "150M patents · RU, SU, CIS, US, EP, WO"
-        },
-        {
-          "name": "EPO Espacenet OPS",
-          "meta": "European and worldwide patents · OAuth2"
-        },
-        {
-          "name": "USPTO PatentsView",
-          "meta": "US patents (in progress)"
+          "meta": "A single worldwide patent index · Russia (RU, SU, CIS), US, Europe, Japan, China"
         }
       ]
     },
@@ -110,7 +102,18 @@
     "loadingHint": "Usually takes 1–2 minutes. Please keep this tab open.",
     "loadingGate": "AI is reviewing your description…",
     "loadingGateHint": "Checking technical features, application area and the problem solved.",
-    "loadingSearch": "Searching Rospatent, EPO, USPTO, JP, CN…",
+    "loadingPhrases": [
+      "Extracting key features and IPC classes from your description.",
+      "Composing parallel queries — Russian and English.",
+      "Polling Rospatent PatSearch — Russia, USSR, CIS.",
+      "Looking into US, European, Japanese and Chinese patents.",
+      "Sifting hundreds of candidates and merging duplicates by ID.",
+      "Cross-checking each hit against every feature of your invention.",
+      "Picking the closest analogs — what overlaps, what differs.",
+      "Verifying every link — only confirmed sources will reach you.",
+      "Calibrating the uniqueness verdict and marking the limits.",
+      "Assembling a structured report with a clear recommendation."
+    ],
     "loadingAnalyze": "Analyzing the matches…",
     "gateReason": "Description accepted: {reason}. Skipping follow-up and starting the search.",
     "errorTitle": "Request failed",
@@ -171,7 +174,19 @@
     "deepBullet2": "Distant analogs that the standard pass filters out",
     "deepButtonFree": "Get the free review",
     "deepFreeHint": "Your first review is free with registration.",
-    "deepLoading": "Preparing the in-depth review… This may take 1–2 minutes.",
+    "deepLoadingPhrases": [
+      "Handing the results off to the Anthropic lab.",
+      "Breaking the claim down into essential distinguishing features.",
+      "Matching each feature against the retrieved analogs one by one.",
+      "Hunting distant analogs — the ones the first pass usually filters out.",
+      "Cross-checking the two engines: where they agree, where they diverge.",
+      "Marking risk areas and non-obvious limits in the claim.",
+      "Calibrating confidence by how well the two reviews converge.",
+      "Assembling the feature breakdown: what's new, what's already covered.",
+      "Drafting the recommendation and the parts of the claim to strengthen.",
+      "Compiling the in-depth verdict with real source links."
+    ],
+    "deepLoadingHint": "This may take 1–2 minutes.",
     "deepResultTitle": "In-depth review",
     "crossCheckTitle": "The in-depth review refined the verdict",
     "crossCheckBody": "The initial screening rated it “{fast}”, while the feature-by-feature review rated it “{deep}”. A shift like this is a signal of uncertainty — we recommend reviewing the result with a patent attorney before filing.",

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
+import { useRotatingText } from "@/hooks/useRotatingText";
 
 type ReportPatent = {
   id: string;
@@ -297,6 +298,17 @@ export default function ReportPage() {
 
   const [deepStatus, setDeepStatus] = useState<DeepStatus>("idle");
   const [deepResult, setDeepResult] = useState<DeepResult | null>(null);
+
+  // Rotating progress text for the Deep Analysis loader (1–2 min Sonnet call).
+  // Stays null when idle/done so the hook doesn't spin a timer for nothing.
+  const deepPhrases = useMemo(
+    () => t.raw("deepLoadingPhrases") as string[],
+    [t]
+  );
+  const deepRotating = useRotatingText(
+    deepStatus === "loading" ? deepPhrases : null,
+    7000
+  );
 
   const deepInput = data?._input;
 
@@ -691,9 +703,15 @@ export default function ReportPage() {
                   disabled={deepStatus === "loading"}
                   className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                 >
-                  {deepStatus === "loading" ? t("deepLoading") : t("deepButtonFree")}
+                  {deepStatus === "loading"
+                    ? deepRotating ?? deepPhrases[0]
+                    : t("deepButtonFree")}
                 </button>
-                <p className="mt-2 text-xs text-slate-500">{t("deepFreeHint")}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {deepStatus === "loading"
+                    ? t("deepLoadingHint")
+                    : t("deepFreeHint")}
+                </p>
               </div>
             ) : (
               <p className="mt-6 text-xs text-slate-500">{t("deepFreeHint")}</p>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
 import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
+import { useRotatingText } from "@/hooks/useRotatingText";
 
 type Question = { q: string; placeholder: string };
 
@@ -26,6 +27,15 @@ export default function SearchPage() {
   );
   const [loadingMsg, setLoadingMsg] = useState("");
   const [loadingHintMsg, setLoadingHintMsg] = useState("");
+  // Rotating phrases for the long search phase (1–2 min) so it doesn't look
+  // frozen. `t.raw` is memoized to keep the array reference stable across
+  // renders — otherwise useEffect inside useRotatingText would reset every tick.
+  const searchPhrases = useMemo(
+    () => t.raw("loadingPhrases") as string[],
+    [t]
+  );
+  const [activePhrases, setActivePhrases] = useState<string[] | null>(null);
+  const rotatingMsg = useRotatingText(activePhrases, 7000);
   const [errorMsg, setErrorMsg] = useState("");
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
 
@@ -76,7 +86,8 @@ export default function SearchPage() {
 
   async function runSearch() {
     setStep("loading");
-    setLoadingMsg(t("loadingSearch"));
+    setLoadingMsg("");
+    setActivePhrases(searchPhrases);
     setLoadingHintMsg(t("loadingHint"));
 
     try {
@@ -93,6 +104,7 @@ export default function SearchPage() {
         return;
       }
 
+      setActivePhrases(null);
       setLoadingMsg(t("loadingAnalyze"));
 
       const analyzeResp = await fetch("/api/analyze", {
@@ -243,7 +255,7 @@ export default function SearchPage() {
                 aria-hidden
               />
               <p className="mt-6 text-lg font-semibold text-slate-900">
-                {loadingMsg || t("loading")}
+                {rotatingMsg || loadingMsg || t("loading")}
               </p>
               <p className="mt-2 text-sm text-slate-500">
                 {loadingHintMsg || t("loadingHint")}
