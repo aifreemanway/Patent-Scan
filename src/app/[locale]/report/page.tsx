@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
@@ -16,6 +17,23 @@ type ReportPatent = {
   url?: string;
 };
 
+type DeepFeature = {
+  feature: string;
+  status: "known" | "partially_known" | "novel";
+  analogIds: string[];
+  note?: string;
+};
+
+type DeepResult = {
+  uniqueness?: "High" | "Medium" | "Low";
+  uniquenessDetail?: string;
+  overview?: string;
+  features?: DeepFeature[];
+  patents?: ReportPatent[];
+  recommendation?: string;
+  deep?: boolean;
+};
+
 type ReportData = {
   empty?: boolean;
   uniqueness?: "High" | "Medium" | "Low";
@@ -24,7 +42,14 @@ type ReportData = {
   patents?: ReportPatent[];
   recommendation?: string;
   searchTotal?: number;
+  _input?: {
+    description: string;
+    answers: string[];
+    patents: unknown[];
+  };
 };
+
+type DeepStatus = "idle" | "loading" | "done" | "used" | "error";
 
 // Subtle per-level accent only (a small dot) — never a big green "all clear",
 // which reads as automation-bias permission to skip a real attorney review.
@@ -195,6 +220,43 @@ export default function ReportPage() {
   const t = useTranslations("Report");
   const locale = useLocale();
   const { data, loaded } = useSessionJSON<ReportData>("ps_report");
+
+  const [deepStatus, setDeepStatus] = useState<DeepStatus>("idle");
+  const [deepResult, setDeepResult] = useState<DeepResult | null>(null);
+
+  const deepInput = data?._input;
+
+  const runDeepAnalysis = async () => {
+    if (!deepInput) return;
+    setDeepStatus("loading");
+    try {
+      const resp = await fetch("/api/deep-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: deepInput.description,
+          answers: deepInput.answers,
+          patents: deepInput.patents,
+        }),
+      });
+
+      if (resp.status === 402) {
+        setDeepStatus("used");
+        return;
+      }
+
+      if (!resp.ok) {
+        setDeepStatus("error");
+        return;
+      }
+
+      const result = (await resp.json()) as DeepResult;
+      setDeepResult(result);
+      setDeepStatus("done");
+    } catch {
+      setDeepStatus("error");
+    }
+  };
 
   if (!loaded) {
     return (
@@ -513,6 +575,155 @@ export default function ReportPage() {
               <p className="mt-3 text-sm leading-6 text-slate-200">
                 {data.recommendation}
               </p>
+            </section>
+          )}
+
+          {/* Deep Analysis CTA — calm, honest, no buy button, no urgency. */}
+          <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold text-slate-900">
+              {t("deepTitle")}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {t("deepBody")}
+            </p>
+            <ul className="mt-4 space-y-2 text-sm text-slate-700">
+              <li className="flex gap-2">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
+                <span>{t("deepBullet1")}</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden />
+                <span>{t("deepBullet2")}</span>
+              </li>
+            </ul>
+            {deepInput ? (
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={runDeepAnalysis}
+                  disabled={deepStatus === "loading"}
+                  className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {deepStatus === "loading" ? t("deepLoading") : t("deepButtonFree")}
+                </button>
+                <p className="mt-2 text-xs text-slate-500">{t("deepFreeHint")}</p>
+              </div>
+            ) : (
+              <p className="mt-6 text-xs text-slate-500">{t("deepFreeHint")}</p>
+            )}
+          </section>
+
+          {/* Deep Analysis result / states */}
+          {deepStatus === "used" && (
+            <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+              <div className="font-semibold text-amber-900">{t("deepUsedTitle")}</div>
+              <p className="mt-1 text-sm leading-6 text-amber-800">{t("deepUsedBody")}</p>
+            </section>
+          )}
+
+          {deepStatus === "error" && (
+            <section className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-5">
+              <p className="text-sm leading-6 text-rose-800">{t("deepErrorMsg")}</p>
+            </section>
+          )}
+
+          {deepStatus === "done" && deepResult && (
+            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold text-slate-900">
+                {t("deepResultTitle")}
+              </h2>
+
+              {deepResult.overview && (
+                <p className="mt-3 text-sm leading-6 text-slate-700">
+                  {deepResult.overview}
+                </p>
+              )}
+              {deepResult.uniquenessDetail && (
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  {deepResult.uniquenessDetail}
+                </p>
+              )}
+
+              {deepResult.features && deepResult.features.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {t("deepFeaturesTitle")}
+                  </h3>
+                  <ul className="mt-3 space-y-4">
+                    {deepResult.features.map((f, i) => {
+                      const chip =
+                        f.status === "novel"
+                          ? { cls: "bg-emerald-100 text-emerald-800", label: t("deepStatusNovel") }
+                          : f.status === "partially_known"
+                            ? { cls: "bg-amber-50 text-amber-700", label: t("deepStatusPartial") }
+                            : { cls: "bg-amber-100 text-amber-800", label: t("deepStatusKnown") };
+                      return (
+                        <li
+                          key={i}
+                          className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <p className="text-sm font-medium text-slate-900">
+                              {f.feature}
+                            </p>
+                            <span
+                              className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${chip.cls}`}
+                            >
+                              {chip.label}
+                            </span>
+                          </div>
+                          {f.note && (
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                              {f.note}
+                            </p>
+                          )}
+                          {f.analogIds && f.analogIds.length > 0 && (
+                            <div className="mt-2 text-xs text-slate-500">
+                              <span className="font-medium text-slate-600">
+                                {t("deepFeatureAnalogs")}
+                              </span>{" "}
+                              {f.analogIds.map((id, j) => {
+                                const match = deepResult.patents?.find(
+                                  (p) => p.id === id
+                                );
+                                const href = match?.url;
+                                return (
+                                  <span key={id}>
+                                    {j > 0 && ", "}
+                                    {href && /^https?:\/\//i.test(href) ? (
+                                      <a
+                                        href={href}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="font-mono underline decoration-slate-300 hover:decoration-slate-900"
+                                      >
+                                        {id}
+                                      </a>
+                                    ) : (
+                                      <span className="font-mono">{id}</span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              {deepResult.recommendation && (
+                <div className="mt-6 rounded-xl bg-slate-900 p-5 text-white">
+                  <h3 className="text-base font-semibold">
+                    {t("recommendationTitle")}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-200">
+                    {deepResult.recommendation}
+                  </p>
+                </div>
+              )}
             </section>
           )}
 
