@@ -1,0 +1,32 @@
+name: Deploy to VPS
+
+# Manual trigger for the beta — deploy on demand, not on every push to main.
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          # 15 min — npm ci + next build can take a few minutes on a 2-vCPU box.
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            cd /var/www/patent-scan
+            git fetch origin main
+            git reset --hard origin/main
+            cd web
+            npm ci
+            npm run build
+            pm2 reload deploy/ecosystem.config.js --update-env
+            pm2 save
