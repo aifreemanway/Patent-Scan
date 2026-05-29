@@ -17,7 +17,15 @@ export async function GET(
     ? rawLocale
     : routing.defaultLocale;
 
-  const { searchParams, origin } = new URL(req.url);
+  const { searchParams } = new URL(req.url);
+  // Same proxy-origin issue as /api/auth/login: behind the nginx TLS proxy,
+  // req.url's origin is the internal host (localhost:3000), so the post-exchange
+  // redirect would send the user to localhost. Use the forwarded headers nginx sets.
+  const fwdHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  const fwdProto =
+    req.headers.get("x-forwarded-proto") ??
+    new URL(req.url).protocol.replace(":", "");
+  const origin = fwdHost ? `${fwdProto}://${fwdHost}` : new URL(req.url).origin;
   const code = searchParams.get("code");
   const next = searchParams.get("next");
 
