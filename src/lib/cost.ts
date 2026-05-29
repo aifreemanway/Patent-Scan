@@ -14,11 +14,12 @@
 /** RUB per 1,000,000 tokens on the Timeweb gateway. */
 type Price = { in: number; out: number };
 
-// Confirmed from the Timeweb price page, 2026-05-29 (gemini-2.5-flash).
-// Sonnet 4.6 / Opus 4.7 ₽ prices on Timeweb are NOT yet confirmed → intentionally
-// absent (they log rub:null until a verified price is added here).
+// Confirmed from the Timeweb price page, 2026-05-29 (per-1M-token rates).
+// Opus 4.7's ₽ price is not yet confirmed → intentionally absent (logs rub:null
+// until a verified price is added here).
 const PRICING_RUB_PER_M: Record<string, Price> = {
   "gemini/gemini-2.5-flash": { in: 41, out: 338 },
+  "anthropic/claude-sonnet-4-6": { in: 405, out: 2025 },
 };
 
 export type LlmUsage = { input: number; output: number };
