@@ -20,6 +20,18 @@ export const GEMINI_TIMEOUT_MS = {
   rank: 40_000,
 } as const;
 
+// --- Timeweb LLM gateway (Deep Analysis) ---
+
+/** Timeweb OpenAI-compatible chat-completions endpoint. Override via `TIMEWEB_URL`. */
+export const TIMEWEB_URL =
+  process.env.TIMEWEB_URL ?? "https://api.timeweb.ai/v1/chat/completions";
+
+/** Deep Analysis judge model (premium, transactional). Routed via Timeweb gateway. */
+export const DEEP_ANALYSIS_MODEL = "anthropic/claude-sonnet-4-6";
+
+/** Deep Analysis is a long claim-by-claim + cross-check pass. */
+export const DEEP_ANALYSIS_TIMEOUT_MS = 120_000;
+
 // --- Rospatent PatSearch ---
 
 /** PatSearch endpoint. Override via env `PATSEARCH_URL`. */
