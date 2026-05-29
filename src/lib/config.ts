@@ -103,6 +103,9 @@ export const RATE_MAX = {
   // Novelty's two-pass ranking makes up to ~6 calls per run (chunk maps +
   // reduce), so this must clear a couple of runs/min per IP.
   priorArtRank: 30,
+  // Premium Sonnet judge — expensive + metered by the per-account free credit,
+  // so the per-IP limit is just an abuse backstop.
+  deepAnalysis: 3,
 } as const;
 
 // --- Auth / anti-abuse ---
