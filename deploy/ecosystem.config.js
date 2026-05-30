@@ -33,9 +33,10 @@ module.exports = {
       script: "node_modules/.bin/tsx",
       args: "src/worker/literature-review/index.ts",
       env: { NODE_ENV: "production" },
-      // One worker — concurrency is enforced by the SQL claim guard. Adding a
-      // second would mostly just lose more races; lit-reviews are paid (Team
-      // 1/mo, Enterprise 2/mo) so the queue stays shallow.
+      // fork mode (not cluster) — pm2 cluster_mode is for HTTP servers and
+      // silently swallows stdout for non-server scripts (worker shows online
+      // but logs stay empty). Fork mode pipes console.* normally.
+      exec_mode: "fork",
       instances: 1,
       autorestart: true,
       max_memory_restart: "1000M",
