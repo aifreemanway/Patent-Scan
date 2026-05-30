@@ -25,7 +25,10 @@ jobs:
             cd /var/www/patent-scan
             git fetch origin main
             git reset --hard origin/main
-            npm ci
+            # Use `npm install` (not `npm ci`) so a Windows-vs-Linux package-lock
+            # drift on a transitive like @swc/helpers doesn't tank the deploy.
+            # Slower (~30s extra on this 2-vCPU box) but bulletproof.
+            npm install
             npm run build
             pm2 reload deploy/ecosystem.config.js --update-env
             pm2 save
