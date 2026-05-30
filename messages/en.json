@@ -548,6 +548,86 @@
     "ogrnip": "OGRNIP",
     "rkn": "Roskomnadzor PDn Operator Registry",
     "privacy": "Privacy Policy",
-    "terms": "Terms of Service"
+    "terms": "Terms of Service",
+    "enterprise": "For institutes & R&D"
+  },
+  "Enterprise": {
+    "meta": {
+      "title": "For institutes & R&D — complimentary demo review",
+      "description": "A free demo literature review on a topic of your choice for research institutes and R&D centres. Delivered within 24 hours, in our Team-tier format."
+    },
+    "hero": {
+      "badge": "For R&D centres, institutes, and design organisations",
+      "title": "A literature review on your topic — on us",
+      "subtitle": "We deliver a Team-tier literature review (14,900 ₽ value) on one topic of your choice. Turnaround — up to 24 hours after we agree on the brief, plus a 30-minute call to discuss findings. No commitment — if the format works, we can discuss further collaboration."
+    },
+    "value": {
+      "title": "What you get",
+      "items": [
+        {
+          "title": "Full literature review in a unified format",
+          "body": "Six sections: technology landscape and classification, comparison tables by producers, pros/cons of approaches, conclusions, sources, caveats. Identical to our paid product."
+        },
+        {
+          "title": "Comparable across topics",
+          "body": "All reviews follow the same template, so 10 topics fit in one comparison table — useful for R&D planning and prioritisation."
+        },
+        {
+          "title": "30-minute call on findings",
+          "body": "We walk through what we found, what didn't make it in and why, what stayed out of scope. By the end you'll know where this tool fits in your workflow."
+        },
+        {
+          "title": "44-FZ / 223-FZ — separate pre-sales track",
+          "body": "For state-funded procurement we align scope, pricing and procurement-procedure details up front."
+        }
+      ]
+    },
+    "how": {
+      "title": "How it works",
+      "items": [
+        {
+          "title": "Request",
+          "body": "Fill out the form below: organisation, contacts, topic. We respond within 24 hours."
+        },
+        {
+          "title": "Brief and review",
+          "body": "We agree on the brief, then deliver the review within 24 hours — PDF plus an online version."
+        },
+        {
+          "title": "Findings call",
+          "body": "30 minutes on Zoom/Telemost: what we found, what's in focus, what isn't covered. Then we decide on next steps."
+        }
+      ]
+    },
+    "form": {
+      "title": "Demo review request",
+      "subtitle": "Required fields are marked with an asterisk. We respond within 24 hours.",
+      "fullNameLabel": "Full name",
+      "positionLabel": "Position",
+      "organizationLabel": "Organisation (institute, R&D centre, design bureau)",
+      "innLabel": "Organisation INN",
+      "innHint": "Optional — needed for 44-FZ / 223-FZ procurement alignment",
+      "emailLabel": "Contact email",
+      "phoneLabel": "Phone",
+      "phoneHint": "Optional — if you'd rather discuss by voice",
+      "topicLabel": "Review topic",
+      "topicPlaceholder": "For example: antimony concentrate processing technologies in Russia and China, patent landscape over the past 10 years, key producers and their approaches.",
+      "topicHint": "Describe the topic as concretely as possible: domain, geographic focus, time range, anything we should pay particular attention to.",
+      "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
+      "consentRequired": "Confirm consent to submit the request.",
+      "marketingConsent": "I'd like to receive informational messages from Patent-Scan: product news, case studies. Consent can be withdrawn at any time.",
+      "submit": "Submit request",
+      "submitting": "Submitting…",
+      "successTitle": "Request received",
+      "successBody": "Thanks. We've sent a confirmation to your email and will get back to you within 24 hours.",
+      "errors": {
+        "generic": "Couldn't submit the request. Please try again or email support@patent-scan.com.",
+        "invalid_format": "Please make sure all required fields are filled correctly (email, INN — digits only).",
+        "captcha_missing": "Couldn't pass the bot check. Please refresh the page.",
+        "captcha_failed": "Bot check failed. Please try again.",
+        "send_failed": "We can't send the request right now. Please email support@patent-scan.com directly.",
+        "rate_limited": "Too many submissions from this IP. Please try again in a few minutes."
+      }
+    }
   }
 }
