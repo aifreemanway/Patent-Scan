@@ -11,6 +11,12 @@ import {
   RATE_WINDOW_MS,
   RATE_MAX,
 } from "@/lib/config";
+import {
+  createSearchRequest,
+  deriveTopic,
+  markSearchRequestCompleted,
+  markSearchRequestError,
+} from "@/lib/search-requests";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -104,15 +110,27 @@ export async function POST(req: Request) {
     );
   }
 
+  const sr = await createSearchRequest({
+    userId: guard.user.id,
+    type: "landscape",
+    topic: deriveTopic(topic),
+    description: topic,
+    params: { patentsUsed: patents.length },
+  });
+
   try {
     const result = await synthesizeLandscape(topic, patents, apiKey);
-    return NextResponse.json({ topic, patentsUsed: patents.length, ...result });
+    const responsePayload = { topic, patentsUsed: patents.length, ...result };
+    await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
+    return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error("[landscape-synthesize] failed", {
-      message: e instanceof Error ? e.message : String(e),
+      message,
       topicLen: topic.length,
       patentsLen: patents.length,
     });
+    await markSearchRequestError(sr?.id ?? null, message);
     return NextResponse.json(
       { error: "Synthesis service failed" },
       { status: 502 }

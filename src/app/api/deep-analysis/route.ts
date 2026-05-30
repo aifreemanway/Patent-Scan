@@ -8,6 +8,12 @@ import {
   timewebErrorToStatus,
 } from "@/lib/timeweb";
 import {
+  createSearchRequest,
+  deriveTopic,
+  markSearchRequestCompleted,
+  markSearchRequestError,
+} from "@/lib/search-requests";
+import {
   DEEP_ANALYSIS_MODEL,
   DEEP_ANALYSIS_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
@@ -196,6 +202,18 @@ export async function POST(req: Request): Promise<NextResponse> {
     .filter(Boolean)
     .join("\n\n");
 
+  // Logged after validation so we don't pollute history with rejected inputs.
+  // The free-credit was already claimed up-top; on downstream failure the
+  // existing refund() returns it AND we mark the request 'error' so the
+  // user sees it in /account/history with the failure reason.
+  const sr = await createSearchRequest({
+    userId: auth.user.id,
+    type: "deep_analysis",
+    topic: deriveTopic(description),
+    description,
+    params: { answers, patentsInput: patents.length },
+  });
+
   try {
     const { data } = await callTimewebJson<DeepVerdict>({
       apiKey,
@@ -246,14 +264,19 @@ export async function POST(req: Request): Promise<NextResponse> {
       }
     );
 
-    return NextResponse.json({
+    const responsePayload = {
       ...data,
       patents: verified,
       features,
       deep: true,
-    });
+    };
+    await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
+    return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
   } catch (e) {
     await refund();
+    const message =
+      e instanceof Error ? e.message : "Deep analysis service unavailable";
+    await markSearchRequestError(sr?.id ?? null, message);
     if (e instanceof TimewebError) {
       return NextResponse.json(
         { error: "Deep analysis service error" },
