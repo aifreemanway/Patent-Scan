@@ -273,7 +273,7 @@
       "subtitle": "Enter your email — we'll send a sign-in link. No password needed.",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
-      "consent": "I agree to the processing of personal data for the purpose of sign-in and service delivery.",
+      "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
       "consentRequired": "Please confirm your consent to continue.",
       "marketingConsent": "I agree to receive informational emails from Patent-Scan: product news, patent-search tips, customer cases. You can unsubscribe via the link in each email.",
       "captchaLoading": "Verifying you're human…",
@@ -540,5 +540,14 @@
       "retry": "Retry",
       "cancelled": "Request cancelled."
     }
+  },
+  "Footer": {
+    "operatorTitle": "Operator",
+    "operatorName": "IE Kobzar Vsevolod Yurievich",
+    "inn": "INN",
+    "ogrnip": "OGRNIP",
+    "rkn": "Roskomnadzor PDn Operator Registry",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
   }
 }

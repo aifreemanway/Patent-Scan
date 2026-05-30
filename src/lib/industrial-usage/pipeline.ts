@@ -13,7 +13,7 @@
 // have that metadata in hand.
 
 import { callGeminiJson } from "@/lib/gemini";
-import { fetchPatentMeta, harvestStage2, type PatentMeta } from "./harvest";
+import { fetchPatentMeta, harvestStage2 } from "./harvest";
 import type { IUReport, IUSource } from "./types";
 
 const SYNTH_PROMPT = `Ты — отраслевой аналитик. На вход: метаданные патента + найденные web-страницы про компанию-патентообладателя, её продукты и конкурентов. Сформируй краткую коммерческую карту использования патента.
