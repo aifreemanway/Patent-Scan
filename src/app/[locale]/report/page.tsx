@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
 import { useRotatingText } from "@/hooks/useRotatingText";
+import { IndustrialUsageRow } from "./IndustrialUsageRow";
 
 type ReportPatent = {
   id: string;
@@ -596,43 +597,52 @@ export default function ReportPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {patents.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-3 font-mono text-xs text-slate-900">
-                          {p.url ? (
-                            <a
-                              href={p.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="underline decoration-slate-300 hover:decoration-slate-900"
+                      <Fragment key={p.id}>
+                        <tr className="hover:bg-slate-50">
+                          <td className="px-6 py-3 font-mono text-xs text-slate-900">
+                            {p.url ? (
+                              <a
+                                href={p.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="underline decoration-slate-300 hover:decoration-slate-900"
+                              >
+                                {p.id}
+                              </a>
+                            ) : (
+                              p.id
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-slate-700">
+                            <div>{p.title}</div>
+                            {(p.match || p.diff) && (
+                              <div className="mt-1 space-y-0.5 text-xs text-slate-500">
+                                {p.match && <div><span className="font-medium text-rose-600">{headers.match}:</span> {p.match}</div>}
+                                {p.diff && <div><span className="font-medium text-emerald-600">{headers.diff}:</span> {p.diff}</div>}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-3 text-slate-600">{p.year}</td>
+                          <td className="px-6 py-3 text-slate-600">{p.country}</td>
+                          <td className="px-6 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                SIMILARITY_STYLES[p.similarity] ??
+                                "bg-slate-100 text-slate-700"
+                              }`}
                             >
-                              {p.id}
-                            </a>
-                          ) : (
-                            p.id
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-slate-700">
-                          <div>{p.title}</div>
-                          {(p.match || p.diff) && (
-                            <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-                              {p.match && <div><span className="font-medium text-rose-600">{headers.match}:</span> {p.match}</div>}
-                              {p.diff && <div><span className="font-medium text-emerald-600">{headers.diff}:</span> {p.diff}</div>}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-3 text-slate-600">{p.year}</td>
-                        <td className="px-6 py-3 text-slate-600">{p.country}</td>
-                        <td className="px-6 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                              SIMILARITY_STYLES[p.similarity] ??
-                              "bg-slate-100 text-slate-700"
-                            }`}
-                          >
-                            {t(`similarity${p.similarity}` as "similarityHigh" | "similarityMedium" | "similarityLow")}
-                          </span>
-                        </td>
-                      </tr>
+                              {t(`similarity${p.similarity}` as "similarityHigh" | "similarityMedium" | "similarityLow")}
+                            </span>
+                          </td>
+                        </tr>
+                        {/* Industrial Usage — lazy-loaded on click. Free/Starter
+                            users get a lock + upsell from the endpoint (403). */}
+                        <IndustrialUsageRow
+                          patentId={p.id}
+                          patentTitle={p.title}
+                          colSpan={5}
+                        />
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
