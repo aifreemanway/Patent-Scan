@@ -35,8 +35,10 @@ import {
   sendErrorEmail,
 } from "./email";
 import type { LitReviewParams } from "@/lib/literature-review/types";
+import { reactivationTick } from "../reactivation/tick";
 
 const POLL_INTERVAL_MS = 5_000;
+const REACTIVATION_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORAGE_BUCKET = "literature-review-reports";
 const PDF_URL_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const MAX_RETRIES = 3;
@@ -341,6 +343,21 @@ async function main(): Promise<void> {
       busy = false;
     }
   }, POLL_INTERVAL_MS);
+
+  // Reactivation tick — hourly, completely independent of the lit-review
+  // pipeline. Cheap (one indexed SELECT + ≤BATCH_SIZE emails); doesn't need a
+  // busy guard because the wall-clock between ticks (1h) is orders of
+  // magnitude larger than the wave processing time.
+  setInterval(() => {
+    reactivationTick(admin).catch((e) => {
+      console.error("[worker] reactivation interval error", e);
+    });
+  }, REACTIVATION_TICK_INTERVAL_MS);
+  // Kick once on startup so a freshly-restarted worker processes the backlog
+  // immediately instead of waiting an hour.
+  reactivationTick(admin).catch((e) => {
+    console.error("[worker] reactivation startup error", e);
+  });
 
   // Keep alive
   process.on("SIGTERM", () => {
