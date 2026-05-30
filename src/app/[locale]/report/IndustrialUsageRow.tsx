@@ -1,0 +1,255 @@
+"use client";
+
+// IndustrialUsageRow — expandable section per patent in the novelty report.
+// Lazy-loads from /api/industrial-usage on click; gates by tier server-side
+// (free / starter get 403 → we render the lock + upsell).
+//
+// Renders nothing inline by default; the row is mounted as a <tr> sibling of
+// the patent row, with a colspan covering the full table.
+
+import { useState } from "react";
+import { useTranslations } from "next-intl";
+
+type IUSource = { ref: number; title: string; url: string; reachedAt: string | null };
+type IUAssignee = {
+  canonical: string;
+  country: string;
+  description: string;
+  website?: string;
+  sourceRefs: number[];
+};
+type IUProduct = { name: string; description: string; sourceRefs: number[] };
+type IUCompetitor = { name: string; country?: string; technology: string; sourceRefs: number[] };
+type IUReport = {
+  patentId: string;
+  patentTitle: string;
+  assignee: IUAssignee;
+  products: IUProduct[];
+  competitors: IUCompetitor[];
+  caveats: string[];
+  sources: IUSource[];
+};
+
+type FetchState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; data: IUReport }
+  | { kind: "locked"; upsell?: string }
+  | { kind: "error"; message: string };
+
+export function IndustrialUsageRow({
+  patentId,
+  patentTitle,
+  colSpan,
+}: {
+  patentId: string;
+  patentTitle: string;
+  colSpan: number;
+}) {
+  const t = useTranslations("Report.IndustrialUsage");
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<FetchState>({ kind: "idle" });
+
+  async function load() {
+    setState({ kind: "loading" });
+    try {
+      const resp = await fetch("/api/industrial-usage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patentId, patentTitle }),
+      });
+      if (resp.status === 401) {
+        setState({ kind: "error", message: t("errorAuth") });
+        return;
+      }
+      if (resp.status === 403) {
+        const body = (await resp.json().catch(() => ({}))) as { upsell?: string };
+        setState({ kind: "locked", upsell: body.upsell });
+        return;
+      }
+      if (!resp.ok) {
+        setState({ kind: "error", message: t("errorPipeline") });
+        return;
+      }
+      const data = (await resp.json()) as IUReport;
+      setState({ kind: "ok", data });
+    } catch (e) {
+      setState({ kind: "error", message: e instanceof Error ? e.message : t("errorPipeline") });
+    }
+  }
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && state.kind === "idle") {
+      void load();
+    }
+  }
+
+  return (
+    <tr className="bg-slate-50/40">
+      <td colSpan={colSpan} className="px-6 py-2">
+        <button
+          type="button"
+          onClick={toggle}
+          className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          <span aria-hidden>{open ? "▼" : "▶"}</span>
+          {t("toggleLabel")}
+        </button>
+
+        {open && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+            {state.kind === "loading" && (
+              <div className="text-slate-500">{t("loading")}</div>
+            )}
+
+            {state.kind === "locked" && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                <div className="font-medium">{t("lockedTitle")}</div>
+                <div className="mt-1 text-xs">{state.upsell ?? t("lockedDefault")}</div>
+              </div>
+            )}
+
+            {state.kind === "error" && (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-rose-900">
+                <div className="font-medium">{t("errorTitle")}</div>
+                <div className="mt-1 text-xs">{state.message}</div>
+              </div>
+            )}
+
+            {state.kind === "ok" && <IndustrialUsageBody data={state.data} />}
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function refList(refs: number[]): string {
+  return refs.length ? ` [${refs.join(", ")}]` : "";
+}
+
+function IndustrialUsageBody({ data }: { data: IUReport }) {
+  const t = useTranslations("Report.IndustrialUsage");
+
+  return (
+    <div className="space-y-4">
+      {/* Assignee */}
+      <section>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {t("assigneeTitle")}
+        </h4>
+        <div className="mt-1 text-slate-900">
+          <span className="font-medium">{data.assignee.canonical || "—"}</span>
+          {data.assignee.country && (
+            <span className="ml-2 text-xs text-slate-500">({data.assignee.country})</span>
+          )}
+        </div>
+        {data.assignee.description && (
+          <p className="mt-1 text-slate-700">
+            {data.assignee.description}
+            <span className="text-xs text-slate-400">{refList(data.assignee.sourceRefs)}</span>
+          </p>
+        )}
+        {data.assignee.website && (
+          <a
+            href={data.assignee.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block text-xs text-blue-600 underline"
+          >
+            {data.assignee.website}
+          </a>
+        )}
+      </section>
+
+      {/* Products */}
+      <section>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {t("productsTitle")}
+        </h4>
+        {data.products.length === 0 ? (
+          <p className="mt-1 text-slate-500 italic">{t("productsEmpty")}</p>
+        ) : (
+          <ul className="mt-1 space-y-1.5">
+            {data.products.map((p, i) => (
+              <li key={i} className="text-slate-700">
+                <span className="font-medium text-slate-900">{p.name}</span>
+                {p.description && <span> — {p.description}</span>}
+                <span className="text-xs text-slate-400">{refList(p.sourceRefs)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Competitors */}
+      <section>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {t("competitorsTitle")}
+        </h4>
+        {data.competitors.length === 0 ? (
+          <p className="mt-1 text-slate-500 italic">{t("competitorsEmpty")}</p>
+        ) : (
+          <ul className="mt-1 space-y-1.5">
+            {data.competitors.map((c, i) => (
+              <li key={i} className="text-slate-700">
+                <span className="font-medium text-slate-900">{c.name}</span>
+                {c.country && <span className="ml-1 text-xs text-slate-500">({c.country})</span>}
+                {c.technology && <span> — {c.technology}</span>}
+                <span className="text-xs text-slate-400">{refList(c.sourceRefs)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Caveats */}
+      {data.caveats.length > 0 && (
+        <section>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {t("caveatsTitle")}
+          </h4>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-slate-600">
+            {data.caveats.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Sources */}
+      {data.sources.length > 0 && (
+        <section>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {t("sourcesTitle")} ({data.sources.length})
+          </h4>
+          <ol className="mt-1 space-y-0.5 text-xs text-slate-600">
+            {data.sources.map((s) => (
+              <li key={s.ref}>
+                <span className="font-mono text-slate-400">[{s.ref}]</span>{" "}
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-slate-300 hover:decoration-slate-900"
+                >
+                  {s.title || s.url}
+                </a>
+                {s.reachedAt === null && (
+                  <span className="ml-1 text-slate-400">{t("sourceArchived")}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {/* Disclaimer — explicit so the user can't mistake this for legal analysis. */}
+      <p className="border-t border-slate-100 pt-2 text-xs italic text-slate-400">
+        {t("disclaimer")}
+      </p>
+    </div>
+  );
+}

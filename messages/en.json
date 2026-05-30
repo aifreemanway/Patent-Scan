@@ -197,7 +197,25 @@
     "deepFeatureAnalogs": "Where it appears:",
     "deepUsedTitle": "Free review already used",
     "deepUsedBody": "One free in-depth review is available per account. Paid access will appear later.",
-    "deepErrorMsg": "Could not complete the in-depth review. Please try again later."
+    "deepErrorMsg": "Could not complete the in-depth review. Please try again later.",
+    "IndustrialUsage": {
+      "toggleLabel": "Industrial usage",
+      "loading": "Gathering owner and competitor data…",
+      "lockedTitle": "Available from the Team plan",
+      "lockedDefault": "This section shows the patent owner, products and competitors. Available on the Team plan and above.",
+      "errorTitle": "Could not gather data",
+      "errorAuth": "Sign-in required.",
+      "errorPipeline": "Sources temporarily unavailable, try again later.",
+      "assigneeTitle": "Patent owner",
+      "productsTitle": "Products / lines",
+      "productsEmpty": "No public sources linking this patent to a specific product were found.",
+      "competitorsTitle": "Technology competitors",
+      "competitorsEmpty": "No public data about competitors in this niche was found.",
+      "caveatsTitle": "Caveats",
+      "sourcesTitle": "Sources",
+      "sourceArchived": "(unreachable at the time of verification)",
+      "disclaimer": "This map is auto-generated from public sources. It does not replace legal analysis and should be verified by an industry expert."
+    }
   },
   "Landscape": {
     "title": "Patent landscape",

@@ -9,7 +9,12 @@
     "lint": "eslint",
     "worker:literature-review": "tsx src/worker/literature-review/index.ts",
     "poc:literature-review-sb2o3": "tsx scripts/poc-gates/literature-review-sb2o3.ts",
-    "poc:literature-review-saas-videoconf": "tsx scripts/poc-gates/literature-review-saas-videoconf.ts"
+    "poc:literature-review-saas-videoconf": "tsx scripts/poc-gates/literature-review-saas-videoconf.ts",
+    "poc:literature-review-lfp": "tsx scripts/poc-gates/literature-review-lfp-batteries.ts",
+    "poc:literature-review-hydrogen": "tsx scripts/poc-gates/literature-review-hydrogen-electrolyzers.ts",
+    "poc:literature-review-glp1": "tsx scripts/poc-gates/literature-review-glp1-agonists.ts",
+    "poc:literature-review-mab": "tsx scripts/poc-gates/literature-review-mab-biosimilars.ts",
+    "poc:industrial-usage-nord": "tsx scripts/poc-gates/industrial-usage-nord.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
