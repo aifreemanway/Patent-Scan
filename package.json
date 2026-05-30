@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "worker:literature-review": "tsx src/worker/literature-review/index.ts",
-    "poc:literature-review-sb2o3": "tsx scripts/poc-gates/literature-review-sb2o3.ts"
+    "poc:literature-review-sb2o3": "tsx scripts/poc-gates/literature-review-sb2o3.ts",
+    "poc:literature-review-saas-videoconf": "tsx scripts/poc-gates/literature-review-saas-videoconf.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
