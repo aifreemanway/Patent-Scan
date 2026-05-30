@@ -15,6 +15,12 @@ import {
   GeminiError,
   geminiErrorToStatus,
 } from "@/lib/gemini";
+import {
+  createSearchRequest,
+  deriveTopic,
+  markSearchRequestCompleted,
+  markSearchRequestError,
+} from "@/lib/search-requests";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -147,6 +153,17 @@ export async function POST(req: Request): Promise<NextResponse> {
     .filter(Boolean)
     .join("\n\n");
 
+  // History row created before the heavy call so a route crash still leaves a
+  // record (worker would never see it, but /account/history will). Failure here
+  // returns null and we proceed without logging — see search-requests.ts.
+  const sr = await createSearchRequest({
+    userId: guard.user.id,
+    type: "novelty",
+    topic: deriveTopic(description),
+    description,
+    params: { answers, patentsInput: patents.length },
+  });
+
   try {
     const { data } = await callGeminiJson<AnalyzeVerdict>({
       apiKey,
@@ -202,8 +219,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.json({ ...data, patents: verified });
+    const responsePayload = { ...data, patents: verified };
+    await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
+    return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
   } catch (e) {
+    const message =
+      e instanceof Error ? e.message : "Analysis service unavailable";
+    await markSearchRequestError(sr?.id ?? null, message);
     if (e instanceof GeminiError) {
       return NextResponse.json(
         { error: "Analysis service error" },

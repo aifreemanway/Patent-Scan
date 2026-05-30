@@ -1,0 +1,155 @@
+// Helpers around the unified `search_requests` table — the foundation of
+// /account/history (PR-2), the literature-review async pipeline (PR-3) and
+// any per-request analytics. Every user-facing search route inserts one row
+// here on entry and marks it completed/error on exit.
+//
+// All writes use the service-role client (RLS bypassed) so the existing routes
+// don't need to thread a user-scoped Supabase client through every call site.
+//
+// Failure-mode: every helper SWALLOWS its error and logs to console — a DB
+// outage on the history-logging path must never break the actual search a user
+// is waiting on. The history will just miss that row.
+
+import { createSupabaseAdmin } from "@/lib/supabase-server";
+
+export type SearchType =
+  | "novelty"
+  | "landscape"
+  | "deep_analysis"
+  | "literature_review";
+
+export type SearchStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "error"
+  | "cancelled";
+
+const TOPIC_MAX = 500;
+
+/** Trim and clip to 500 chars for the listings/search index. */
+export function deriveTopic(source: string): string {
+  const trimmed = source.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "(без темы)";
+  if (trimmed.length <= TOPIC_MAX) return trimmed;
+  return trimmed.slice(0, TOPIC_MAX - 1) + "…";
+}
+
+type CreateOpts = {
+  userId: string;
+  type: SearchType;
+  topic: string;
+  description?: string | null;
+  params?: Record<string, unknown> | null;
+  /**
+   * For synchronous routes (analyze/landscape/deep-analysis) the request is
+   * processed in the same HTTP call, so we start at 'in_progress' and flip to
+   * completed/error in the same path. The async literature-review worker is
+   * the only caller that should start at 'pending'.
+   */
+  status?: Extract<SearchStatus, "pending" | "in_progress">;
+};
+
+/**
+ * Insert a new request row and return its id. Returns null on failure so the
+ * caller can swallow-and-continue (logging is best-effort, never blocking).
+ */
+export async function createSearchRequest(
+  opts: CreateOpts
+): Promise<{ id: string } | null> {
+  const admin = createSupabaseAdmin();
+  const status = opts.status ?? "in_progress";
+  const now = new Date().toISOString();
+
+  const { data, error } = await admin
+    .from("search_requests")
+    .insert({
+      user_id: opts.userId,
+      type: opts.type,
+      status,
+      topic: opts.topic,
+      description: opts.description ?? null,
+      params: opts.params ?? {},
+      started_at: status === "in_progress" ? now : null,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    console.error("[search-requests] create failed", {
+      type: opts.type,
+      userId: opts.userId,
+      message: error?.message,
+    });
+    return null;
+  }
+  return { id: data.id };
+}
+
+type CompleteOpts = {
+  cogsActual?: number;
+  /** For literature-review: final PDF signed URL. */
+  resultPdfUrl?: string;
+};
+
+/**
+ * Flip a request to status='completed' and persist its result payload.
+ * No-op if id is null (lets routes use the helper unconditionally after a
+ * failed createSearchRequest).
+ */
+export async function markSearchRequestCompleted(
+  id: string | null,
+  result: Record<string, unknown>,
+  opts?: CompleteOpts
+): Promise<void> {
+  if (!id) return;
+  const admin = createSupabaseAdmin();
+
+  const { error } = await admin
+    .from("search_requests")
+    .update({
+      status: "completed",
+      result,
+      result_pdf_url: opts?.resultPdfUrl ?? null,
+      cogs_actual: opts?.cogsActual ?? null,
+      completed_at: new Date().toISOString(),
+      progress_pct: 100,
+      error_message: null,
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[search-requests] markCompleted failed", {
+      id,
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * Flip a request to status='error' and save the message for the user to see.
+ * No-op if id is null.
+ */
+export async function markSearchRequestError(
+  id: string | null,
+  errorMessage: string
+): Promise<void> {
+  if (!id) return;
+  const admin = createSupabaseAdmin();
+
+  const { error } = await admin
+    .from("search_requests")
+    .update({
+      status: "error",
+      error_message: errorMessage.slice(0, 2000),
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    console.error("[search-requests] markError failed", {
+      id,
+      message: error.message,
+    });
+  }
+}
