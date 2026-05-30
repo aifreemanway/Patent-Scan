@@ -45,7 +45,11 @@ export function renderReportMarkdown(report: LitReviewReport): string {
     lines.push("");
   }
   report.comparativeTables.forEach((t, i) => {
-    lines.push(`### Таблица ${i + 1}. ${t.title}`);
+    // Sonnet often returns titles that already start with "Таблица N." (the
+    // SYNTH_PROMPT example shows that shape). Strip a leading "Таблица <num>."
+    // so we don't double-prefix to "Таблица 1. Таблица 1. …".
+    const cleanTitle = t.title.replace(/^\s*Таблица\s*\d+\.\s*/i, "").trim();
+    lines.push(`### Таблица ${i + 1}. ${cleanTitle}`);
     lines.push("");
     if (t.columns.length > 0) {
       lines.push(`| ${t.columns.map(escapePipe).join(" | ")} |`);

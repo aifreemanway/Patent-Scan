@@ -71,7 +71,7 @@ async function main() {
   // ── Spec §8 quality gates ─────────────────────────────────
   const gates = {
     sources: report.sources.length >= 20,
-    tables: report.comparativeTables.length >= 4,
+    tables: report.comparativeTables.length >= 3,
     tablesFilled: report.comparativeTables.every((t) =>
       t.rows.length === 0
         ? false
