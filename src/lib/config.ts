@@ -28,6 +28,13 @@ export const TIMEWEB_URL =
 /** Deep Analysis judge model (premium, transactional). Routed via Timeweb gateway. */
 export const DEEP_ANALYSIS_MODEL = "anthropic/claude-sonnet-4-6";
 
+/** Literature-review synthesis model. Opus 4.7 (1M context) over Sonnet 4.6
+ *  because the synth stage feeds 80+ sources and is expected to produce ≥4
+ *  structured tables; Sonnet hit Timeweb's 408 ceiling repeatedly on this
+ *  workload (POC #2-3). Opus is ~3-5x dearer per token but the bill stays
+ *  under ₽110/report — see [[project_pricing_lit_review_pilot_target]]. */
+export const LIT_REVIEW_SYNTH_MODEL = "anthropic/claude-opus-4-7";
+
 /** Deep Analysis is a long claim-by-claim + cross-check pass.
  *  120s was too tight (verified: Sonnet via Timeweb on ~60 patents repeatedly
  *  overran, killed by the AbortController, refund + 504). Bumped to 300s so the
