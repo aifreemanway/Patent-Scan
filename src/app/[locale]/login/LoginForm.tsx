@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -198,7 +199,28 @@ export function LoginForm({
             }}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
           />
-          <span>{t("consent")}</span>
+          <span>
+            {t.rich("consent", {
+              terms: (chunks) => (
+                <Link
+                  href="/terms"
+                  target="_blank"
+                  className="underline hover:text-slate-900"
+                >
+                  {chunks}
+                </Link>
+              ),
+              privacy: (chunks) => (
+                <Link
+                  href="/privacy"
+                  target="_blank"
+                  className="underline hover:text-slate-900"
+                >
+                  {chunks}
+                </Link>
+              ),
+            })}
+          </span>
         </label>
         {consentError && (
           <p className="mt-1 text-xs text-red-600">{t("consentRequired")}</p>

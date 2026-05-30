@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
+import { useRouter, Link } from "@/i18n/navigation";
 
 type Industry =
   | "metallurgy"
@@ -272,14 +272,14 @@ export function IntakeForm({ locale }: { locale: string }) {
       <p className="text-center text-xs text-slate-500">
         {t.rich("submitDisclaimer", {
           terms: (chunks) => (
-            <a href="/terms" className="underline">
+            <Link href="/terms" target="_blank" className="underline">
               {chunks}
-            </a>
+            </Link>
           ),
           privacy: (chunks) => (
-            <a href="/privacy" className="underline">
+            <Link href="/privacy" target="_blank" className="underline">
               {chunks}
-            </a>
+            </Link>
           ),
         })}
       </p>
