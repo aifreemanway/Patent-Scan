@@ -6,7 +6,12 @@
 
 import { createSupabaseAdmin } from "./supabase-server";
 
-export type QuotaOperation = "search" | "landscape" | "analyze" | "questions";
+export type QuotaOperation =
+  | "search"
+  | "landscape"
+  | "analyze"
+  | "questions"
+  | "literature_review";
 
 export type QuotaChargeResult =
   | {

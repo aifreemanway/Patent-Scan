@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:literature-review": "tsx src/worker/literature-review/index.ts",
+    "poc:literature-review-sb2o3": "tsx scripts/poc-gates/literature-review-sb2o3.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
@@ -14,10 +16,12 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
     "disposable-email-domains": "^1.0.62",
+    "dotenv": "^16.4.5",
     "next": "16.2.3",
     "next-intl": "^4.9.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

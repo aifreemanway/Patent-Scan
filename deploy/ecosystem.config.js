@@ -22,5 +22,27 @@ module.exports = {
       max_memory_restart: "1500M", // headroom on the 4GB box; restart on a creeping leak
       kill_timeout: 135000,        // let an in-flight Deep Analysis (≤120s) finish on reload
     },
+    {
+      // Literature review pipeline worker. Polls search_requests for pending
+      // type=literature_review rows and runs them stage-by-stage (Sonnet via
+      // Timeweb + PatSearch + Crossref + Tavily + Wikipedia harvesting + final
+      // markdown to Supabase Storage). Separate process so it can run for
+      // 10-15min per row without colliding with HTTP request lifecycles.
+      name: "patent-scan-worker",
+      cwd: "/var/www/patent-scan",
+      script: "node_modules/.bin/tsx",
+      args: "src/worker/literature-review/index.ts",
+      env: { NODE_ENV: "production" },
+      // One worker — concurrency is enforced by the SQL claim guard. Adding a
+      // second would mostly just lose more races; lit-reviews are paid (Team
+      // 1/mo, Enterprise 2/mo) so the queue stays shallow.
+      instances: 1,
+      autorestart: true,
+      max_memory_restart: "1000M",
+      // Let an in-flight pipeline finish on reload (up to ~15min). Without
+      // this pm2 SIGKILL's mid-Sonnet-call → the row stays in_progress and
+      // we resume on next start.
+      kill_timeout: 900000,
+    },
   ],
 };
