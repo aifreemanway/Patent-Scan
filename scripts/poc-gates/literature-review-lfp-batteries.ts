@@ -53,7 +53,8 @@ async function main() {
   const report = await stage3to8(
     apiKey, PARAMS, sources, snippets,
     process.env.TAVILY_API_KEY ?? "",
-    s1.seedCompanies ?? []
+    s1.seedCompanies ?? [],
+    [...(s1.queriesRu ?? []), ...(s1.queriesEn ?? [])]
   );
 
   console.log(`[poc:${SLUG}] Stage 7: verifying sources`);

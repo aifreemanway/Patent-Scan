@@ -49,14 +49,21 @@ export type PlayerField =
   | "founded"   // год основания / foundation year
   | "product"   // основной продукт / технология
   | "capacity"  // объём производства / capacity
-  | "share"     // доля рынка / выручка
+  | "share"     // доля рынка (% only)
+  | "revenue"   // выручка / revenue ($ / млн / млрд only) — split from share in v2.2
   | "customers" // ключевые клиенты / партнёрства
   | "status";   // статус / IPO / ownership
 
 function classifyRow(label: string): PlayerField | null {
   const l = label.toLowerCase();
-  // Order matters — "доля рынка / выручка" must match BEFORE generic "рынок"
-  if (/(дол[ья].*рынк|market\s*share|выручк|revenue|оборот|sales)/.test(l)) return "share";
+  // PR-3.6.1.2 (ap-ba v2.1 review issue #3): split share vs revenue. v2.1 had
+  // LFP «Выручка 2025» row filled with market share %; values passed share-
+  // format check because classifier collapsed both into one field. Revenue
+  // wants currency tokens; share wants %. Order: revenue match runs FIRST so
+  // «доля выручки» (rare) collapses to revenue, but plain «доля рынка» →
+  // share.
+  if (/(выручк|revenue|оборот|sales|товарооб)/.test(l)) return "revenue";
+  if (/(дол[ья].*рынк|market\s*share|share\b)/.test(l)) return "share";
   if (/(объ[её]м|capacity|выпуск|production\s+(volume|capacity)|производит|производственн)/.test(l)) return "capacity";
   if (/(ключев[ые]?\s+клиент|customer|партн|partner|потребител)/.test(l)) return "customers";
   if (/(статус|status|ipo|owner|ownership|listing|listed|акцион|публичн)/.test(l)) return "status";
@@ -151,6 +158,7 @@ const MAX_LEN: Record<PlayerField, number> = {
   product: 200,
   capacity: 120,
   share: 120,
+  revenue: 120,
   customers: 250,
   status: 180,
 };
@@ -170,11 +178,24 @@ export function validateValue(value: string, field: PlayerField): boolean {
       return /\d+\s*(GWh|MWh|MW|GW|kWh|т\/год|тонн|tons?|tonnes?|tpy|млн\.?\s*т|units?\/year|шт)/i.test(v);
     case "share":
       return /\d+(\.\d+)?\s*%/.test(v);
+    case "revenue":
+      // PR-3.6.1.2 (ap-ba v2.1 review #3): Revenue field requires currency
+      // tokens or revenue-word; bare percentages are market share, not money.
+      return /(\$|₽|€|¥|₸|млрд|млн|billion|million|тыс\.?\s+руб|revenue|выручк|оборот|sales)/i.test(v) &&
+        /\d/.test(v);
     case "status":
       // IPO ticker, or "private", "state-owned", year of listing
       return /([A-Z]{2,6}\s*[:.\s]\s*[A-Z\d.]{3,8})|\b(IPO|publicly listed|traded|state-owned|госуд|частн|частная|public)\b/i.test(v) ||
         /\b(20\d{2}|19\d{2})\b/.test(v);
     case "hq":
+      // PR-3.6.1.2 (ap-ba v2.1 review #4): v2.1 LFP regressed to «Китай»×4
+      // (LLM put single-word generic, anti-fab passed it since it has caps).
+      // Force specificity: ≥1 of {comma-separated location} OR {2+ cap words}.
+      // «Китай» → fail. «Ningde, Fujian, China» → pass. «Latham, New York» → pass.
+      if (!/[A-ZА-ЯЁ]/.test(v)) return false;
+      if (v.includes(",")) return true;
+      // Count capital-leading words (proper nouns).
+      return ((v.match(/\b[A-ZА-ЯЁ][a-zа-яё]{2,}/g) ?? []).length) >= 2;
     case "product":
     case "customers":
       // Free-form, but must have at least one capitalized word (proper noun)
@@ -402,10 +423,11 @@ function stripNestedTemplates(s: string): string {
 
 const WIKI_FIELD_KEYS: Record<PlayerField, string[]> = {
   hq: ["headquarters", "hq_location", "hq_location_city", "hq_location_country", "location", "location_country", "location_city"],
-  founded: ["founded", "foundation", "founding_date", "foundation_date", "established", "formation"],
+  founded: ["founded", "foundation", "founding_date", "foundation_date", "established", "formation", "inception", "date_of_incorporation"],
   product: ["products", "production_output_article", "production"],
   capacity: ["production_output_article", "production"],
-  share: ["market_share", "revenue"],
+  share: ["market_share"],
+  revenue: ["revenue", "net_income", "operating_income"],
   customers: [], // not typically in infobox
   status: ["traded_as", "type", "owner", "owners", "parent", "isin"],
 };
@@ -486,11 +508,12 @@ function htmlToText(html: string): string {
 }
 
 const FIELD_RU_LABEL: Record<PlayerField, string> = {
-  hq: "штаб-квартира (город и страна)",
+  hq: "штаб-квартира (город и страна, например 'Ningde, Fujian Province, China')",
   founded: "год основания (только год, 4 цифры)",
-  product: "ключевой продукт / технология (конкретное название)",
+  product: "ключевой продукт / технология (конкретное название, должно относиться к теме обзора)",
   capacity: "объём производства (например, '500 GWh/год' или '20 000 т/год')",
   share: "доля рынка (например, '38%')",
+  revenue: "выручка / revenue в денежных единицах (например, '$61 млрд USD 2025' или '423.7 млрд юаней')",
   customers: "ключевые клиенты / партнёры (конкретные названия)",
   status: "статус / IPO / тикер (например, 'SHE 300750' или 'public, Nasdaq: PLUG')",
 };
@@ -510,6 +533,29 @@ const NARROW_EXTRACT_PROMPT = `Ты — narrow-extractor для литерату
 
 type NarrowExtractOutput = { value?: string };
 
+// PR-3.6.1.2 (ap-ba v2.1 review issue #2): "topic-keyword constraint".
+// v2.1 augmenter picked source pages про Siemens Digital Logistics (Dubai
+// airports HQ) и Siemens Mobile (GSM 3G product) because Tavily site:sec.gov
+// for "Siemens electrolyzer" surfaces ALL Siemens filings — substring-match
+// passes but the page isn't about H2 at all. Topic-keyword guard: any source
+// text considered must mention ≥1 topic-relevant term (electrolyzer, PEM,
+// hydrogen for H2; LFP, LiFePO4, cathode for LFP). For non-topic-coupled
+// fields (HQ, founded, IPO) the guard is skipped — Siemens's HQ city is
+// objective regardless of which subsidiary's filing names it.
+const TOPIC_GUARDED_FIELDS = new Set<PlayerField>([
+  "product",
+  "capacity",
+  "share",
+  "revenue",
+  "customers",
+]);
+
+function sourceMentionsTopic(sourceText: string, topicKeywords: string[]): boolean {
+  if (topicKeywords.length === 0) return true; // no list = no filter
+  const lc = sourceText.toLowerCase();
+  return topicKeywords.some((k) => k.length >= 3 && lc.includes(k.toLowerCase()));
+}
+
 async function narrowExtract(opts: {
   apiKey: string;
   company: string;
@@ -517,14 +563,27 @@ async function narrowExtract(opts: {
   sourceText: string;
   sourceUrl: string;
   label: string;
+  topicKeywords: string[];
 }): Promise<string | null> {
+  // Topic-keyword pre-gate (PR-3.6.1.2): skip the LLM call entirely when
+  // the source text doesn't mention the topic at all, for fields where the
+  // value MUST be topic-coupled.
+  if (
+    TOPIC_GUARDED_FIELDS.has(opts.field) &&
+    !sourceMentionsTopic(opts.sourceText, opts.topicKeywords)
+  ) {
+    return null;
+  }
   const userText = [
     `КОМПАНИЯ: ${opts.company}`,
     `ИСКОМОЕ ПОЛЕ: ${FIELD_RU_LABEL[opts.field]}`,
+    opts.topicKeywords.length > 0 && TOPIC_GUARDED_FIELDS.has(opts.field)
+      ? `КОНТЕКСТ ТЕМЫ: значение должно относиться к теме обзора — ключевые термины темы: ${opts.topicKeywords.slice(0, 15).join(", ")}. Если найденное упоминание про другую business unit / subsidiary / product line (не связан с темой) — верни NONE.`
+      : "",
     `SOURCE URL: ${opts.sourceUrl}`,
     `SOURCE TEXT (первые 12k символов):`,
     opts.sourceText.slice(0, 12000),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 
   try {
     const { data } = await callGeminiJson<NarrowExtractOutput>({
@@ -575,6 +634,7 @@ const FIELD_NEWS_QUERY: Record<PlayerField, string> = {
   product: "products technology",
   capacity: "production capacity GWh tons annual",
   share: "market share percentage",
+  revenue: "revenue annual financial billion million",
   customers: "customers partnership supply contract",
   status: "IPO listed ticker traded",
 };
@@ -648,8 +708,9 @@ async function resolveCell(opts: {
   field: PlayerField;
   infobox: WikiInfobox | null;
   corpText: { url: string; text: string } | null;
+  topicKeywords: string[];
 }): Promise<ResolverHit | null> {
-  const { company, field, infobox, corpText } = opts;
+  const { company, field, infobox, corpText, topicKeywords } = opts;
 
   // 1. Wikipedia infobox (deterministic).
   if (infobox) {
@@ -673,6 +734,7 @@ async function resolveCell(opts: {
       sourceText: corpText.text,
       sourceUrl: corpText.url,
       label: "litreview/augment-corp",
+      topicKeywords,
     });
     if (v) {
       return {
@@ -700,6 +762,7 @@ async function resolveCell(opts: {
         sourceText: hit.content,
         sourceUrl: hit.url,
         label: "litreview/augment-news",
+        topicKeywords,
       });
       if (v) {
         return {
@@ -728,6 +791,7 @@ async function resolveCell(opts: {
         sourceText: hit.content,
         sourceUrl: hit.url,
         label: "litreview/augment-filing",
+        topicKeywords,
       });
       if (v) {
         return {
@@ -875,6 +939,11 @@ export async function augmentReportTables(opts: {
   apiKey: string;
   tavilyKey: string;
   report: LitReviewReport;
+  /** PR-3.6.1.2 (ap-ba v2.1 review issue #2): topic-relevant terms used to
+   *  gate the narrow-extract LLM call. If a source page mentions none of
+   *  these, augmenter skips it — prevents "Siemens HQ = airports Dubai"
+   *  (Siemens Digital Logistics filing) and similar wrong-subsidiary picks. */
+  topicKeywords?: string[];
 }): Promise<AugmentationStats> {
   const stats: AugmentationStats = {
     cellsAttempted: 0,
@@ -886,6 +955,7 @@ export async function augmentReportTables(opts: {
       product: { attempted: 0, filled: 0 },
       capacity: { attempted: 0, filled: 0 },
       share: { attempted: 0, filled: 0 },
+      revenue: { attempted: 0, filled: 0 },
       customers: { attempted: 0, filled: 0 },
       status: { attempted: 0, filled: 0 },
     },
@@ -933,6 +1003,7 @@ export async function augmentReportTables(opts: {
         field: fieldRow.field,
         infobox: prefetch.infobox,
         corpText: prefetch.corpText,
+        topicKeywords: opts.topicKeywords ?? [],
       });
       if (!hit) continue;
 
@@ -962,4 +1033,43 @@ export async function augmentReportTables(opts: {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Topic-keyword extraction (used by augmentReportTables guard)
+// ─────────────────────────────────────────────────────────────
+// Heuristic: tokenize a corpus of (topic + hypotheses + Stage-1 queries),
+// drop common stopwords, return de-duped >=3-char tokens. We don't need
+// perfect keyword extraction here — the guard is a coarse filter ("does this
+// SEC filing mention anything about the topic?") not a relevance scorer.
+
+const STOPWORDS = new Set<string>([
+  // Russian high-freq
+  "что", "это", "для", "или", "как", "при", "под", "над", "из", "от",
+  "обзор", "обзора", "обзоре", "мира", "мире", "мировой", "мировая",
+  "мировые", "россии", "россия", "рынка", "рынке", "рынок", "годы",
+  "года", "году", "также", "более", "менее", "является", "являются",
+  "может", "могут", "должн", "необходимо", "включает", "также",
+  // English high-freq
+  "the", "and", "for", "with", "from", "this", "that", "are", "was",
+  "were", "have", "has", "had", "will", "would", "world", "global",
+  "review", "industry", "market", "company", "companies", "year",
+  "years", "production", "manufacturer",
+]);
+
+export function deriveTopicKeywords(opts: {
+  topic: string;
+  hypotheses?: string;
+  extraQueries?: string[];
+}): string[] {
+  const blob = [
+    opts.topic,
+    opts.hypotheses ?? "",
+    ...(opts.extraQueries ?? []),
+  ].join(" ").toLowerCase();
+  const tokens = blob
+    .split(/[^\wЀ-ӿ]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+$/.test(t));
+  return Array.from(new Set(tokens));
 }
