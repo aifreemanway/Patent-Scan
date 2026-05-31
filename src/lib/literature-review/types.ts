@@ -45,7 +45,19 @@ export type LitReviewSource = {
   /** ISO date when the URL was last reachable; null = archived/broken. */
   reachedAt: string | null;
   /** Origin so a reader knows the provenance (PatSearch / Crossref / web / wiki). */
-  provenance: "patsearch" | "crossref" | "openalex" | "tavily" | "wikipedia" | "user_attachment";
+  provenance:
+    | "patsearch"
+    | "crossref"
+    | "openalex"
+    | "tavily"
+    | "wikipedia"
+    | "user_attachment"
+    // PR-3.6 source-augmentation resolvers (Tab.1 cell enrichment):
+    | "wikipedia_infobox"   // deterministic infobox parse
+    | "corp_site"            // company /about LLM narrow-extraction
+    | "industry_news"        // whitelist (bloomberg/reuters/argus/iea/irena)
+    | "sec_edgar"            // sec.gov filings
+    | "hkex";                // hkexnews.hk filings
 };
 
 export type LitReviewPatentHit = {

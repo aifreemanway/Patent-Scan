@@ -27,6 +27,7 @@ import {
   isBlacklistedUrl,
   filterByRelevance,
 } from "@/lib/literature-review/source-sanitizer";
+import { augmentReportTables } from "@/lib/literature-review/source-augmentation";
 import type {
   LitReviewParams,
   LitReviewReport,
@@ -362,6 +363,12 @@ const SYNTH_TABLES_PROMPT = COMMON_PROMPT_PREFIX + `Твоя задача — с
 
 Если в SOURCES нет количественных данных по компании — поставь "—" в ячейке (НЕ выдумывай числа). Цель: 4-6 компаний в колонках, 4-7 строк характеристик.
 
+ЖЁСТКО ЗАПРЕЩЕНО в cells:
+- ❌ Generic statements: «производит батареи», «major player», «выпускает разнообразные продукты», «один из ведущих», «various solutions», «ключевой игрок». Любое такое содержание → cell = "—".
+- ❌ Перефразирование без конкретики: если в source нет числа/имени/года — cell = "—".
+- ❌ Утверждения без source: каждая заполненная cell ОБЯЗАНА иметь хотя бы один валидный sourceRef из SOURCES.
+- ✅ Принцип: лучше «—» чем generic prose. Пустую ячейку pipeline дозаполнит из Wikipedia / корп.сайта / SEC после твоей синтез-стадии — твоя задача НЕ замусорить её фразой-наполнителем.
+
 Дополнительные оси (выбирай в зависимости от topic'а):
 - методы / технологии / процессы → колонки = МЕТОДЫ (Параметр × Пирометаллургия × Гидрометаллургия × Электролиз)
 - материалы / продукты → колонки = МАТЕРИАЛЫ
@@ -408,7 +415,8 @@ export async function stage3to8(
   apiKey: string,
   params: LitReviewParams,
   sources: LitReviewSource[],
-  enrichmentSnippets: Map<string, string>
+  enrichmentSnippets: Map<string, string>,
+  tavilyKey: string = process.env.TAVILY_API_KEY ?? ""
 ): Promise<LitReviewReport> {
   const synthSources: SynthSourceInput[] = sources.slice(0, SYNTH_MAX_SOURCES).map((s) => ({
     ref: s.ref,
@@ -452,7 +460,7 @@ export async function stage3to8(
   const filterRefs = (refs: number[] | undefined) =>
     Array.isArray(refs) ? refs.filter((r) => knownRefs.has(r)) : [];
 
-  return {
+  const report: LitReviewReport = {
     title: typeof rest.title === "string" ? rest.title : params.topic,
     scope: typeof rest.scope === "string" ? rest.scope : "",
     overview: typeof rest.overview === "string" ? rest.overview : "",
@@ -486,6 +494,24 @@ export async function stage3to8(
     sources,
     caveats: Array.isArray(rest.caveats) ? rest.caveats : [],
   };
+
+  // PR-3.6 source-augmentation: fill empty cells in the «tables-of-players»
+  // table using deterministic Wiki infobox + corp /about + industry news +
+  // SEC/HKEX filings. Mutates report.comparativeTables[N].rows[*].cells and
+  // appends new entries to report.sources (which Stage 7 will then verify).
+  //
+  // Best-effort: if the augmenter fails, the report still ships with whatever
+  // the LLM filled (mostly "—"). We don't fail the whole pipeline over it —
+  // the user got their report; v2 quality is a soft target.
+  try {
+    await augmentReportTables({ apiKey, tavilyKey, report });
+  } catch (e) {
+    console.error("[litreview/stage3to8] augmentation failed (non-fatal)", {
+      message: e instanceof Error ? e.message : String(e),
+    });
+  }
+
+  return report;
 }
 
 // ─────────────────────────────────────────────────────────────
