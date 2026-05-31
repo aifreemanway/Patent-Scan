@@ -300,7 +300,8 @@
     },
     "header": {
       "login": "Sign in",
-      "logout": "Sign out"
+      "logout": "Sign out",
+      "account": "Account"
     }
   },
   "Quota": {

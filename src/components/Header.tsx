@@ -62,7 +62,13 @@ export function Header() {
         <div className="flex items-center gap-4">
           {authLoaded && email ? (
             <div className="flex items-center gap-3 text-sm">
-              <span className="hidden max-w-[180px] truncate text-slate-600 sm:inline">
+              <Link
+                href="/account"
+                className="rounded-md px-3 py-1 font-medium text-slate-700 transition hover:bg-slate-100"
+              >
+                {ta("account")}
+              </Link>
+              <span className="hidden max-w-[180px] truncate text-slate-500 sm:inline">
                 {email}
               </span>
               <button
