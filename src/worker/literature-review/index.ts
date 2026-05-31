@@ -28,6 +28,7 @@ import {
   stage3to8,
   stage7VerifySources,
   harvestToSources,
+  applyRelevanceFilter,
 } from "./stages";
 import { renderReportMarkdown } from "./markdown";
 import {
@@ -179,9 +180,35 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
   });
 
   await updateStage(admin, row.id, 3, 35);
-  const { sources, snippets } = harvestToSources(harvest);
-  if (sources.length === 0) {
+  const initial = harvestToSources(harvest);
+  console.info(`[worker] sources after blacklist`, {
+    id: row.id,
+    kept: initial.sources.length,
+    blacklisted: initial.blacklistedCount,
+  });
+  if (initial.sources.length === 0) {
     throw new Error("no_sources_harvested");
+  }
+
+  // PR-3.5 Fix 1+2: LLM-based relevance filter pass. Drops «явно не в тему»
+  // hits that survived the domain blacklist (BUG-LIT-2 H2 sample: литий
+  // батареи from rospatent.gov.ru — authoritative source, off-topic content).
+  // Gemini Flash, batched 50 / call; spends ~₽0.5 per review.
+  const filtered = await applyRelevanceFilter({
+    apiKey,
+    topic: params.topic,
+    sources: initial.sources,
+    snippets: initial.snippets,
+  });
+  console.info(`[worker] sources after relevance filter`, {
+    id: row.id,
+    kept: filtered.sources.length,
+    droppedByRelevance: filtered.droppedCount,
+  });
+  const sources = filtered.sources;
+  const snippets = filtered.snippets;
+  if (sources.length === 0) {
+    throw new Error("no_relevant_sources");
   }
 
   // Stage 3-6+8 combined synthesis

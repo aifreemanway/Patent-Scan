@@ -7,7 +7,7 @@ dotenvConfig({ path: ".env.local" });
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
-  stage1, stage2, stage3to8, stage7VerifySources, harvestToSources,
+  stage1, stage2, stage3to8, stage7VerifySources, harvestToSources, applyRelevanceFilter,
 } from "../../src/worker/literature-review/stages";
 import { renderReportMarkdown } from "../../src/worker/literature-review/markdown";
 import type { LitReviewParams } from "../../src/lib/literature-review/types";
@@ -37,8 +37,18 @@ async function main() {
   const harvest = await stage2(PARAMS, s1);
   console.log(`  patents=${harvest.patents.length} scholar=${harvest.scholar.length} web=${harvest.web.length} wiki=${harvest.wiki.length}`);
 
+  console.log(`[poc:${SLUG}] Stage 3 prep: blacklist + relevance filter`);
+  const initial = harvestToSources(harvest);
+  console.log(`  blacklist dropped ${initial.blacklistedCount}, kept ${initial.sources.length}`);
+  const filtered = await applyRelevanceFilter({ apiKey, topic: PARAMS.topic, sources: initial.sources, snippets: initial.snippets });
+  console.log(`  relevance filter dropped ${filtered.droppedCount}, kept ${filtered.sources.length}`);
+  if (filtered.droppedCount > 0) {
+    console.log(`  reasons sample:`, [...filtered.droppedRefs.entries()].slice(0, 5));
+  }
+
   console.log(`[poc:${SLUG}] Stage 3-8: synthesis`);
-  const { sources, snippets } = harvestToSources(harvest);
+  const sources = filtered.sources;
+  const snippets = filtered.snippets;
   const report = await stage3to8(apiKey, PARAMS, sources, snippets);
 
   console.log(`[poc:${SLUG}] Stage 7: verifying sources`);
