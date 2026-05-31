@@ -141,10 +141,24 @@ const BANNED_PATTERNS: RegExp[] = [
   /\bодин\s+из\s+(крупн|ведущ|основн)/i,
 ];
 
+// PR-3.6.1 (ap-ba v2 review 2026-05-31 — confirmed 40% LLM-cell hallucination
+// rate): per-field max length cuts off prose drift. «Blade Battery запущена
+// в марте 2020» (60 chars) is a product-launch sentence, not a founding year
+// — even though it matches the year-digit regex. A 30-char cap rejects it.
+const MAX_LEN: Record<PlayerField, number> = {
+  hq: 120,
+  founded: 30,
+  product: 200,
+  capacity: 120,
+  share: 120,
+  customers: 250,
+  status: 180,
+};
+
 /** Validate an extracted value against field-specific format + bans. */
 export function validateValue(value: string, field: PlayerField): boolean {
   const v = value.trim();
-  if (v.length < 2 || v.length > 300) return false;
+  if (v.length < 2 || v.length > MAX_LEN[field]) return false;
   if (/^[—\-–.\s?]+$/.test(v)) return false;
   if (BANNED_PATTERNS.some((re) => re.test(v))) return false;
 
@@ -732,6 +746,121 @@ async function resolveCell(opts: {
 // ─────────────────────────────────────────────────────────────
 // Top-level entry — mutates report.comparativeTables + report.sources
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// PR-3.6.3 — pre-render cell-count assert (ap-ba v2 review issue #3)
+// ─────────────────────────────────────────────────────────────
+// LLM occasionally emits row.cells.length > columns.length-1 (e.g. v2 H2
+// Tab.1 HQ row had 6 cells for 5 column headers; LFP HQ 7 for 6). The extra
+// cells shift downstream alignment and produce ghost "Россия | Россия" tails.
+// We collapse to expected count (drop tail) or pad with "—" if short.
+
+export function normalizeTableCellCounts(report: LitReviewReport): {
+  fixedRows: number;
+  droppedCells: number;
+  paddedCells: number;
+} {
+  let fixedRows = 0;
+  let droppedCells = 0;
+  let paddedCells = 0;
+  for (const table of report.comparativeTables) {
+    const expected = Math.max(0, table.columns.length - 1);
+    if (expected === 0) continue;
+    for (const row of table.rows) {
+      if (row.cells.length === expected) continue;
+      fixedRows++;
+      if (row.cells.length > expected) {
+        droppedCells += row.cells.length - expected;
+        row.cells = row.cells.slice(0, expected);
+      } else {
+        const pad = expected - row.cells.length;
+        paddedCells += pad;
+        for (let i = 0; i < pad; i++) row.cells.push("—");
+      }
+    }
+  }
+  return { fixedRows, droppedCells, paddedCells };
+}
+
+// ─────────────────────────────────────────────────────────────
+// PR-3.6.1 — LLM-cell anti-fab validation (ap-ba v2 review issue #2c)
+// ─────────────────────────────────────────────────────────────
+// Augmenter validates its own outputs (substring + format regex). LLM-filled
+// cells (those in the synth-emitted table before augmenter runs) had NO
+// validation. ap-ba v2 spot-check: 2/5 sampled LLM cells = hallucinations
+// (Plug Power HQ = "Китай (Сиань)" mis-attributed from Longi's row; LFP
+// "Российские проекты" share = "14% Q2 2025" actually citing an LNG export
+// article). 40% fail rate.
+//
+// Fix: for each non-empty LLM cell, require either substring-match in the
+// snippets of its cited sourceRefs, OR pass the field-format validator.
+// Strict: BOTH the substring AND the field-format must hold (anti-fab is the
+// product's core promise — over-rejecting is preferable to over-passing).
+// Failing cells reset to "—" so the augmenter's resolver chain gets a second
+// shot.
+
+export function validateLLMCells(opts: {
+  report: LitReviewReport;
+  enrichmentSnippets: Map<string, string>;
+}): { resetCount: number; checkedCount: number } {
+  const player = findPlayerTable(opts.report);
+  if (!player) return { resetCount: 0, checkedCount: 0 };
+
+  const table = opts.report.comparativeTables[player.tableIdx];
+  // ref → snippet text (concat URL → snippet for quick row-level lookup).
+  const refToSnippet = new Map<number, string>();
+  for (const s of opts.report.sources) {
+    const snip = opts.enrichmentSnippets.get(s.url);
+    if (snip) refToSnippet.set(s.ref, snip);
+  }
+
+  let resetCount = 0;
+  let checkedCount = 0;
+  for (const fieldRow of player.fieldRows) {
+    const row = table.rows[fieldRow.row];
+    for (const companyCol of player.companyCols) {
+      const cellIdx = companyCol.col;
+      const cellRaw = row.cells[cellIdx] ?? "";
+      if (EMPTY_CELL_RE.test(cellRaw)) continue;
+      // Already augmented? Augmenter writes `value [N]` with a trailing ref.
+      // Trust augmenter's own validation, skip re-check.
+      if (/\[\d+\]\s*$/.test(cellRaw.trim())) continue;
+
+      checkedCount++;
+      // Strip any inline [N] refs for value-only checks (LLM may have added
+      // them inline copying our augmenter style).
+      const valueClean = cellRaw.replace(/\s*\[\d+(?:,\s*\d+)*\]\s*/g, "").trim();
+      if (!valueClean) {
+        row.cells[cellIdx] = "—";
+        resetCount++;
+        continue;
+      }
+
+      // Field-format regex (length + content shape) — required.
+      const fmtOk = validateValue(valueClean, fieldRow.field);
+      if (!fmtOk) {
+        row.cells[cellIdx] = "—";
+        resetCount++;
+        continue;
+      }
+
+      // Substring match — required when we have cited refs to check against.
+      // If no refs cited (LLM didn't attribute), we can't verify → fail safe.
+      const refs = Array.isArray(row.sourceRefs) ? row.sourceRefs : [];
+      const sourceText = refs.map((r) => refToSnippet.get(r) ?? "").join(" ");
+      if (!sourceText.trim()) {
+        row.cells[cellIdx] = "—";
+        resetCount++;
+        continue;
+      }
+      if (!substringMatches(valueClean, sourceText)) {
+        row.cells[cellIdx] = "—";
+        resetCount++;
+      }
+    }
+  }
+  return { resetCount, checkedCount };
+}
 
 export type AugmentationStats = {
   cellsAttempted: number;

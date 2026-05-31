@@ -50,7 +50,11 @@ async function main() {
   console.log(`[poc:${SLUG}] Stage 3-8: synthesis`);
   const sources = filtered.sources;
   const snippets = filtered.snippets;
-  const report = await stage3to8(apiKey, PARAMS, sources, snippets);
+  const report = await stage3to8(
+    apiKey, PARAMS, sources, snippets,
+    process.env.TAVILY_API_KEY ?? "",
+    s1.seedCompanies ?? []
+  );
 
   console.log(`[poc:${SLUG}] Stage 7: verifying sources`);
   report.sources = await stage7VerifySources(report.sources);
