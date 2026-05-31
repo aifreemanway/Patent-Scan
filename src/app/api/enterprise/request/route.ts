@@ -89,6 +89,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (inn && !/^\d{10,12}$/.test(inn)) {
     return NextResponse.json({ error: "invalid_format" }, { status: 400 });
   }
+  // Phone is optional; if present, require 7-15 digits (E.164 minimum
+  // significantly trims junk submissions per BUG-ENT-PHONE 2026-05-31:
+  // user could submit "1" and the form accepted it because the client
+  // pattern was missing).
+  if (phone) {
+    const digits = phone.replace(/[^0-9]/g, "");
+    if (digits.length < 7 || digits.length > 15) {
+      return NextResponse.json({ error: "invalid_format" }, { status: 400 });
+    }
+  }
   if (topic.length > 4000) {
     return NextResponse.json({ error: "invalid_format" }, { status: 400 });
   }

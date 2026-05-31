@@ -214,6 +214,10 @@ export function EnterpriseForm({
           onChange={setPhone}
           type="tel"
           autoComplete="tel"
+          // E.164 acceptance: 7-15 digits, optional leading +.
+          // Native HTML pattern catches single-digit / junk inputs before
+          // submit (BUG-ENT-PHONE 2026-05-31: user could submit "1").
+          pattern="\+?[0-9\s()\-]{7,20}"
           hint={t("phoneHint")}
         />
 
