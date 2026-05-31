@@ -105,6 +105,44 @@ function ipcSubclasses(codes: string[]): string[] {
   return out;
 }
 
+// Normalise an IPC code from "H01M 4/58" or "h01m4/58" or "H01M-4/58" to the
+// canonical "H01M  4/58" PatSearch expects in `classification.ipc` filter
+// (subclass + spaces + main-group/sub-group). The platform accepts either
+// "H01M  4/58" (two spaces) or "H01M0004/00580000" zero-padded — we pick the
+// short human form. If the input is just a subclass (4 chars) we return it
+// unchanged for fallback.
+function normaliseIpcFull(code: string): string {
+  const c = code.trim().toUpperCase().replace(/\s+/g, " ").replace(/-/g, " ");
+  // Subclass only — handled by the separate subclass filter.
+  if (/^[A-H]\d{2}[A-Z]$/.test(c.replace(/\s/g, ""))) return c.replace(/\s/g, "");
+  // Full like "H01M 4/58" or "H01M4/58"
+  const m = c.match(/^([A-H])\s*(\d{2})\s*([A-Z])\s*(\d{1,4})\s*\/?\s*(\d{1,6})?$/);
+  if (m) {
+    const sub = `${m[1]}${m[2]}${m[3]}`;
+    const main = m[4];
+    return m[5] ? `${sub}  ${main}/${m[5]}` : `${sub}  ${main}`;
+  }
+  return c;
+}
+
+function splitIpcCodes(codes: string[]): { full: string[]; subclass: string[] } {
+  const full: string[] = [];
+  const subclass: string[] = [];
+  for (const raw of codes) {
+    const cleaned = raw.trim();
+    if (!cleaned) continue;
+    // Subclass-only = 4 chars [A-H]\d\d[A-Z], no group separator
+    const compact = cleaned.replace(/\s/g, "");
+    if (/^[A-H]\d{2}[A-Z]$/.test(compact)) {
+      if (!subclass.includes(compact)) subclass.push(compact);
+    } else {
+      const norm = normaliseIpcFull(cleaned);
+      if (!full.includes(norm)) full.push(norm);
+    }
+  }
+  return { full, subclass };
+}
+
 export async function harvestPatSearch(opts: {
   token: string;
   query: string;
@@ -118,10 +156,24 @@ export async function harvestPatSearch(opts: {
   // implementation returned 0 hits across all 6 queries on the Sb₂O₃ POC.
   // novelty/search-rospatent doesn't filter by date either; the period bound
   // is a soft preference baked into the topic/queries, not a hard cutoff.
-  const subclasses = opts.ipcCodes && opts.ipcCodes.length > 0 ? ipcSubclasses(opts.ipcCodes) : [];
-  const filter = subclasses.length > 0
-    ? { "classification.ipc_subclass": { values: subclasses } }
-    : undefined;
+  //
+  // PR-3.8 (ap-ba 2026-05-31 review issue #3): we now split incoming IPC
+  // codes into full-precision (e.g. "H01M 4/58") and subclass-only (e.g.
+  // "H01M"). Full codes go into `classification.ipc` for precise recall —
+  // H2 electrolyzer queries match "C25B  1/04" but NOT "C25B  3/00" (which
+  // is electrolytic refining of metal). Subclass codes stay as a broader
+  // safety net via the existing `classification.ipc_subclass` filter. Both
+  // can coexist; PatSearch AND-combines filter clauses, so we prefer the
+  // strictest available.
+  const parts = opts.ipcCodes && opts.ipcCodes.length > 0
+    ? splitIpcCodes(opts.ipcCodes)
+    : { full: [], subclass: [] };
+  const filter: Record<string, { values: string[] }> = {};
+  if (parts.full.length > 0) {
+    filter["classification.ipc"] = { values: parts.full };
+  } else if (parts.subclass.length > 0) {
+    filter["classification.ipc_subclass"] = { values: parts.subclass };
+  }
 
   const body: Record<string, unknown> = {
     qn: opts.query,
@@ -130,7 +182,7 @@ export async function harvestPatSearch(opts: {
     datasets: opts.datasets,
     include_facets: false,
   };
-  if (filter) body.filter = filter;
+  if (Object.keys(filter).length > 0) body.filter = filter;
 
   try {
     const resp = await fetch(PATSEARCH_URL, {
