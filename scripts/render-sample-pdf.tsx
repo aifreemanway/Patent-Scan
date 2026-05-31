@@ -35,11 +35,13 @@ async function main() {
   const md = await readFile(inputAbs, "utf-8");
   console.log(`[render-pdf] markdown bytes: ${md.length}`);
 
-  const element = React.createElement(MarkdownDocument, {
-    markdown: md,
-    footerText: FOOTER,
-  });
-  const buffer = await renderToBuffer(element);
+  // JSX (not React.createElement) so TypeScript narrows the element type
+  // to ReactElement<DocumentProps> — renderToBuffer's signature requires
+  // it, and createElement returns FunctionComponentElement which TS won't
+  // structurally narrow. See PR #70 build-failure root cause.
+  const buffer = await renderToBuffer(
+    <MarkdownDocument markdown={md} footerText={FOOTER} />
+  );
 
   await mkdir(dirname(outputAbs), { recursive: true });
   await writeFile(outputAbs, buffer);

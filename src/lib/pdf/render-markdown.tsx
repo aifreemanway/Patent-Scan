@@ -23,6 +23,7 @@ import {
   StyleSheet,
   Font,
   Link as PDFLink,
+  type DocumentProps,
 } from "@react-pdf/renderer";
 import { marked, type Tokens } from "marked";
 
@@ -296,7 +297,8 @@ function renderBlocks(tokens: Tokens.Generic[], opts: RenderOpts): React.ReactNo
         out.push(
           <View key={k} style={styles.list}>
             {l.items.map((item, j) => {
-              const marker = l.ordered ? `${(l.start ?? 1) + j}.` : "•";
+              const startNum = typeof l.start === "number" ? l.start : 1;
+              const marker = l.ordered ? `${startNum + j}.` : "•";
               const itemTokens = item.tokens ?? [];
               const inlineForFirstLine = (() => {
                 const first = itemTokens[0];
@@ -424,13 +426,16 @@ function splitBySection(tokens: Tokens.Generic[]): Tokens.Generic[][] {
 }
 
 // ── Public renderer ──────────────────────────────────────────
+// Return type pinned to ReactElement<DocumentProps> so renderToBuffer can
+// accept it without a cast (PR #70 deploy failed on this: TS rejected the
+// loose ReactElement signature against renderToBuffer's narrower param).
 export function MarkdownDocument({
   markdown,
   footerText,
 }: {
   markdown: string;
   footerText?: string;
-}): React.ReactElement {
+}): React.ReactElement<DocumentProps> {
   const tokens = marked.lexer(markdown);
   const sections = splitBySection(tokens);
   return (
