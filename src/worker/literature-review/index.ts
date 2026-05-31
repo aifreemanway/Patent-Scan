@@ -211,9 +211,18 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     throw new Error("no_relevant_sources");
   }
 
-  // Stage 3-6+8 combined synthesis
+  // Stage 3-6+8 combined synthesis. Pass s1.seedCompanies so the players
+  // table uses canonical industry leaders rather than tangential firms
+  // (PR-3.6.4 — ap-ba v2 review issue #2a).
   await updateStage(admin, row.id, 4, 50);
-  const report = await stage3to8(apiKey, params, sources, snippets);
+  const report = await stage3to8(
+    apiKey,
+    params,
+    sources,
+    snippets,
+    process.env.TAVILY_API_KEY ?? "",
+    s1.seedCompanies ?? []
+  );
   // Apply Stage 1's working title if Sonnet didn't override (rare)
   if (!report.title) report.title = s1.workingTitle;
 

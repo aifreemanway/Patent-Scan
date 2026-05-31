@@ -157,56 +157,115 @@ export async function harvestPatSearch(opts: {
   // novelty/search-rospatent doesn't filter by date either; the period bound
   // is a soft preference baked into the topic/queries, not a hard cutoff.
   //
-  // PR-3.8 (ap-ba 2026-05-31 review issue #3): we now split incoming IPC
-  // codes into full-precision (e.g. "H01M 4/58") and subclass-only (e.g.
-  // "H01M"). Full codes go into `classification.ipc` for precise recall —
-  // H2 electrolyzer queries match "C25B  1/04" but NOT "C25B  3/00" (which
-  // is electrolytic refining of metal). Subclass codes stay as a broader
-  // safety net via the existing `classification.ipc_subclass` filter. Both
-  // can coexist; PatSearch AND-combines filter clauses, so we prefer the
-  // strictest available.
+  // PR-3.8 (ap-ba 2026-05-31 review issue #3): split incoming IPC codes into
+  // full-precision (e.g. "H01M 4/58") and subclass-only (e.g. "H01M").
+  //
+  // PR-3.8 v2 (ap-ba 2026-05-31 review issue #1 — CRITICAL): full-code filter
+  // dropped patents to 0 in both H2+LFP samples (v1 had 33+50). PatSearch's
+  // `classification.ipc` index is sparse on subgroup codes; many real patents
+  // are tagged at the subclass level only. Fix: three-pass cascade — try
+  // strict full-codes first (most precise); on 0 hits, broaden to subclass
+  // prefixes derived from the full codes (still topic-relevant but recalls
+  // more); on still-0, drop the filter entirely (textual qn matching only,
+  // matches v1 behavior). Logs which strategy succeeded so we can monitor
+  // precision/recall trade-off in pm2 output.
   const parts = opts.ipcCodes && opts.ipcCodes.length > 0
     ? splitIpcCodes(opts.ipcCodes)
     : { full: [], subclass: [] };
-  const filter: Record<string, { values: string[] }> = {};
+  type FilterStrategy = { name: string; filter: Record<string, { values: string[] }> };
+  const strategies: FilterStrategy[] = [];
   if (parts.full.length > 0) {
-    filter["classification.ipc"] = { values: parts.full };
+    strategies.push({
+      name: "strict-full",
+      filter: { "classification.ipc": { values: parts.full } },
+    });
+    // Derive subclass prefixes from full codes for broaden-pass.
+    const subFromFull = ipcSubclasses(parts.full);
+    const allSub = Array.from(new Set([...parts.subclass, ...subFromFull]));
+    if (allSub.length > 0) {
+      strategies.push({
+        name: "broaden-subclass",
+        filter: { "classification.ipc_subclass": { values: allSub } },
+      });
+    }
   } else if (parts.subclass.length > 0) {
-    filter["classification.ipc_subclass"] = { values: parts.subclass };
+    strategies.push({
+      name: "subclass-only",
+      filter: { "classification.ipc_subclass": { values: parts.subclass } },
+    });
   }
+  // Final fallback: textual qn only (matches v1 pre-PR-3.8 behavior).
+  strategies.push({ name: "no-filter", filter: {} });
 
-  const body: Record<string, unknown> = {
+  const baseBody: Record<string, unknown> = {
     qn: opts.query,
     limit: Math.min(opts.limit ?? 25, 50),
     offset: 0,
     datasets: opts.datasets,
     include_facets: false,
   };
-  if (Object.keys(filter).length > 0) body.filter = filter;
+
+  const doSearch = async (
+    strategy: FilterStrategy
+  ): Promise<{ ok: true; data: PatSearchResponse } | { ok: false }> => {
+    const body = { ...baseBody };
+    if (Object.keys(strategy.filter).length > 0) body.filter = strategy.filter;
+    try {
+      const resp = await fetch(PATSEARCH_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${opts.token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        const bodyText = await resp.text().catch(() => "");
+        console.error("[litreview/patsearch] non-ok", {
+          status: resp.status,
+          strategy: strategy.name,
+          body: bodyText.slice(0, 300),
+          qn: opts.query.slice(0, 100),
+        });
+        return { ok: false };
+      }
+      const data = (await resp.json()) as PatSearchResponse;
+      return { ok: true, data };
+    } catch (e) {
+      console.error("[litreview/patsearch] fetch error", {
+        strategy: strategy.name,
+        message: e instanceof Error ? e.message : String(e),
+      });
+      return { ok: false };
+    }
+  };
+
+  let data: PatSearchResponse | null = null;
+  let usedStrategy = "none";
+  for (const strategy of strategies) {
+    const result = await doSearch(strategy);
+    if (!result.ok) continue;
+    const hits = Array.isArray(result.data.hits) ? result.data.hits : [];
+    if (hits.length > 0) {
+      data = result.data;
+      usedStrategy = strategy.name;
+      break;
+    }
+  }
+  if (!data) {
+    console.log("[litreview/patsearch] all strategies returned 0 hits", {
+      qn: opts.query.slice(0, 60),
+      datasets: opts.datasets.join(","),
+    });
+    return [];
+  }
 
   try {
-    const resp = await fetch(PATSEARCH_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${opts.token}`,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const bodyText = await resp.text().catch(() => "");
-      console.error("[litreview/patsearch] non-ok", {
-        status: resp.status,
-        body: bodyText.slice(0, 300),
-        qn: opts.query.slice(0, 100),
-      });
-      return [];
-    }
-    const data = (await resp.json()) as PatSearchResponse;
     const hits = Array.isArray(data.hits) ? data.hits : [];
     console.log("[litreview/patsearch] ok", {
       qn: opts.query.slice(0, 60),
       datasets: opts.datasets.join(","),
+      strategy: usedStrategy,
       total: data.total ?? 0,
       hits: hits.length,
     });
