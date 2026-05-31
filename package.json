@@ -17,12 +17,15 @@
     "poc:industrial-usage-nord": "tsx scripts/poc-gates/industrial-usage-nord.ts"
   },
   "dependencies": {
+    "@fontsource/noto-sans": "^5.2.10",
+    "@react-pdf/renderer": "^4.5.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
     "disposable-email-domains": "^1.0.62",
     "dotenv": "^16.4.5",
+    "marked": "^18.0.4",
     "next": "16.2.3",
     "next-intl": "^4.9.1",
     "react": "19.2.4",
