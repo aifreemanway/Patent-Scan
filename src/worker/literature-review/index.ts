@@ -221,7 +221,8 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     sources,
     snippets,
     process.env.TAVILY_API_KEY ?? "",
-    s1.seedCompanies ?? []
+    s1.seedCompanies ?? [],
+    [...(s1.queriesRu ?? []), ...(s1.queriesEn ?? [])]
   );
   // Apply Stage 1's working title if Sonnet didn't override (rare)
   if (!report.title) report.title = s1.workingTitle;
