@@ -482,6 +482,16 @@
         "generic": "Temporary service-side error. Try again in a minute."
       }
     },
+    "tierLocked": {
+      "title": "Literature review is available on the Team plan",
+      "body": "Your current plan is «{tier}». Literature reviews are included with Team (1/mo) and Enterprise (2/mo). Research institutes can request a complimentary demo review.",
+      "benefit1": "Up to 80 verified sources: scientific publications, patents, industry reports",
+      "benefit2": "Comparative tables of producers and technologies — ready for R&D planning",
+      "benefit3": "Strategic insights: dominant players, risks, trends, regulation",
+      "price": "From 12,900 ₽ per review",
+      "ctaEnterprise": "Free demo review for R&D",
+      "ctaBilling": "Choose a plan"
+    },
     "industries": {
       "metallurgy": "Metallurgy & mining",
       "chemistry": "Chemistry & materials",

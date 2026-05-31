@@ -61,10 +61,19 @@ const CURRENT_YEAR = new Date().getUTCFullYear();
 
 type Status = "idle" | "submitting" | "error";
 
-export function IntakeForm({ locale }: { locale: string }) {
+const LITREVIEW_ALLOWED_TIERS = new Set(["team", "enterprise"]);
+
+export function IntakeForm({
+  locale,
+  tier,
+}: {
+  locale: string;
+  tier: string | null;
+}) {
   const t = useTranslations("LiteratureReview.intake");
   const tInd = useTranslations("LiteratureReview.industries");
   const tReg = useTranslations("LiteratureReview.regions");
+  const tLocked = useTranslations("LiteratureReview.tierLocked");
   const router = useRouter();
 
   const [topic, setTopic] = useState("");
@@ -105,6 +114,11 @@ export function IntakeForm({ locale }: { locale: string }) {
     });
   }
 
+  // tier === null → user not authed (form stays open, submit hits 401 → login)
+  // tier === free/starter → show upsell card instead of form
+  // tier === team/enterprise → form works
+  const isLockedTier = tier !== null && !LITREVIEW_ALLOWED_TIERS.has(tier);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid || status === "submitting") return;
@@ -139,6 +153,41 @@ export function IntakeForm({ locale }: { locale: string }) {
       setErrorCode("network");
       setStatus("error");
     }
+  }
+
+  if (isLockedTier) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-sm">
+        <h2 className="text-xl font-bold tracking-tight text-amber-950">
+          {tLocked("title")}
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-amber-900">
+          {tLocked("body", { tier: tier ?? "" })}
+        </p>
+        <ul className="mt-4 space-y-1 text-sm text-amber-900">
+          <li>• {tLocked("benefit1")}</li>
+          <li>• {tLocked("benefit2")}</li>
+          <li>• {tLocked("benefit3")}</li>
+        </ul>
+        <p className="mt-5 text-2xl font-bold text-amber-950">
+          {tLocked("price")}
+        </p>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/enterprise"
+            className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
+          >
+            {tLocked("ctaEnterprise")}
+          </Link>
+          <Link
+            href="/account/billing"
+            className="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+          >
+            {tLocked("ctaBilling")}
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
