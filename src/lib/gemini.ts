@@ -5,11 +5,7 @@
 
 import { TIMEWEB_URL, GEMINI_MODEL } from "./config";
 import { logCost } from "./cost";
-
-type ChatResponseRaw = {
-  choices?: { message?: { content?: string } }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-};
+import { streamChatCompletion, LlmStreamError } from "./llm-stream";
 
 export type GeminiUsage = {
   input: number;
@@ -89,12 +85,15 @@ export async function callGeminiJson<T>(
     traceId,
   } = opts;
 
-  // OpenAI-compatible chat payload for the gateway.
+  // OpenAI-compatible chat payload for the gateway. We STREAM the response (see
+  // lib/llm-stream.ts): a non-streamed call is killed by the gateway's ~187s
+  // server-side deadline (HTTP 408) on long generations — e.g. a landscape
+  // synthesis over ≤150 patents — while a streamed response is not.
   // - `thinkingBudget` (in opts) is intentionally NOT sent: the gateway has no
   //   thinking-budget control; gemini-2.5-flash reasons at the gateway default.
-  // - `max_tokens` is intentionally omitted: the prior Google-direct calls set no
-  //   output cap, and large landscape syntheses (≤150 patents) must not truncate
-  //   (verified: the gateway returns finish_reason "stop", not "length", uncapped).
+  // - `max_tokens` is intentionally omitted so large syntheses don't truncate.
+  // - `response_format: json_object` is omitted in streaming mode — the model
+  //   wraps the object in a ```json fence / prose, which the cleanup below strips.
   const payload = {
     model: GEMINI_MODEL,
     messages: [
@@ -102,61 +101,47 @@ export async function callGeminiJson<T>(
       { role: "user", content: userText },
     ],
     temperature,
-    response_format: { type: "json_object" },
   };
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
+  let text: string;
+  let usageRaw: { prompt_tokens: number; completion_tokens: number };
   try {
-    resp = await fetch(TIMEWEB_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
+    const r = await streamChatCompletion({
+      url: TIMEWEB_URL,
+      apiKey,
+      payload,
+      idleTimeoutMs: timeoutMs,
     });
+    text = r.content;
+    usageRaw = r.usage;
   } catch (e) {
-    const isTimeout = e instanceof DOMException && e.name === "AbortError";
-    const msg = isTimeout
-      ? `Gemini timeout after ${timeoutMs}ms`
-      : `Gemini fetch failed: ${e instanceof Error ? e.message : String(e)}`;
-    // Log BEFORE throwing — same reason as timeweb.ts: otherwise a Gemini
-    // network timeout is silent in pm2 logs and looks like nothing happened.
-    console.error("[gemini] network error", {
-      label: opts.label,
-      timeoutMs,
-      isTimeout,
-      traceId,
-    });
-    throw new GeminiError("network", msg, { traceId });
-  } finally {
-    clearTimeout(timer);
+    if (e instanceof LlmStreamError) {
+      if (e.kind === "http") {
+        console.error("[gemini] upstream non-ok", { traceId, status: e.status });
+        throw new GeminiError("upstream_http", `Gemini returned ${e.status}`, {
+          traceId,
+          status: e.status,
+        });
+      }
+      // timeout/network → "network" code; keep "timeout" in the message so
+      // geminiErrorToStatus maps an idle-timeout to 504.
+      const msg =
+        e.kind === "timeout"
+          ? `Gemini timeout after ${timeoutMs}ms`
+          : `Gemini fetch failed: ${e.message}`;
+      console.error("[gemini] network error", {
+        label: opts.label,
+        timeoutMs,
+        isTimeout: e.kind === "timeout",
+        traceId,
+      });
+      throw new GeminiError("network", msg, { traceId });
+    }
+    throw e;
   }
 
-  if (!resp.ok) {
-    console.error("[gemini] upstream non-ok", {
-      traceId,
-      status: resp.status,
-      statusText: resp.statusText,
-    });
-    throw new GeminiError("upstream_http", `Gemini returned ${resp.status}`, {
-      traceId,
-      status: resp.status,
-    });
-  }
-
-  const raw = (await resp.json()) as ChatResponseRaw;
-
-  const text = raw.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) {
-    console.error("[gemini] empty response", {
-      traceId,
-      rawPreview: JSON.stringify(raw).slice(0, 300),
-    });
+    console.error("[gemini] empty response", { traceId });
     throw new GeminiError("empty_response", "Gemini returned empty text", {
       traceId,
     });
@@ -188,8 +173,8 @@ export async function callGeminiJson<T>(
   }
 
   const usage: GeminiUsage = {
-    input: raw.usage?.prompt_tokens ?? 0,
-    output: raw.usage?.completion_tokens ?? 0,
+    input: usageRaw.prompt_tokens ?? 0,
+    output: usageRaw.completion_tokens ?? 0,
     thinking: 0, // gateway doesn't report a separate thinking-token count
   };
 
