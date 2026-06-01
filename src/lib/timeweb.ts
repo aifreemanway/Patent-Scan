@@ -10,6 +10,7 @@
 
 import { TIMEWEB_URL } from "./config";
 import { logCost } from "./cost";
+import { streamChatCompletion, LlmStreamError } from "./llm-stream";
 
 export type TimewebModel =
   | "anthropic/claude-sonnet-4-6"
@@ -35,11 +36,6 @@ export class TimewebError extends Error {
 
 export type TimewebUsage = { input: number; output: number };
 export type TimewebJsonResult<T> = { data: T; text: string; usage: TimewebUsage };
-
-type ChatResponse = {
-  choices?: { message?: { content?: string } }[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
-};
 
 /**
  * Call the Timeweb gateway expecting a JSON object back. `temperature` is
@@ -68,6 +64,11 @@ export async function callTimewebJson<T>(opts: {
     timeoutMs = 120_000,
   } = opts;
 
+  // NOTE: we STREAM the response (see lib/llm-stream.ts). A non-streamed call to
+  // this gateway is killed by a ~187s server-side deadline (HTTP 408) on long
+  // Sonnet generations; streaming is not subject to it. `response_format:
+  // json_object` is intentionally omitted in streaming mode — the model wraps
+  // the object in a ```json fence / prose, which the brace-slice below extracts.
   const payload: Record<string, unknown> = {
     model,
     messages: [
@@ -75,52 +76,45 @@ export async function callTimewebJson<T>(opts: {
       { role: "user", content: userText },
     ],
     max_tokens: maxTokens,
-    response_format: { type: "json_object" },
   };
   // Opus 4.7 rejects `temperature` with a 400 — only send it for non-opus models.
   if (!model.includes("opus")) payload.temperature = temperature;
 
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-
-  let resp: Response;
+  let text: string;
+  let usageRaw: { prompt_tokens: number; completion_tokens: number };
   try {
-    resp = await fetch(TIMEWEB_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: ctrl.signal,
+    const r = await streamChatCompletion({
+      url: TIMEWEB_URL,
+      apiKey,
+      payload,
+      idleTimeoutMs: timeoutMs,
     });
+    text = r.content;
+    usageRaw = r.usage;
   } catch (e) {
-    const isTimeout = e instanceof DOMException && e.name === "AbortError";
-    const msg = isTimeout
-      ? `Timeweb timeout after ${timeoutMs}ms`
-      : `Timeweb fetch failed: ${e instanceof Error ? e.message : String(e)}`;
-    // Log BEFORE throwing — otherwise this entire failure mode is silent in pm2
-    // logs (a Sonnet timeout would surface as an empty error log section and
-    // confuse triage). The upstream_http / empty_response / invalid_json paths
-    // each have their own console.error; this one needs the same treatment.
-    console.error("[timeweb] network error", { model, timeoutMs, isTimeout });
-    throw new TimewebError("network", msg);
-  } finally {
-    clearTimeout(timer);
+    if (e instanceof LlmStreamError) {
+      if (e.kind === "http") {
+        console.error("[timeweb] upstream non-ok", { status: e.status });
+        throw new TimewebError("upstream_http", `Timeweb returned ${e.status}`, {
+          status: e.status,
+        });
+      }
+      // timeout/network → "network" code; keep "timeout" in the message so
+      // timewebErrorToStatus maps an idle-timeout to 504.
+      const msg =
+        e.kind === "timeout"
+          ? `Timeweb timeout after ${timeoutMs}ms`
+          : `Timeweb fetch failed: ${e.message}`;
+      console.error("[timeweb] network error", {
+        model,
+        timeoutMs,
+        isTimeout: e.kind === "timeout",
+      });
+      throw new TimewebError("network", msg);
+    }
+    throw e;
   }
 
-  if (!resp.ok) {
-    console.error("[timeweb] upstream non-ok", {
-      status: resp.status,
-      statusText: resp.statusText,
-    });
-    throw new TimewebError("upstream_http", `Timeweb returned ${resp.status}`, {
-      status: resp.status,
-    });
-  }
-
-  const raw = (await resp.json()) as ChatResponse;
-  const text = raw.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) {
     console.error("[timeweb] empty response");
     throw new TimewebError("empty_response", "Timeweb returned empty content");
@@ -144,8 +138,8 @@ export async function callTimewebJson<T>(opts: {
   }
 
   const usage: TimewebUsage = {
-    input: raw.usage?.prompt_tokens ?? 0,
-    output: raw.usage?.completion_tokens ?? 0,
+    input: usageRaw.prompt_tokens ?? 0,
+    output: usageRaw.completion_tokens ?? 0,
   };
 
   logCost({ label: opts.label ?? "timeweb", model, usage });

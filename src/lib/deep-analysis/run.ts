@@ -139,6 +139,11 @@ export async function runDeepAnalysisVerdict(opts: {
     systemPrompt: DEEP_ANALYSIS_SYSTEM_PROMPT,
     userText,
     timeoutMs: DEEP_ANALYSIS_TIMEOUT_MS,
+    // Streaming removed the gateway's ~187s deadline, so we can afford the
+    // headroom: a full per-patent verdict over up to 60 analogs overflowed the
+    // 8192 default (finish_reason "length" → truncated, invalid JSON). 16384
+    // lets the JSON close while keeping the full analog set (no quality cut).
+    maxTokens: 16384,
   });
 
   const normKey = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]/g, "");
