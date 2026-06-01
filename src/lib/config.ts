@@ -8,15 +8,21 @@
  *  (e.g. "gemini/gemini-2.5-pro" or a newer flash) without a code change. */
 export const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini/gemini-2.5-flash";
 
-/** Per-route Gemini timeouts (ms). Must be ≤ route's `maxDuration`. */
+// Per-route gateway timeouts (ms). These are now IDLE timeouts, not total
+// wall-clock: every call streams (lib/llm-stream.ts), so the value bounds the
+// max SILENCE between chunks — a streaming response resets it on every chunk.
+// Generous values are therefore safe: they only cover slow time-to-first-token
+// and ride out transient gateway stalls. `synthesize` (≤150-patent landscape)
+// gets the most headroom — a 60s budget tripped it during a gateway stall.
+// Keep each ≤ its route's `maxDuration`.
 export const GEMINI_TIMEOUT_MS = {
   analyze: 90_000,
   questions: 30_000,
   assess: 15_000,
   extract: 30_000,
   plan: 30_000,
-  synthesize: 50_000,
-  rank: 40_000,
+  synthesize: 120_000,
+  rank: 60_000,
 } as const;
 
 // --- Timeweb LLM gateway (Deep Analysis) ---

@@ -19,7 +19,9 @@ import {
 } from "@/lib/search-requests";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// ≥ GEMINI_TIMEOUT_MS.synthesize (120s idle budget): the synthesis streams, so
+// this only needs to exceed the worst-case slow-TTFT + stall window.
+export const maxDuration = 130;
 
 type IncomingPatent = {
   id?: unknown;
