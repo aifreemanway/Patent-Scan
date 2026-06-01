@@ -37,8 +37,13 @@ import {
 } from "./email";
 import type { LitReviewParams } from "@/lib/literature-review/types";
 import { reactivationTick } from "../reactivation/tick";
+import {
+  deepAnalysisTick,
+  requeueStuckDeepAnalysis,
+} from "../deep-analysis/tick";
 
 const POLL_INTERVAL_MS = 5_000;
+const DEEP_POLL_INTERVAL_MS = 3_000;
 const REACTIVATION_TICK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const STORAGE_BUCKET = "literature-review-reports";
 const PDF_URL_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -380,6 +385,26 @@ async function main(): Promise<void> {
       busy = false;
     }
   }, POLL_INTERVAL_MS);
+
+  // Deep Analysis tick — its OWN loop (separate from lit-review) so a ~45-180s
+  // Sonnet verdict isn't head-of-line-blocked behind a 10-15 min lit-review.
+  // Own busy guard; both loops await the Timeweb gateway (I/O-bound) so running
+  // concurrently in one Node process is fine.
+  await requeueStuckDeepAnalysis(admin).catch((e) => {
+    console.error("[worker/deep] requeue startup error", e);
+  });
+  let deepBusy = false;
+  setInterval(async () => {
+    if (deepBusy) return;
+    deepBusy = true;
+    try {
+      await deepAnalysisTick(admin);
+    } catch (e) {
+      console.error("[worker/deep] tick error", e);
+    } finally {
+      deepBusy = false;
+    }
+  }, DEEP_POLL_INTERVAL_MS);
 
   // Reactivation tick — hourly, completely independent of the lit-review
   // pipeline. Cheap (one indexed SELECT + ≤BATCH_SIZE emails); doesn't need a

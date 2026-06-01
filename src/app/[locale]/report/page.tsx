@@ -313,9 +313,17 @@ export default function ReportPage() {
 
   const deepInput = data?._input;
 
+  // Async Deep Analysis (вариант B): submit → poll. Submit returns fast (no
+  // LLM call), so mobile NAT can't kill the request mid-verdict (ap-qa bug).
+  // The pm2 worker runs Sonnet; we poll status every few seconds. If the tab
+  // is closed mid-poll, the worker still finishes and the result lands in
+  // /account/history — durable, free credit never lost on a dropped connection.
   const runDeepAnalysis = async () => {
     if (!deepInput) return;
     setDeepStatus("loading");
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const POLL_INTERVAL_MS = 3000;
+    const POLL_MAX_ATTEMPTS = 80; // ~4 min ceiling (verdict usually <2 min)
     try {
       const resp = await fetch("/api/deep-analysis", {
         method: "POST",
@@ -331,15 +339,42 @@ export default function ReportPage() {
         setDeepStatus("used");
         return;
       }
-
       if (!resp.ok) {
         setDeepStatus("error");
         return;
       }
 
-      const result = (await resp.json()) as DeepResult;
-      setDeepResult(result);
-      setDeepStatus("done");
+      const { id } = (await resp.json()) as { id?: string };
+      if (!id) {
+        setDeepStatus("error");
+        return;
+      }
+
+      // Poll for the verdict.
+      for (let i = 0; i < POLL_MAX_ATTEMPTS; i++) {
+        await delay(POLL_INTERVAL_MS);
+        let row: { status?: string; result?: DeepResult } | null = null;
+        try {
+          const sResp = await fetch(`/api/deep-analysis/${id}/status`);
+          if (!sResp.ok) continue; // transient 5xx/network — keep polling
+          row = (await sResp.json()) as { status?: string; result?: DeepResult };
+        } catch {
+          continue; // network blip — keep polling
+        }
+        if (row?.status === "completed" && row.result) {
+          setDeepResult(row.result);
+          setDeepStatus("done");
+          return;
+        }
+        if (row?.status === "error") {
+          setDeepStatus("error");
+          return;
+        }
+        // pending / in_progress → keep polling
+      }
+      // Poll ceiling hit — worker may still finish; result will appear in
+      // /account/history. Soft error so the user isn't stuck on the spinner.
+      setDeepStatus("error");
     } catch {
       setDeepStatus("error");
     }

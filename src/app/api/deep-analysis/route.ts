@@ -1,21 +1,26 @@
+// POST /api/deep-analysis — SUBMIT (async).
+//
+// Was synchronous (Sonnet call inline, ~45-180s). On mobile, NAT/idle-timeout
+// killed the connection at 60-120s → client saw an error while the server had
+// already charged the free credit → user lost their one free Deep Analysis with
+// nothing to show (BUG ap-qa 2026-05-29). Fix (Vsevolod: вариант B): make it
+// durable like the literature-review pipeline —
+//   submit (this route, fast) → pm2 worker runs Sonnet → client polls status.
+//
+// This route now: rate-limit → auth → validate → claim the free credit →
+// create a 'pending' search_requests row carrying the inputs in params →
+// return { id }. NO Timeweb call here, so the HTTP request finishes in <1s and
+// никакой NAT-таймаут его не рвёт. The worker (src/worker/deep-analysis) picks
+// up the row, runs the verdict, and writes result; the client polls
+// GET /api/deep-analysis/[id]/status.
+
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { requireAuth } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
+import { createSearchRequest, deriveTopic } from "@/lib/search-requests";
+import type { InputPatent } from "@/lib/deep-analysis/run";
 import {
-  callTimewebJson,
-  TimewebError,
-  timewebErrorToStatus,
-} from "@/lib/timeweb";
-import {
-  createSearchRequest,
-  deriveTopic,
-  markSearchRequestCompleted,
-  markSearchRequestError,
-} from "@/lib/search-requests";
-import {
-  DEEP_ANALYSIS_MODEL,
-  DEEP_ANALYSIS_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
   MAX_ANSWERS,
   MAX_ANSWER_LEN,
@@ -25,88 +30,8 @@ import {
 } from "@/lib/config";
 
 export const runtime = "nodejs";
-// Sonnet claim-by-claim is long. Exceeds Vercel Pro's 60s cap → needs a no-cap
-// host (Timeweb VPS) in prod; fine locally and on the deferred deploy target.
-// 300s mirrors DEEP_ANALYSIS_TIMEOUT_MS (the real kill switch on the self-hosted
-// node runtime is the AbortController; maxDuration is here for parity).
-export const maxDuration = 300;
-
-// Premium "deep" judge: a claim-by-claim novelty read over the SAME retrieved
-// prior-art pool the free pass used — broken down by the distinguishing
-// features of the invention (which are already disclosed, which are genuinely
-// new), with the conservative honest-verdict framing.
-const SYSTEM_PROMPT = `Ты — патентный эксперт высшей квалификации, готовишь углублённое заключение о патентоспособности. На вход: описание изобретения, уточнения и список найденных патентов-аналогов (id, страна, год, название, реферат) из открытых баз (Роспатент, US, EP, JP, CN).
-
-Задача — РАЗБОР ПО ПРИЗНАКАМ: вычлени существенные отличительные признаки изобретения (как в формуле — устройство/способ + действие + объект + отличие) и по КАЖДОМУ признаку определи, раскрыт ли он в аналогах.
-
-Верни СТРОГО валидный JSON без преамбул:
-{
-  "uniqueness": "High" | "Medium" | "Low",
-  "uniquenessDetail": "2–3 предложения: почему такая итоговая оценка по совокупности признаков",
-  "overview": "3–5 предложений: патентный ландшафт вокруг изобретения",
-  "features": [
-    {
-      "feature": "существенный признак изобретения своими словами",
-      "status": "known" | "partially_known" | "novel",
-      "analogIds": ["<id аналога из входа, раскрывающего признак>", ...],
-      "note": "1–2 предложения: чем именно аналог раскрывает признак, или почему признак нов"
-    }
-  ],
-  "patents": [
-    {
-      "id": "<id из входа, без изменений>",
-      "title": "<title из входа>",
-      "year": "<YYYY>",
-      "country": "<2-буквенный код>",
-      "similarity": "High" | "Medium" | "Low",
-      "match": "какие существенные признаки совпадают",
-      "diff": "какие существенные признаки отсутствуют/решены иначе"
-    }
-  ],
-  "recommendation": "3–5 предложений: перспективы патентования, какие признаки усилить в формуле, конкретный следующий шаг"
-}
-
-Правила:
-- features: 3–8 существенных признаков. status='known' если признак прямо раскрыт хотя бы одним аналогом; 'partially_known' если раскрыт частично/смежно; 'novel' если в аналогах не найден.
-- analogIds: ТОЛЬКО id из входа, дословно. Если признак нов — пустой массив. НИЧЕГО не выдумывай.
-- ЗАПРЕЩЕНО выдумывать патенты/номера. Используй только id и title из входа.
-- uniqueness: 'High' только если большинство существенных признаков 'novel'; 'Low' если ключевые признаки 'known'.
-- Будь консервативен: это предварительный скрининг, а не гарантия патента. Язык ответа — язык описания изобретения.`;
-
-type FeatureStatus = "known" | "partially_known" | "novel";
-type DeepFeature = {
-  feature?: string;
-  status?: FeatureStatus;
-  analogIds?: unknown;
-  note?: string;
-};
-type DeepPatent = {
-  id?: string;
-  title?: string;
-  year?: string;
-  country?: string;
-  similarity?: "High" | "Medium" | "Low";
-  match?: string;
-  diff?: string;
-};
-type DeepVerdict = {
-  uniqueness?: "High" | "Medium" | "Low";
-  uniquenessDetail?: string;
-  overview?: string;
-  features?: DeepFeature[];
-  patents?: DeepPatent[];
-  recommendation?: string;
-};
-
-type InputPatent = {
-  id: string;
-  title?: string;
-  year?: string;
-  country?: string;
-  abstract?: string;
-  ipc?: string[];
-  url?: string;
-};
+// Submit is fast (no LLM call) — but keep a small cap as a guard.
+export const maxDuration = 15;
 
 export async function POST(req: Request): Promise<NextResponse> {
   const rl = await rateLimit(req, {
@@ -119,45 +44,17 @@ export async function POST(req: Request): Promise<NextResponse> {
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 
-  const apiKey = process.env.TIMEWEB_AI_KEY;
-  if (!apiKey) {
+  // Fail fast if the gateway key isn't configured — better to reject before
+  // consuming the credit than to let the worker fail and refund.
+  if (!process.env.TIMEWEB_AI_KEY) {
     return NextResponse.json(
       { error: "Service configuration error" },
       { status: 500 }
     );
   }
 
-  // Claim the one free Deep Analysis atomically (anti-abuse §5: strictly one per
-  // verified account). Billing for additional runs is fast-follow.
-  const admin = createSupabaseAdmin();
-  const { data: consumeRaw, error: consumeErr } = await admin.rpc(
-    "consume_free_deep_analysis",
-    { p_user_id: auth.user.id }
-  );
-  if (consumeErr) {
-    console.error("[deep-analysis] consume rpc failed", {
-      message: consumeErr.message,
-    });
-    return NextResponse.json({ error: "internal_error" }, { status: 500 });
-  }
-  const consume = consumeRaw as { allowed?: boolean; reason?: string };
-  if (!consume?.allowed) {
-    return NextResponse.json(
-      { error: "deep_analysis_used", reason: consume?.reason ?? "already_used" },
-      { status: 402 }
-    );
-  }
-
-  // From here the credit is claimed — refund it on any downstream failure.
-  // Self-guarding so a refund hiccup never masks the real error path.
-  const refund = async () => {
-    try {
-      await admin.rpc("refund_free_deep_analysis", { p_user_id: auth.user.id });
-    } catch (err) {
-      console.error("[deep-analysis] refund failed", err);
-    }
-  };
-
+  // 1. Parse + validate BEFORE consuming the credit (no consume/refund churn on
+  // malformed input).
   let body: {
     description?: string;
     answers?: string[];
@@ -166,20 +63,17 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     body = await req.json();
   } catch {
-    await refund();
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const description = (body.description ?? "").trim();
   if (description.length < 20) {
-    await refund();
     return NextResponse.json(
       { error: "description must be at least 20 characters" },
       { status: 400 }
     );
   }
   if (description.length > MAX_DESCRIPTION_LEN) {
-    await refund();
     return NextResponse.json(
       { error: `description must be at most ${MAX_DESCRIPTION_LEN} characters` },
       { status: 413 }
@@ -192,100 +86,48 @@ export async function POST(req: Request): Promise<NextResponse> {
     .slice(0, MAX_ANSWERS)
     .map((a) => a.slice(0, MAX_ANSWER_LEN));
 
-  const userText = [
-    `ОПИСАНИЕ ИЗОБРЕТЕНИЯ:\n${description}`,
-    answers.length > 0
-      ? `УТОЧНЕНИЯ:\n${answers.map((a, i) => `${i + 1}. ${a}`).join("\n")}`
-      : "",
-    `НАЙДЕННЫЕ ПАТЕНТЫ (JSON):\n${JSON.stringify(patents, null, 2)}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  // 2. Claim the one free Deep Analysis atomically (anti-abuse §5: strictly one
+  // per verified account). Billing for additional runs is fast-follow.
+  const admin = createSupabaseAdmin();
+  const { data: consumeRaw, error: consumeErr } = await admin.rpc(
+    "consume_free_deep_analysis",
+    { p_user_id: auth.user.id }
+  );
+  if (consumeErr) {
+    console.error("[deep-analysis/submit] consume rpc failed", {
+      message: consumeErr.message,
+    });
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
+  }
+  const consume = consumeRaw as { allowed?: boolean; reason?: string };
+  if (!consume?.allowed) {
+    return NextResponse.json(
+      { error: "deep_analysis_used", reason: consume?.reason ?? "already_used" },
+      { status: 402 }
+    );
+  }
 
-  // Logged after validation so we don't pollute history with rejected inputs.
-  // The free-credit was already claimed up-top; on downstream failure the
-  // existing refund() returns it AND we mark the request 'error' so the
-  // user sees it in /account/history with the failure reason.
+  // 3. Create the pending job row carrying the inputs. The worker reads
+  // description + params.{answers,patents}, runs the verdict, writes result.
   const sr = await createSearchRequest({
     userId: auth.user.id,
     type: "deep_analysis",
+    status: "pending",
     topic: deriveTopic(description),
     description,
-    params: { answers, patentsInput: patents.length },
+    params: { answers, patents },
   });
 
-  try {
-    const { data } = await callTimewebJson<DeepVerdict>({
-      apiKey,
-      label: "deep-analysis",
-      model: DEEP_ANALYSIS_MODEL,
-      systemPrompt: SYSTEM_PROMPT,
-      userText,
-      timeoutMs: DEEP_ANALYSIS_TIMEOUT_MS,
-    });
-
-    // Anti-fabrication (same guarantee as /api/analyze): every cited id — in
-    // patents AND in each feature's analogIds — must be a real retrieved hit.
-    const normKey = (id: string) => id.toUpperCase().replace(/[^A-Z0-9]/g, "");
-    const byId = new Map(
-      patents.filter((p) => p.id).map((p) => [normKey(p.id), p] as const)
-    );
-
-    const verdictPatents = Array.isArray(data.patents) ? data.patents : [];
-    const verified = verdictPatents.flatMap((p) => {
-      const src =
-        p && typeof p.id === "string" ? byId.get(normKey(p.id)) : undefined;
-      if (!src) return [];
-      return [
-        {
-          ...p,
-          id: src.id,
-          title: src.title || p.title || "",
-          year: src.year || p.year || "",
-          country: src.country || p.country || "",
-          url: src.url ?? "",
-        },
-      ];
-    });
-
-    const features = (Array.isArray(data.features) ? data.features : []).map(
-      (f) => {
-        const ids = Array.isArray(f.analogIds) ? f.analogIds : [];
-        const analogIds = ids
-          .filter((id): id is string => typeof id === "string")
-          .map((id) => byId.get(normKey(id))?.id)
-          .filter((id): id is string => Boolean(id));
-        return {
-          feature: typeof f.feature === "string" ? f.feature : "",
-          status: f.status ?? "partially_known",
-          analogIds,
-          note: typeof f.note === "string" ? f.note : "",
-        };
-      }
-    );
-
-    const responsePayload = {
-      ...data,
-      patents: verified,
-      features,
-      deep: true,
-    };
-    await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
-    return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
-  } catch (e) {
-    await refund();
-    const message =
-      e instanceof Error ? e.message : "Deep analysis service unavailable";
-    await markSearchRequestError(sr?.id ?? null, message);
-    if (e instanceof TimewebError) {
-      return NextResponse.json(
-        { error: "Deep analysis service error" },
-        { status: timewebErrorToStatus(e) }
-      );
+  // If we couldn't create the job row, the credit is claimed but there's
+  // nothing to process — refund it and surface an error so the user retries.
+  if (!sr) {
+    try {
+      await admin.rpc("refund_free_deep_analysis", { p_user_id: auth.user.id });
+    } catch (err) {
+      console.error("[deep-analysis/submit] refund after create-fail failed", err);
     }
-    return NextResponse.json(
-      { error: "Deep analysis service unavailable" },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
+
+  return NextResponse.json({ id: sr.id, status: "pending" });
 }
