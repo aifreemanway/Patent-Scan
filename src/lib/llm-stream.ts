@@ -53,7 +53,7 @@ const MIN_IDLE_MS = 60_000;
  * callers can map gateway HTTP errors vs idle-timeout vs network to their own
  * error types.
  */
-export async function streamChatCompletion(opts: {
+async function streamOnce(opts: {
   url: string;
   apiKey: string;
   /** Payload WITHOUT stream fields — `stream`/`stream_options` are added here. */
@@ -195,4 +195,57 @@ export async function streamChatCompletion(opts: {
   }
 
   return { content, usage };
+}
+
+// Transient gateway failures worth a retry: server-side 5xx, rate-limit/timeout
+// status codes, and our own idle-timeout / network breaks. The Timeweb gateway
+// was observed flapping (408 deadline, 500, stalls) under load — a single blip
+// otherwise surfaces to the user as "Analysis service error" on a one-shot call
+// (novelty analyze / landscape synthesize have no outer retry). NOT retried:
+// other 4xx (400/401/403 — bad payload / auth — a retry can't fix those).
+const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+function isRetryable(e: LlmStreamError): boolean {
+  if (e.kind === "timeout" || e.kind === "network") return true;
+  if (e.kind === "http" && e.status != null && RETRYABLE_STATUS.has(e.status)) {
+    return true;
+  }
+  return false;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Stream a chat-completion with bounded retry on transient gateway failures.
+ * Each attempt re-POSTs from scratch (partial content is discarded and
+ * re-accumulated). The happy path is unchanged — attempt 1 succeeds, no delay.
+ * Non-retryable errors (4xx auth/payload) throw immediately.
+ */
+export async function streamChatCompletion(opts: {
+  url: string;
+  apiKey: string;
+  /** Payload WITHOUT stream fields — `stream`/`stream_options` are added here. */
+  payload: Record<string, unknown>;
+  /** Abort if no chunk arrives within this many ms (floored at 60s). */
+  idleTimeoutMs: number;
+  /** Total attempts incl. the first (default 3 → up to 2 retries). */
+  maxAttempts?: number;
+}): Promise<StreamResult> {
+  const maxAttempts = Math.max(1, opts.maxAttempts ?? 3);
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await streamOnce(opts);
+    } catch (e) {
+      lastErr = e;
+      const retryable = e instanceof LlmStreamError && isRetryable(e);
+      if (!retryable || attempt >= maxAttempts) throw e;
+      const backoff = Math.min(800 * 2 ** (attempt - 1), 4000); // 800, 1600, …
+      const le = e as LlmStreamError;
+      console.error(
+        `[llm-stream] retryable ${le.kind}${le.status ? " " + le.status : ""} — attempt ${attempt}/${maxAttempts}, backoff ${backoff}ms`
+      );
+      await sleep(backoff);
+    }
+  }
+  throw lastErr;
 }
