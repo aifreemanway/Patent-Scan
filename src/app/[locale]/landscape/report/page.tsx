@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
+import { useReopenRow } from "@/hooks/useReopenRow";
 
 type LandscapeHit = {
   id: string;
@@ -304,10 +305,39 @@ ${printScript}
 </html>`;
 }
 
-export default function LandscapeReportPage() {
+function LandscapeReportInner() {
   const t = useTranslations("LandscapeReport");
   const locale = useLocale();
-  const { data, loaded } = useSessionJSON<LandscapeData>("ps_landscape");
+  const { data: sessionData, loaded } = useSessionJSON<LandscapeData>("ps_landscape");
+
+  // Re-open from /account/history: rebuild from the persisted row when the
+  // sessionStorage fast path is empty but the URL carries ?id=. The synthesis
+  // (overview/categories/trends) always restores; the patent breakdown restores
+  // only if `hits` were persisted with the run (newer runs) — older rows show
+  // the synthesis with empty country/appendix tables rather than "Нет данных".
+  const reopen = useReopenRow(loaded && !sessionData);
+  const data = useMemo<LandscapeData | null>(() => {
+    if (sessionData) return sessionData;
+    if (reopen.state === "done" && reopen.row?.result) {
+      const r = reopen.row.result as {
+        topic?: string;
+        overview?: string;
+        categories?: Category[];
+        trends?: Trend[];
+        hits?: LandscapeHit[];
+      };
+      return {
+        topic: r.topic,
+        hits: r.hits ?? [],
+        synthesis: {
+          overview: r.overview ?? "",
+          categories: r.categories ?? [],
+          trends: r.trends ?? [],
+        },
+      };
+    }
+    return null;
+  }, [sessionData, reopen.state, reopen.row]);
 
   // Stable reference so the useMemo deps below don't invalidate on every
   // render (was flagged by react-hooks/exhaustive-deps).
@@ -339,19 +369,44 @@ export default function LandscapeReportPage() {
     );
   }
 
+  // Re-open in progress: fetching the persisted row from history.
+  if (!data && reopen.id && (reopen.state === "idle" || reopen.state === "loading")) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 py-24">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+        </main>
+      </>
+    );
+  }
+
   if (!data) {
+    const isError = reopen.id != null && reopen.state === "error";
+    const isProcessing = reopen.id != null && reopen.state === "processing";
+    const title = isError
+      ? t("reopenErrorTitle")
+      : isProcessing
+        ? t("reopenProcessingTitle")
+        : t("missingTitle");
+    const body = isError
+      ? reopen.row?.error_message || t("reopenErrorBody")
+      : isProcessing
+        ? t("reopenProcessingBody")
+        : t("missingBody");
+    const reopenContext = isError || isProcessing;
     return (
       <>
         <Header />
         <main className="flex flex-1 flex-col bg-slate-50">
           <div className="mx-auto w-full max-w-3xl px-6 py-24 text-center">
-            <h1 className="text-2xl font-bold text-slate-900">{t("missingTitle")}</h1>
-            <p className="mt-3 text-slate-600">{t("missingBody")}</p>
+            <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+            <p className="mt-3 text-slate-600">{body}</p>
             <Link
-              href="/landscape"
+              href={reopenContext ? "/account/history" : "/landscape"}
               className="mt-6 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
-              {t("ctaPrimary")}
+              {reopenContext ? t("reopenBackToHistory") : t("ctaPrimary")}
             </Link>
           </div>
         </main>
@@ -753,5 +808,24 @@ export default function LandscapeReportPage() {
         </div>
       </main>
     </>
+  );
+}
+
+// useSearchParams (via useReopenRow) requires a Suspense boundary on a
+// statically-prerendered page — otherwise `next build` bails on CSR.
+export default function LandscapeReportPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <Header />
+          <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 py-24">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+          </main>
+        </>
+      }
+    >
+      <LandscapeReportInner />
+    </Suspense>
   );
 }

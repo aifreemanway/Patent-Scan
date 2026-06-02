@@ -122,7 +122,17 @@ export async function POST(req: Request) {
 
   try {
     const result = await synthesizeLandscape(topic, patents, apiKey);
-    const responsePayload = { topic, patentsUsed: patents.length, ...result };
+    // Persist the raw input hits (with their source URLs) alongside the
+    // synthesis so /account/history can fully rebuild the landscape: the
+    // country/period grids and the appendix list render from `hits`, not from
+    // the synthesis text. The live client ignores this field (it keeps its own
+    // hits in sessionStorage) — only the re-open path reads it back.
+    const responsePayload = {
+      topic,
+      patentsUsed: patents.length,
+      hits: (body.patents ?? []).slice(0, MAX_PATENTS_SYNTHESIZE),
+      ...result,
+    };
     await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
     return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
   } catch (e) {
