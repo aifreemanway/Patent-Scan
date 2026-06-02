@@ -17,6 +17,7 @@ import {
   markSearchRequestCompleted,
   markSearchRequestError,
 } from "@/lib/search-requests";
+import { computeInputRichness, newSessionId } from "@/lib/calibration";
 
 export const runtime = "nodejs";
 // ≥ GEMINI_TIMEOUT_MS.synthesize (120s idle budget): the synthesis streams, so
@@ -118,6 +119,10 @@ export async function POST(req: Request) {
     topic: deriveTopic(topic),
     description: topic,
     params: { patentsUsed: patents.length },
+    calibration: {
+      session_id: newSessionId(),
+      input_richness: computeInputRichness(topic),
+    },
   });
 
   try {

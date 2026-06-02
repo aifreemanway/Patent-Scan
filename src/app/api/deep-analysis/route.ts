@@ -19,6 +19,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { requireAuth } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import { createSearchRequest, deriveTopic } from "@/lib/search-requests";
+import { computeInputRichness, newSessionId } from "@/lib/calibration";
 import type { InputPatent } from "@/lib/deep-analysis/run";
 import {
   MAX_DESCRIPTION_LEN,
@@ -116,6 +117,13 @@ export async function POST(req: Request): Promise<NextResponse> {
     topic: deriveTopic(description),
     description,
     params: { answers, patents },
+    calibration: {
+      session_id: newSessionId(),
+      input_richness: computeInputRichness(description),
+      ...(answers.length > 0
+        ? { clarifying_qa: { answers } }
+        : {}),
+    },
   });
 
   // If we couldn't create the job row, the credit is claimed but there's
