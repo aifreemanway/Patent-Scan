@@ -251,6 +251,7 @@ export async function retrieveNoveltyPriorArt(opts: {
       structureQuery?: string;
       structureQueryEn?: string;
       ipcSubclasses?: string[];
+      ipcGroups?: string[];
     };
     const ruQueries = plan.queries ?? [];
     const enQueries = plan.queriesEn ?? [];
@@ -272,6 +273,11 @@ export async function retrieveNoveltyPriorArt(opts: {
     const planSubclasses = (plan.ipcSubclasses ?? [])
       .map((c) => (typeof c === "string" ? c.trim() : ""))
       .filter((c) => IPC_SUBCLASS_RE.test(c));
+    // Full IPC groups the planner deems relevant (e.g. "G01R31/34"). These seed
+    // the class-sweep directly — see the seeding note below.
+    const planGroups = (plan.ipcGroups ?? [])
+      .map((g) => (typeof g === "string" ? g.replace(/\s+/g, "") : ""))
+      .filter((g) => IPC_GROUP_RE.test(g));
 
     // Per-region buckets: CN crowds out US/EP/JP when datasets are queried
     // together, so each English query is run against [us,ep], [jp], [cn]
@@ -332,10 +338,27 @@ export async function retrieveNoveltyPriorArt(opts: {
         if (planSubclasses.includes(g.slice(0, 4))) groupFreq.set(g, c + 1000);
       }
     }
-    topGroups = [...groupFreq.entries()]
+    const probeTopGroups = [...groupFreq.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .map(([g]) => g);
+    // SEED with plan-declared full IPC groups even when NO probe hit carried them.
+    // Root cause of the Samara 0/2 (RU2799985 G01R31/34, RU2854805 G01R19/02):
+    // topGroups was derived purely from probe-hit IPC, and the plan-subclass boost
+    // only multiplied groups ALREADY present — so a plan-relevant class with zero
+    // probe representation was never swept. A direct classification.ipc sweep of
+    // the planner's groups surfaces those in-class analogs regardless of phrasing
+    // (verified: classification.ipc "G01R31/34" → RU2799985 #3). Plan groups go
+    // first (highest-confidence target classes), then probe-derived groups fill in.
+    const seenGroups = new Set<string>();
+    topGroups = [];
+    for (const g of [...planGroups, ...probeTopGroups]) {
+      if (!seenGroups.has(g)) {
+        seenGroups.add(g);
+        topGroups.push(g);
+      }
+    }
+    topGroups = topGroups.slice(0, 14);
 
     // Sweep each group under its IPC filter with SEVERAL phrasings (function +
     // structure facets). A given analog surfaces only for the phrasing that
@@ -352,34 +375,55 @@ export async function retrieveNoveltyPriorArt(opts: {
     // (~120 vs ~280) without losing their recall.
     const ruSweepQs = uniq(probesRu);
     const enSweepQs = uniq(probesEn);
-    const sweepTasks: { group: string; qn: string; datasets: string[] }[] = [];
-    for (const g of topGroups) {
+    // Two sweep modes, both merged into the in-class pool:
+    //  • exact GROUP (classification.ipc) — high precision; surfaces analogs in
+    //    the specific subgroups the probes/plan name (e.g. G01R31/34 → RU2799985).
+    //  • plan SUBCLASS (classification.ipc_subclass) — robust recall net: the
+    //    planner emits subclasses reliably (4-char "G01R") where it cannot guess
+    //    an exact subgroup, and a probe phrasing surfaces an in-subclass analog
+    //    the exact-group sweep misses. Run UNCONDITIONALLY — an exact group that
+    //    shares a subclass prefix does NOT cover sibling subgroups (PatSearch
+    //    classification.ipc is exact-subgroup match: G01R31/34 ≠ G01R19/02).
+    //    Verified on the Samara 0/2: ipc_subclass G01R + probes → RU2854805
+    //    (G01R19/02) #1, RU2799985 (G01R31/34) #4.
+    const sweepUnits: { key: string; filter: SweepFilter }[] = [
+      ...topGroups.map((g) => ({ key: `g:${g}`, filter: { ipcGroups: [g] } })),
+      ...planSubclasses.map((s) => ({
+        key: `s:${s}`,
+        filter: { ipcSubclasses: [s] },
+      })),
+    ];
+    const sweepTasks: {
+      key: string;
+      filter: SweepFilter;
+      qn: string;
+      datasets: string[];
+    }[] = [];
+    for (const u of sweepUnits) {
       for (const b of regionBuckets) {
         for (const qn of b.lang === "ru" ? ruSweepQs : enSweepQs) {
-          sweepTasks.push({ group: g, qn, datasets: b.datasets });
+          sweepTasks.push({ key: u.key, filter: u.filter, qn, datasets: b.datasets });
         }
       }
     }
     const sweepResults = sweepTasks.length
       ? await mapPool(sweepTasks, FETCH_CONCURRENCY, (t) =>
-          searchLandscape(base, fetchImpl, t.qn, t.datasets, {
-            ipcGroups: [t.group],
-          })
+          searchLandscape(base, fetchImpl, t.qn, t.datasets, t.filter)
         )
       : [];
-    // Merge each group's phrasing/bucket lists by best in-list rank, then
-    // round-robin ACROSS groups so every relevant class contributes near the
-    // front. This keeps a strong analog in a deep-derived class (US6322610 in
-    // C21C5/46, the #9-ranked class) early enough to enter the bounded rank set.
-    const byGroup = new Map<string, { hits: PatentHit[] }[]>();
+    // Merge each unit's phrasing/bucket lists by best in-list rank, then
+    // round-robin ACROSS units so every relevant class contributes near the
+    // front (a strong analog in a deep-derived/low-frequency class stays early
+    // enough to enter the bounded rank set).
+    const byKey = new Map<string, { hits: PatentHit[] }[]>();
     sweepResults.forEach((res, i) => {
-      const g = sweepTasks[i].group;
-      const arr = byGroup.get(g) ?? [];
+      const k = sweepTasks[i].key;
+      const arr = byKey.get(k) ?? [];
       arr.push(res);
-      byGroup.set(g, arr);
+      byKey.set(k, arr);
     });
-    const groupMerged = topGroups
-      .map((g) => bestRankMerge(byGroup.get(g) ?? []))
+    const groupMerged = sweepUnits
+      .map((u) => bestRankMerge(byKey.get(u.key) ?? []))
       .filter((l) => l.length > 0);
     inClassPool = roundRobinLists(groupMerged, 20);
     poolSweepLen = inClassPool.length;

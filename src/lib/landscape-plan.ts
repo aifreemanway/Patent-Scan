@@ -18,6 +18,7 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
     "short phrase 5–15 words in English — same aspect 3"
   ],
   "ipcSubclasses": ["C22B", "C01G"],
+  "ipcGroups": ["C22B25/00", "C22B7/00"],
   "functionQuery": "ОДНА фраза 6–12 слов на РУССКОМ — чистая ФУНКЦИЯ изобретения без главного «фирменного» существительного",
   "functionQueryEn": "перевод functionQuery на АНГЛИЙСКИЙ",
   "functionQuery2": "ВТОРАЯ фраза той же функции, ИНАЧЕ сформулированная (синонимы действия/объекта)",
@@ -46,6 +47,13 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
 - 2–5 самых релевантных IPC-subclass (формат: 4 символа, например "C22B", "G01R", "H02H")
 - Только subclass (4 символа), НЕ group (как "C22B 25/00")
 - Если тема пересекает несколько областей — покрыть основные
+
+Правила ipcGroups:
+- 3–8 самых релевантных ПОЛНЫХ IPC-групп уровня подгруппы (формат: БЕЗ пробела, например "C22B25/00", "G01R31/34", "H02H7/09")
+- Это КОНКРЕТНЫЕ классы, где живут ближайшие аналоги изобретения — выбирай точные подгруппы, а не общие. Они напрямую используются для точного поиска по классу (classification.ipc), который достаёт релевантные аналоги, не зависящие от формулировки запроса
+- Указывай ТОЛЬКО реально существующие коды МПК, в которых с высокой вероятностью классифицирован объект и его аналоги. Если не уверен в подгруппе — дай группу основного уровня (например "G01R31/00"). НЕ выдумывай несуществующие коды
+- Покрой РАЗНЫЕ грани: класс самого устройства, класс способа/функции, класс смежных измерений/защиты
+- ОБЯЗАТЕЛЬНО включи класс ОСНОВНОЙ ИЗМЕРЯЕМОЙ ФИЗИЧЕСКОЙ ВЕЛИЧИНЫ, на которой строится работа устройства, даже если главная функция в другом классе. Аналоги-измерители этой величины — частый «ближайший по архитектуре» прототип. Например: диагностика по ТОКУ → измерение электрического тока (G01R19); по ВИБРАЦИИ → G01H; по ТЕМПЕРАТУРЕ → G01K; по ДАВЛЕНИЮ → G01L
 
 Правила functionQuery / functionQueryEn:
 - ОДНА короткая фраза, описывающая ТОЛЬКО суть-функцию изобретения (что оно делает с чем), БЕЗ главного «фирменного» существительного темы (например, без «кессон», если тема про кессон)
@@ -82,6 +90,7 @@ const SYSTEM_PROMPT = `Ты — аналитик патентных ландша
     "vacuum refining of crude tin removing arsenic lead bismuth impurities"
   ],
   "ipcSubclasses": ["C22B", "B03D", "B03B"],
+  "ipcGroups": ["C22B25/00", "C22B7/00", "B03D1/02", "B03B7/00"],
   "functionQuery": "извлечение олова из низкосортного сырья и металлургических отходов",
   "functionQueryEn": "recovery of tin from low-grade feedstock and metallurgical waste",
   "functionQuery2": "выделение олова из шлаков хвостов и вторичного сырья",
@@ -95,6 +104,7 @@ export type LandscapePlan = {
   queries: string[];
   queriesEn: string[];
   ipcSubclasses: string[];
+  ipcGroups: string[];
   functionQuery: string;
   functionQueryEn: string;
   functionQuery2: string;
@@ -113,6 +123,7 @@ export async function planLandscape(
     queries?: unknown;
     queriesEn?: unknown;
     ipcSubclasses?: unknown;
+    ipcGroups?: unknown;
     functionQuery?: unknown;
     functionQueryEn?: unknown;
     functionQuery2?: unknown;
@@ -162,6 +173,21 @@ export async function planLandscape(
         .slice(0, 6)
     : [];
 
+  // Full IPC groups (subgroup level, e.g. "G01R31/34") — normalize away spaces
+  // ("G01R 31/34" → "G01R31/34") and keep only well-formed codes. These seed the
+  // class-sweep directly (classification.ipc) so a plan-relevant class is swept
+  // even when no probe hit happened to carry it (Samara 0/2 root cause).
+  const ipcGroups = Array.isArray(data.ipcGroups)
+    ? Array.from(
+        new Set(
+          data.ipcGroups
+            .filter((g): g is string => typeof g === "string")
+            .map((g) => g.replace(/\s+/g, ""))
+            .filter((g) => /^[A-H]\d{2}[A-Z]\d{1,4}\/\d{1,6}$/.test(g))
+        )
+      ).slice(0, 8)
+    : [];
+
   const functionQuery =
     typeof data.functionQuery === "string" ? data.functionQuery.trim() : "";
   const functionQueryEn =
@@ -186,6 +212,7 @@ export async function planLandscape(
     queries,
     queriesEn,
     ipcSubclasses,
+    ipcGroups,
     functionQuery,
     functionQueryEn,
     functionQuery2,
