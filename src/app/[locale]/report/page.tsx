@@ -8,6 +8,13 @@ import { useSessionJSON } from "@/lib/use-session-json";
 import { useReopenRow } from "@/hooks/useReopenRow";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import { IndustrialUsageRow } from "./IndustrialUsageRow";
+import {
+  LegalStatusBadge,
+  LegalStatusPending,
+  LEGAL_STATUS_UI,
+  formatExtractedDate,
+} from "@/components/LegalStatusBadge";
+import type { LegalStatus } from "@/lib/patent-legal-status";
 
 type ReportPatent = {
   id: string;
@@ -83,6 +90,16 @@ function safeHref(url: string | undefined | null): string | null {
   return /^https?:\/\//i.test(url) ? esc(url) : null;
 }
 
+// RU patents are the only ones with a legal-status badge in Этап 1. A patent is
+// RU when its country is RU/SU OR its id starts with RU/SU. Returns the numeric
+// ФИПС DocNumber (digits only) for the /api/legal-status batch, or null.
+function ruNumberOf(p: { id: string; country?: string }): string | null {
+  const cc = (p.country ?? "").toUpperCase() || /^([A-Z]{2})/.exec(p.id ?? "")?.[1] || "";
+  if (cc !== "RU" && cc !== "SU") return null;
+  const digits = (p.id ?? "").replace(/\D/g, "");
+  return digits.length ? digits : null;
+}
+
 // Trim a long invention description to a header-friendly length (keeps the
 // "what was checked" line from swallowing the top of the report/export).
 function truncate(s: string, max = 280): string {
@@ -133,6 +150,22 @@ a{color:#2563eb}
 
 type ReportT = (key: string, values?: Record<string, string | number>) => string;
 
+// Map a numeric RU number to "🟢 действует" style text for the static export.
+const EXPORT_STATUS_KEY: Record<string, { emoji: string; key: string }> = {
+  действует: { emoji: "🟢", key: "active" },
+  "не действует": { emoji: "⚪", key: "inactive" },
+  восстановим: { emoji: "🟡", key: "restorable" },
+  истёк: { emoji: "🔵", key: "expired" },
+  "не определён": { emoji: "🟠", key: "unknown" },
+};
+
+function ruNumberForExport(p: { id: string; country?: string }): string | null {
+  const cc = (p.country ?? "").toUpperCase() || /^([A-Z]{2})/.exec(p.id ?? "")?.[1] || "";
+  if (cc !== "RU" && cc !== "SU") return null;
+  const digits = (p.id ?? "").replace(/\D/g, "");
+  return digits.length ? digits : null;
+}
+
 function buildSearchReportHtml(args: {
   data: ReportData;
   t: ReportT;
@@ -141,8 +174,10 @@ function buildSearchReportHtml(args: {
   locale: string;
   autoPrint: boolean;
   deep?: DeepResult | null;
+  legalStatuses?: Record<string, LegalStatus>;
 }): string {
   const { data, t, headers, uniquenessLabel, locale, autoPrint, deep } = args;
+  const legalStatuses = args.legalStatuses ?? {};
   const patents = data.patents ?? [];
   const uniqueness = data.uniqueness ?? "Medium";
 
@@ -180,7 +215,7 @@ function buildSearchReportHtml(args: {
         headers.title,
       )}</th><th>${esc(headers.year)}</th><th>${esc(headers.country)}</th><th>${esc(
         headers.similarity,
-      )}</th></tr></thead><tbody>${patents
+      )}</th><th>${esc(headers.status)}</th></tr></thead><tbody>${patents
         .map((p) => {
           const sub =
             p.match || p.diff
@@ -198,15 +233,36 @@ function buildSearchReportHtml(args: {
                     : ""
                 }</div>`
               : "";
+          // Legal-status cell — factual RU status snapshot, or "—" for non-RU
+          // (Этап 2). Anti-fab: no badge when the batch had no result for this id.
+          const num = ruNumberForExport(p);
+          const st = num ? legalStatuses[num] : undefined;
+          let statusCell: string;
+          if (!num || !st) {
+            statusCell = `<span class="muted">${esc(t("legalStatus.nonRu"))}</span>`;
+          } else {
+            const ui = EXPORT_STATUS_KEY[st.state] ?? EXPORT_STATUS_KEY["не определён"];
+            const date = st.extractedAt.replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3.$2.$1");
+            const caption = t("legalStatus.caption", { date });
+            const href = safeHref(st.sourceUrl);
+            const label = `${ui.emoji} ${esc(t(`legalStatus.${ui.key}`))}`;
+            statusCell = `${
+              href
+                ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+                : label
+            }<div class="sub">${esc(caption)}</div>`;
+          }
           return `<tr><td>${idLink(p.id, p.url)}</td><td>${esc(
             p.title,
           )}${sub}</td><td>${esc(p.year)}</td><td>${esc(
             p.country,
           )}</td><td><span class="badge s-${esc(p.similarity)}">${esc(
             t(`similarity${p.similarity}`),
-          )}</span></td></tr>`;
+          )}</span></td><td>${statusCell}</td></tr>`;
         })
-        .join("")}</tbody></table></section>`
+        .join("")}</tbody></table><p class="muted" style="margin-top:8px">${esc(
+        t("legalStatus.caveat"),
+      )}</p></section>`
     : "";
 
   const sourcesHtml = `<section class="card"><h2>${esc(
@@ -312,6 +368,47 @@ function ReportPageInner() {
 
   const [deepStatus, setDeepStatus] = useState<DeepStatus>("idle");
   const [deepResult, setDeepResult] = useState<DeepResult | null>(null);
+
+  // RU legal-status badges (Этап 1). Keyed by numeric ФИПС DocNumber. Fetched
+  // once the report data is available; non-RU patents never enter the batch.
+  const [legalStatuses, setLegalStatuses] = useState<Record<string, LegalStatus>>({});
+  const [legalLoading, setLegalLoading] = useState(false);
+
+  const patentsForStatus = data?.patents ?? null;
+  useEffect(() => {
+    if (!patentsForStatus || patentsForStatus.length === 0) return;
+    const numbers = Array.from(
+      new Set(
+        patentsForStatus
+          .map((p) => ruNumberOf(p))
+          .filter((n): n is string => n != null)
+      )
+    );
+    if (numbers.length === 0) return;
+    let cancelled = false;
+    setLegalLoading(true);
+    void (async () => {
+      try {
+        const resp = await fetch("/api/legal-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numbers }),
+        });
+        if (!resp.ok) return; // anti-fab: leave rows unresolved rather than guess
+        const json = (await resp.json()) as {
+          statuses?: Record<string, LegalStatus>;
+        };
+        if (!cancelled && json.statuses) setLegalStatuses(json.statuses);
+      } catch {
+        // network error — rows stay without a badge (no fabrication)
+      } finally {
+        if (!cancelled) setLegalLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [patentsForStatus]);
 
   // A re-opened deep_analysis row already holds the finished verdict — surface
   // it as a completed deep section (the result payload is the DeepResult shape).
@@ -533,6 +630,7 @@ function ReportPageInner() {
       locale,
       autoPrint: false,
       deep: deepResult,
+      legalStatuses,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const a = document.createElement("a");
@@ -553,6 +651,7 @@ function ReportPageInner() {
       locale,
       autoPrint: true,
       deep: deepResult,
+      legalStatuses,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     window.open(url, "_blank");
@@ -691,6 +790,9 @@ function ReportPageInner() {
                       <th className="px-6 py-3 text-left font-semibold text-slate-700">
                         {headers.similarity}
                       </th>
+                      <th className="px-6 py-3 text-left font-semibold text-slate-700">
+                        {headers.status}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -732,19 +834,46 @@ function ReportPageInner() {
                               {t(`similarity${p.similarity}` as "similarityHigh" | "similarityMedium" | "similarityLow")}
                             </span>
                           </td>
+                          <td className="px-6 py-3">
+                            {(() => {
+                              const num = ruNumberOf(p);
+                              // Non-RU patents → "—" (Этап 2 covers them).
+                              if (!num) {
+                                return (
+                                  <span className="text-xs text-slate-400">
+                                    {t("legalStatus.nonRu")}
+                                  </span>
+                                );
+                              }
+                              const st = legalStatuses[num];
+                              if (st) return <LegalStatusBadge status={st} />;
+                              // Still loading the batch → spinner; otherwise no data.
+                              return legalLoading ? (
+                                <LegalStatusPending />
+                              ) : (
+                                <span className="text-xs text-slate-400">
+                                  {t("legalStatus.nonRu")}
+                                </span>
+                              );
+                            })()}
+                          </td>
                         </tr>
                         {/* Industrial Usage — lazy-loaded on click. Free/Starter
                             users get a lock + upsell from the endpoint (403). */}
                         <IndustrialUsageRow
                           patentId={p.id}
                           patentTitle={p.title}
-                          colSpan={5}
+                          colSpan={6}
                         />
                       </Fragment>
                     ))}
                   </tbody>
                 </table>
               </div>
+              {/* Legal-status anti-fab caveat (factual status, not a legal opinion). */}
+              <p className="border-t border-slate-100 px-6 py-3 text-xs leading-5 text-slate-500">
+                {t("legalStatus.caveat")}
+              </p>
             </section>
           )}
 
@@ -891,6 +1020,38 @@ function ReportPageInner() {
                   {deepResult.uniquenessDetail}
                 </p>
               )}
+
+              {/* Closest RU analog — one-line factual legal status (reuses the
+                  same /api/legal-status data; no extra fetch, no fabrication). */}
+              {(() => {
+                const closestRu = (deepResult.patents ?? data.patents ?? []).find(
+                  (p) => ruNumberOf(p) != null
+                );
+                if (!closestRu) return null;
+                const num = ruNumberOf(closestRu);
+                const st = num ? legalStatuses[num] : undefined;
+                if (!st) return null;
+                const ui = LEGAL_STATUS_UI[st.state] ?? LEGAL_STATUS_UI["не определён"];
+                const line = t("legalStatus.deepLine", {
+                  state: `${ui.emoji} ${t(`legalStatus.${ui.key}` as "legalStatus.active")}`,
+                  fee: st.feeInfo ?? "",
+                  date: formatExtractedDate(st.extractedAt),
+                });
+                return (
+                  <p className="mt-3 text-sm leading-6 text-slate-600">
+                    <span className="font-mono text-xs text-slate-500">{closestRu.id}</span>{" "}
+                    {line}{" "}
+                    <a
+                      href={st.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline decoration-slate-300 hover:decoration-slate-900"
+                    >
+                      ФИПС
+                    </a>
+                  </p>
+                );
+              })()}
 
               {deepResult.features && deepResult.features.length > 0 && (
                 <div className="mt-6">
