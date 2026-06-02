@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
+import { useReopenRow } from "@/hooks/useReopenRow";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import { IndustrialUsageRow } from "./IndustrialUsageRow";
 
@@ -292,13 +293,49 @@ ${printScript}
 </html>`;
 }
 
-export default function ReportPage() {
+function ReportPageInner() {
   const t = useTranslations("Report");
   const locale = useLocale();
-  const { data, loaded } = useSessionJSON<ReportData>("ps_report");
+  const { data: sessionData, loaded } = useSessionJSON<ReportData>("ps_report");
+
+  // Re-open from /account/history: when sessionStorage is empty but the URL
+  // carries ?id=, rebuild the report from the persisted row (novelty/deep).
+  const reopen = useReopenRow(loaded && !sessionData);
+  const data = useMemo<ReportData | null>(() => {
+    if (sessionData) return sessionData;
+    if (reopen.state === "done" && reopen.row?.result) {
+      return reopen.row.result as ReportData;
+    }
+    return null;
+  }, [sessionData, reopen.state, reopen.row]);
 
   const [deepStatus, setDeepStatus] = useState<DeepStatus>("idle");
   const [deepResult, setDeepResult] = useState<DeepResult | null>(null);
+
+  // A re-opened deep_analysis row already holds the finished verdict — surface
+  // it as a completed deep section (the result payload is the DeepResult shape).
+  // setState runs in a microtask callback, not synchronously in the effect body
+  // (react-hooks/set-state-in-effect forbids the latter).
+  useEffect(() => {
+    if (sessionData) return;
+    if (
+      reopen.state !== "done" ||
+      reopen.row?.type !== "deep_analysis" ||
+      !reopen.row.result
+    ) {
+      return;
+    }
+    const result = reopen.row.result as DeepResult;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setDeepResult(result);
+      setDeepStatus("done");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionData, reopen.state, reopen.row]);
 
   // Rotating progress text for the Deep Analysis loader (1–2 min Sonnet call).
   // Stays null when idle/done so the hook doesn't spin a timer for nothing.
@@ -391,19 +428,44 @@ export default function ReportPage() {
     );
   }
 
+  // Re-open in progress: fetching the persisted row from history.
+  if (!data && reopen.id && (reopen.state === "idle" || reopen.state === "loading")) {
+    return (
+      <>
+        <Header />
+        <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 py-24">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+        </main>
+      </>
+    );
+  }
+
   if (!data) {
+    const isError = reopen.id != null && reopen.state === "error";
+    const isProcessing = reopen.id != null && reopen.state === "processing";
+    const title = isError
+      ? t("reopenErrorTitle")
+      : isProcessing
+        ? t("reopenProcessingTitle")
+        : t("missingTitle");
+    const body = isError
+      ? reopen.row?.error_message || t("reopenErrorBody")
+      : isProcessing
+        ? t("reopenProcessingBody")
+        : t("missingBody");
+    const reopenContext = isError || isProcessing;
     return (
       <>
         <Header />
         <main className="flex flex-1 flex-col bg-slate-50">
           <div className="mx-auto w-full max-w-3xl px-6 py-24 text-center">
-            <h1 className="text-2xl font-bold text-slate-900">{t("missingTitle")}</h1>
-            <p className="mt-3 text-slate-600">{t("missingBody")}</p>
+            <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
+            <p className="mt-3 text-slate-600">{body}</p>
             <Link
-              href="/search"
+              href={reopenContext ? "/account/history" : "/search"}
               className="mt-6 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
-              {t("ctaPrimary")}
+              {reopenContext ? t("reopenBackToHistory") : t("ctaPrimary")}
             </Link>
           </div>
         </main>
@@ -938,5 +1000,24 @@ export default function ReportPage() {
         </div>
       </main>
     </>
+  );
+}
+
+// useSearchParams (via useReopenRow) requires a Suspense boundary on a
+// statically-prerendered page — otherwise `next build` bails on CSR.
+export default function ReportPage() {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <Header />
+          <main className="flex flex-1 flex-col items-center justify-center bg-slate-50 py-24">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
+          </main>
+        </>
+      }
+    >
+      <ReportPageInner />
+    </Suspense>
   );
 }
