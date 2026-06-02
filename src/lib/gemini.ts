@@ -92,8 +92,10 @@ export async function callGeminiJson<T>(
   // - `thinkingBudget` (in opts) is intentionally NOT sent: the gateway has no
   //   thinking-budget control; gemini-2.5-flash reasons at the gateway default.
   // - `max_tokens` is intentionally omitted so large syntheses don't truncate.
-  // - `response_format: json_object` is omitted in streaming mode — the model
-  //   wraps the object in a ```json fence / prose, which the cleanup below strips.
+  // - `response_format: json_object` IS sent (verified to work with stream on
+  //   this gateway): it steers the model to emit a bare, valid JSON object even
+  //   on a large/messy synthesis, cutting the "invalid JSON" failures we hit
+  //   without it. The fence-strip / brace-slice cleanup below stays as a belt.
   const payload = {
     model: GEMINI_MODEL,
     messages: [
@@ -101,75 +103,98 @@ export async function callGeminiJson<T>(
       { role: "user", content: userText },
     ],
     temperature,
+    response_format: { type: "json_object" },
   };
 
-  let text: string;
-  let usageRaw: { prompt_tokens: number; completion_tokens: number };
-  try {
-    const r = await streamChatCompletion({
-      url: TIMEWEB_URL,
-      apiKey,
-      payload,
-      idleTimeoutMs: timeoutMs,
-    });
-    text = r.content;
-    usageRaw = r.usage;
-  } catch (e) {
-    if (e instanceof LlmStreamError) {
-      if (e.kind === "http") {
-        console.error("[gemini] upstream non-ok", { traceId, status: e.status });
-        throw new GeminiError("upstream_http", `Gemini returned ${e.status}`, {
-          traceId,
-          status: e.status,
-        });
-      }
-      // timeout/network → "network" code; keep "timeout" in the message so
-      // geminiErrorToStatus maps an idle-timeout to 504.
-      const msg =
-        e.kind === "timeout"
-          ? `Gemini timeout after ${timeoutMs}ms`
-          : `Gemini fetch failed: ${e.message}`;
-      console.error("[gemini] network error", {
-        label: opts.label,
-        timeoutMs,
-        isTimeout: e.kind === "timeout",
-        traceId,
-      });
-      throw new GeminiError("network", msg, { traceId });
-    }
-    throw e;
-  }
-
-  if (!text.trim()) {
-    console.error("[gemini] empty response", { traceId });
-    throw new GeminiError("empty_response", "Gemini returned empty text", {
-      traceId,
-    });
-  }
-
-  // Strip a ```json fence if present; if that still won't parse, fall back to the
-  // first '{' … last '}' slice (the gateway's json_object mode can wrap in prose).
-  const cleaned = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
-  let data: T;
-  try {
-    data = JSON.parse(cleaned) as T;
-  } catch {
-    const s = cleaned.indexOf("{");
-    const e = cleaned.lastIndexOf("}");
-    const slice = s >= 0 && e > s ? cleaned.slice(s, e + 1) : "";
+  // Parse a streamed response into T, or null if it isn't valid JSON. Strips a
+  // ```json fence, then falls back to a first-'{' … last-'}' slice.
+  const tryParse = (raw: string): T | null => {
+    const cleaned = raw.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
     try {
-      data = JSON.parse(slice) as T;
+      return JSON.parse(cleaned) as T;
     } catch {
-      console.error("[gemini] invalid JSON", {
-        traceId,
-        cleanedPreview: cleaned.slice(0, 200),
-      });
-      throw new GeminiError(
-        "invalid_json",
-        `Gemini returned invalid JSON (len=${cleaned.length})`,
-        { traceId }
-      );
+      const s = cleaned.indexOf("{");
+      const e = cleaned.lastIndexOf("}");
+      if (s < 0 || e <= s) return null;
+      try {
+        return JSON.parse(cleaned.slice(s, e + 1)) as T;
+      } catch {
+        return null;
+      }
     }
+  };
+
+  // A streamed response can come back truncated (a transient mid-stream cut by
+  // the gateway) → incomplete, unparseable JSON. streamChatCompletion only
+  // retries STREAM-level errors (5xx/timeout); a "successful" stream with a bad
+  // body slips past it. So retry the whole call on a parse miss (or an empty
+  // body): a fresh generation almost always closes the JSON. Stream-level errors
+  // are already retried inside streamChatCompletion and surface here terminally.
+  const PARSE_ATTEMPTS = 2;
+  let text = "";
+  let usageRaw: { prompt_tokens: number; completion_tokens: number } = {
+    prompt_tokens: 0,
+    completion_tokens: 0,
+  };
+  let data: T | null = null;
+
+  for (let attempt = 1; attempt <= PARSE_ATTEMPTS; attempt++) {
+    try {
+      const r = await streamChatCompletion({
+        url: TIMEWEB_URL,
+        apiKey,
+        payload,
+        idleTimeoutMs: timeoutMs,
+      });
+      text = r.content;
+      usageRaw = r.usage;
+    } catch (e) {
+      if (e instanceof LlmStreamError) {
+        if (e.kind === "http") {
+          console.error("[gemini] upstream non-ok", { traceId, status: e.status });
+          throw new GeminiError("upstream_http", `Gemini returned ${e.status}`, {
+            traceId,
+            status: e.status,
+          });
+        }
+        // timeout/network → "network" code; keep "timeout" in the message so
+        // geminiErrorToStatus maps an idle-timeout to 504.
+        const msg =
+          e.kind === "timeout"
+            ? `Gemini timeout after ${timeoutMs}ms`
+            : `Gemini fetch failed: ${e.message}`;
+        console.error("[gemini] network error", {
+          label: opts.label,
+          timeoutMs,
+          isTimeout: e.kind === "timeout",
+          traceId,
+        });
+        throw new GeminiError("network", msg, { traceId });
+      }
+      throw e;
+    }
+
+    const parsed = text.trim() ? tryParse(text) : null;
+    if (parsed !== null) {
+      data = parsed;
+      break;
+    }
+    console.error("[gemini] unusable response", {
+      traceId,
+      label: opts.label,
+      attempt,
+      len: text.length,
+      empty: !text.trim(),
+      preview: text.slice(0, 200),
+    });
+    if (attempt < PARSE_ATTEMPTS) continue; // re-stream — likely a truncated body
+    throw new GeminiError(
+      text.trim() ? "invalid_json" : "empty_response",
+      text.trim()
+        ? `Gemini returned invalid JSON (len=${text.length})`
+        : "Gemini returned empty text",
+      { traceId }
+    );
   }
 
   const usage: GeminiUsage = {
@@ -180,7 +205,7 @@ export async function callGeminiJson<T>(
 
   logCost({ label: opts.label ?? "gemini", model: GEMINI_MODEL, usage });
 
-  return { data, text, usage };
+  return { data: data as T, text, usage };
 }
 
 /**
