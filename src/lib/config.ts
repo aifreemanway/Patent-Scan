@@ -122,6 +122,10 @@ export const RATE_MAX = {
   // Premium Sonnet judge — expensive + metered by the per-account free credit,
   // so the per-IP limit is just an abuse backstop.
   deepAnalysis: 3,
+  // RU legal-status badges: one report/landscape load batches all RU numbers in
+  // a single POST, so the per-IP ceiling is per-load, not per-patent. Generous
+  // because the work is free (ФИПС HTML) and cached 14d server-side.
+  legalStatus: 60,
 } as const;
 
 // --- Auth / anti-abuse ---

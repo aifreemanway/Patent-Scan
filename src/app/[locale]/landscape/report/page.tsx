@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { useSessionJSON } from "@/lib/use-session-json";
 import { useReopenRow } from "@/hooks/useReopenRow";
+import type { LegalStatus, LegalStatusState } from "@/lib/patent-legal-status";
 
 type LandscapeHit = {
   id: string;
@@ -144,11 +145,13 @@ function buildReportHtml(args: {
   matrix: Record<string, Record<string, number>>;
   counters: { total: number; ru: number; cn: number; jp: number; epus: number };
   hitById: Map<string, LandscapeHit>;
+  legalCounts: Record<LegalStatusState, number> | null;
   t: ReportT;
   locale: string;
   autoPrint: boolean;
 }): string {
-  const { data, hits, grouped, matrix, counters, hitById, t, locale, autoPrint } = args;
+  const { data, hits, grouped, matrix, counters, hitById, legalCounts, t, locale, autoPrint } =
+    args;
   const synthesis = data.synthesis;
   const overviewParas = synthesis?.overview.split(/\n\n+/).filter(Boolean) ?? [];
   const groupKeys = [...COUNTRY_GROUPS.map((g) => g.key), "OTHER"];
@@ -179,6 +182,18 @@ function buildReportHtml(args: {
         `<div class="counter"><div class="label">${esc(c.label)}</div><div class="value">${c.value}</div></div>`,
     )
     .join("")}</div>`;
+
+  const legalStatusHtml = legalCounts
+    ? `<section class="card"><h3>${esc(t("legalStatusTitle"))}</h3><p style="font-weight:600;margin:4px 0 0">${esc(
+        t("legalStatusLine", {
+          active: legalCounts["действует"],
+          inactive: legalCounts["не действует"],
+          restorable: legalCounts["восстановим"],
+          expired: legalCounts["истёк"],
+          unknown: legalCounts["не определён"],
+        }),
+      )}</p><p class="muted" style="margin-top:6px">${esc(t("legalStatusCaveat"))}</p></section>`
+    : "";
 
   const overviewHtml = overviewParas.length
     ? `<section class="card"><h2>${esc(t("overviewTitle"))}</h2>${overviewParas
@@ -293,6 +308,7 @@ function buildReportHtml(args: {
 <p class="subtitle" style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin:8px 0 16px;font-size:14px">${esc(t("caveatNotice"))}</p>
 ${data.topic ? `<p class="topic"><strong>${esc(t("topicLabel"))}:</strong> ${esc(data.topic)}</p>` : ""}
 ${countersHtml}
+${legalStatusHtml}
 ${overviewHtml}
 ${planHtml}
 ${byCountryHtml}
@@ -359,6 +375,70 @@ function LandscapeReportInner() {
     for (const h of hits) m.set(h.id, h);
     return m;
   }, [hits]);
+
+  // RU legal-status counter (Этап 1). Computed by batching the RU hits' numbers
+  // to /api/legal-status. Lazy — fetched after first render so a 400-patent
+  // landscape doesn't block the page; a spinner shows while in flight.
+  const ruNumbers = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          hits
+            .filter((h) => h.country === "RU" || h.country === "SU")
+            .map((h) => h.id.replace(/\D/g, ""))
+            .filter(Boolean)
+        )
+      ),
+    [hits]
+  );
+  const [legalLoading, setLegalLoading] = useState(false);
+  const [legalCounts, setLegalCounts] = useState<Record<LegalStatusState, number> | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (ruNumbers.length === 0) {
+      setLegalCounts(null);
+      return;
+    }
+    let cancelled = false;
+    setLegalLoading(true);
+    void (async () => {
+      try {
+        const resp = await fetch("/api/legal-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numbers: ruNumbers }),
+        });
+        if (!resp.ok) return; // anti-fab: no counts rather than guessed ones
+        const json = (await resp.json()) as {
+          statuses?: Record<string, LegalStatus>;
+        };
+        if (cancelled || !json.statuses) return;
+        const counts: Record<LegalStatusState, number> = {
+          действует: 0,
+          "не действует": 0,
+          восстановим: 0,
+          истёк: 0,
+          "не определён": 0,
+        };
+        for (const num of ruNumbers) {
+          const st = json.statuses[num];
+          // A RU number with no returned status is counted as "не определён"
+          // (anti-fab fallback — never silently dropped).
+          counts[st?.state ?? "не определён"] += 1;
+        }
+        setLegalCounts(counts);
+      } catch {
+        // network error — leave counts null (no fabrication)
+      } finally {
+        if (!cancelled) setLegalLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ruNumbers]);
 
   if (!loaded) {
     return (
@@ -449,6 +529,7 @@ function LandscapeReportInner() {
       matrix,
       counters,
       hitById,
+      legalCounts,
       t,
       locale,
       autoPrint: false,
@@ -471,6 +552,7 @@ function LandscapeReportInner() {
       matrix,
       counters,
       hitById,
+      legalCounts,
       t,
       locale,
       autoPrint: true,
@@ -519,6 +601,38 @@ function LandscapeReportInner() {
               </div>
             ))}
           </section>
+
+          {/* RU legal-status counter (Этап 1) — lazy-fetched from ФИПС. */}
+          {ruNumbers.length > 0 && (
+            <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="text-sm font-medium text-slate-500">
+                {t("legalStatusTitle")}
+              </div>
+              {legalCounts ? (
+                <>
+                  <div className="mt-1 text-base font-semibold text-slate-900">
+                    {t("legalStatusLine", {
+                      active: legalCounts["действует"],
+                      inactive: legalCounts["не действует"],
+                      restorable: legalCounts["восстановим"],
+                      expired: legalCounts["истёк"],
+                      unknown: legalCounts["не определён"],
+                    })}
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {t("legalStatusCaveat")}
+                  </p>
+                </>
+              ) : (
+                <div className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+                  {legalLoading && (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-400" />
+                  )}
+                  <span>{t("legalStatusLoading")}</span>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* Overview */}
           {overviewParas.length > 0 && (
