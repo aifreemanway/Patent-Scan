@@ -11,6 +11,7 @@
 // is waiting on. The history will just miss that row.
 
 import { createSupabaseAdmin } from "@/lib/supabase-server";
+import type { CalibrationInput } from "@/lib/calibration";
 
 export type SearchType =
   | "novelty"
@@ -48,6 +49,12 @@ type CreateOpts = {
    * the only caller that should start at 'pending'.
    */
   status?: Extract<SearchStatus, "pending" | "in_progress">;
+  /**
+   * Silent-capture calibration metadata (input-side). Nested under
+   * `params.calibration` so no schema change is needed. Fully optional —
+   * absent on legacy/non-instrumented call-sites. See lib/calibration.ts.
+   */
+  calibration?: CalibrationInput;
 };
 
 /**
@@ -61,6 +68,14 @@ export async function createSearchRequest(
   const status = opts.status ?? "in_progress";
   const now = new Date().toISOString();
 
+  // Nest calibration metadata inside the existing params jsonb (no schema
+  // change). Spread the caller's params first so an explicit `calibration`
+  // key in params is preserved unless the dedicated arg is supplied.
+  const params: Record<string, unknown> = {
+    ...(opts.params ?? {}),
+    ...(opts.calibration ? { calibration: opts.calibration } : {}),
+  };
+
   const { data, error } = await admin
     .from("search_requests")
     .insert({
@@ -69,7 +84,7 @@ export async function createSearchRequest(
       status,
       topic: opts.topic,
       description: opts.description ?? null,
-      params: opts.params ?? {},
+      params,
       started_at: status === "in_progress" ? now : null,
     })
     .select("id")
@@ -100,16 +115,28 @@ type CompleteOpts = {
 export async function markSearchRequestCompleted(
   id: string | null,
   result: Record<string, unknown>,
-  opts?: CompleteOpts
+  opts?: CompleteOpts,
+  /**
+   * Silent-capture calibration metadata (output-side), e.g.
+   * { ipc_queried, queries_sent, results_per_source, status_source }. Nested
+   * under `result.calibration` so no schema change is needed. Fully optional.
+   */
+  calibrationOutput?: Record<string, unknown>
 ): Promise<void> {
   if (!id) return;
   const admin = createSupabaseAdmin();
+
+  // Nest calibration output inside the result jsonb. Spread result first so an
+  // explicit `calibration` key in result is preserved unless the arg overrides.
+  const resultWithCalibration: Record<string, unknown> = calibrationOutput
+    ? { ...result, calibration: calibrationOutput }
+    : result;
 
   const { error } = await admin
     .from("search_requests")
     .update({
       status: "completed",
-      result,
+      result: resultWithCalibration,
       result_pdf_url: opts?.resultPdfUrl ?? null,
       cogs_actual: opts?.cogsActual ?? null,
       completed_at: new Date().toISOString(),

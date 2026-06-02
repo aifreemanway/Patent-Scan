@@ -21,6 +21,7 @@ import {
   markSearchRequestCompleted,
   markSearchRequestError,
 } from "@/lib/search-requests";
+import { computeInputRichness, newSessionId } from "@/lib/calibration";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -116,6 +117,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     description?: string;
     answers?: string[];
     patents?: InputPatent[];
+    // Silent-capture calibration extras (optional, backward-compatible).
+    questions?: string[];
+    diagnostics?: { topGroups?: string[]; queries?: string[]; total?: number };
   };
   try {
     body = await req.json();
@@ -156,13 +160,32 @@ export async function POST(req: Request): Promise<NextResponse> {
   // History row created before the heavy call so a route crash still leaves a
   // record (worker would never see it, but /account/history will). Failure here
   // returns null and we proceed without logging — see search-requests.ts.
+  // Silent-capture calibration: a fresh session id + deterministic richness of
+  // the user's description, plus the clarifying Q&A (answers always; questions
+  // only if the client sent them). Nested under params.calibration — additive,
+  // never changes the response shape, and a failure here can't break a search.
+  const sessionId = newSessionId();
+  const questions = Array.isArray(body.questions)
+    ? body.questions.filter((q): q is string => typeof q === "string")
+    : undefined;
+
   const sr = await createSearchRequest({
     userId: guard.user.id,
     type: "novelty",
     topic: deriveTopic(description),
     description,
     params: { answers, patentsInput: patents.length },
+    calibration: {
+      session_id: sessionId,
+      input_richness: computeInputRichness(description),
+      clarifying_qa: {
+        answers,
+        ...(questions && questions.length > 0 ? { questions } : {}),
+      },
+    },
   });
+
+  const diagnostics = body.diagnostics;
 
   try {
     const { data } = await callGeminiJson<AnalyzeVerdict>({
@@ -220,7 +243,21 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     const responsePayload = { ...data, patents: verified };
-    await markSearchRequestCompleted(sr?.id ?? null, responsePayload);
+    // Output-side calibration (nested under result.calibration). No-op fields
+    // when the client didn't send diagnostics.
+    const calibrationOutput =
+      diagnostics?.topGroups || diagnostics?.queries
+        ? {
+            ipc_queried: diagnostics?.topGroups,
+            queries_sent: diagnostics?.queries,
+          }
+        : undefined;
+    await markSearchRequestCompleted(
+      sr?.id ?? null,
+      responsePayload,
+      undefined,
+      calibrationOutput
+    );
     return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
   } catch (e) {
     const message =

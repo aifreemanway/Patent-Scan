@@ -16,6 +16,7 @@ import {
   createSearchRequest,
   deriveTopic,
 } from "@/lib/search-requests";
+import { computeInputRichness, newSessionId } from "@/lib/calibration";
 import { RATE_WINDOW_MS } from "@/lib/config";
 import { sendReceivedEmail } from "@/worker/literature-review/email";
 import type {
@@ -129,6 +130,10 @@ export async function POST(req: Request): Promise<NextResponse> {
     description: hypotheses ?? null,
     params: params as unknown as Record<string, unknown>,
     status: "pending",
+    calibration: {
+      session_id: newSessionId(),
+      input_richness: computeInputRichness(topic),
+    },
   });
 
   if (!sr) {
