@@ -30,13 +30,30 @@ type PatSearchResponse = {
 
 type EnrichedHit = NormalizedHit & { source: string };
 
-function ipcSubclasses(codes: string[]): string[] {
-  const out: string[] = [];
+// Full IPC group, e.g. "G01R31/34" (no internal space). The precise
+// classification.ipc filter — the documented working field (root CLAUDE.md,
+// and what landscape/search uses). A truncated subclass head ("G01R31") sent
+// to classification.ipc_subclass returns total=0 (verified 2026-06-02), so we
+// prefer full codes; a valid 4-char subclass ("G01R") is only a fallback.
+const IPC_GROUP_RE = /^[A-H]\d{2}[A-Z]\d{1,4}\/\d{1,6}$/;
+const IPC_SUBCLASS_RE = /^[A-H]\d{2}[A-Z]$/;
+
+function ipcGroups(codes: string[]): string[] {
+  const out = new Set<string>();
   for (const c of codes) {
-    const head = c.trim().split(/[/\s]/, 1)[0];
-    if (head && !out.includes(head)) out.push(head);
+    const g = c.replace(/\s+/g, "");
+    if (IPC_GROUP_RE.test(g)) out.add(g);
   }
-  return out;
+  return [...out];
+}
+
+function ipcSubclasses(codes: string[]): string[] {
+  const out = new Set<string>();
+  for (const c of codes) {
+    const head = c.replace(/\s+/g, "").slice(0, 4);
+    if (IPC_SUBCLASS_RE.test(head)) out.add(head);
+  }
+  return [...out];
 }
 
 function normalizeHits(hits: PatSearchHit[]): EnrichedHit[] {
@@ -152,12 +169,19 @@ export async function POST(req: Request) {
   const ipcInput = body.ipcCodes && body.ipcCodes.length > 0
     ? body.ipcCodes
     : extractedIpc;
+  const fullGroups = ipcGroups(ipcInput);
   const subclasses = ipcSubclasses(ipcInput);
   const highlight = body.highlight ?? false;
 
-  const filter = subclasses.length > 0
-    ? { "classification.ipc_subclass": { values: subclasses } }
-    : undefined;
+  // Prefer the precise classification.ipc group filter; fall back to a valid
+  // 4-char subclass. (The old code truncated "G01R31/34"→"G01R31" into
+  // classification.ipc_subclass, which PatSearch returns 0 for — dead filter.)
+  const filter = fullGroups.length > 0
+    ? { "classification.ipc": { values: fullGroups } }
+    : subclasses.length > 0
+      ? { "classification.ipc_subclass": { values: subclasses } }
+      : undefined;
+  const usedIpc = fullGroups.length > 0 ? fullGroups : subclasses;
 
   const userDatasets = Array.isArray(body.datasets)
     ? body.datasets.filter(
@@ -194,7 +218,7 @@ export async function POST(req: Request) {
         total: result.data.total ?? hits.length,
         usedQn: qn,
         usedQnEn: qnEn,
-        usedIpc: subclasses,
+        usedIpc,
       });
     }
 
@@ -253,7 +277,7 @@ export async function POST(req: Request) {
       total: ruTotal + enTotal,
       usedQn: qn,
       usedQnEn: qnEn,
-      usedIpc: subclasses,
+      usedIpc,
     });
   } finally {
     clearTimeout(timer);
