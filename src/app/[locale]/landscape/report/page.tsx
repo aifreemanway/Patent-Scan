@@ -290,6 +290,7 @@ function buildReportHtml(args: {
 <body>
 <div class="wrap">
 <h1>${esc(t("title"))}</h1>
+<p class="subtitle" style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin:8px 0 16px;font-size:14px">${esc(t("caveatNotice"))}</p>
 ${data.topic ? `<p class="topic"><strong>${esc(t("topicLabel"))}:</strong> ${esc(data.topic)}</p>` : ""}
 ${countersHtml}
 ${overviewHtml}
@@ -299,6 +300,7 @@ ${categoriesHtml}
 ${matrixHtml}
 ${trendsHtml}
 ${appendixHtml}
+<section class="card" style="border-color:#fcd34d;background:#fffbeb;margin-top:24px"><strong style="color:#92400e">${esc(t("caveatTitle"))}</strong><p style="color:#92400e;margin:4px 0 0">${esc(t("caveatBody"))}</p></section>
 </div>
 ${printScript}
 </body>
@@ -486,6 +488,10 @@ function LandscapeReportInner() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
             {t("title")}
           </h1>
+          {/* Trust caveat — ГОСТ Р 15.011-96 disclaimer (mandatory before any demo) */}
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {t("caveatNotice")}
+          </p>
           {data.topic && (
             <p className="mt-3 max-w-4xl text-sm text-slate-600">
               <span className="font-semibold text-slate-700">{t("topicLabel")}:</span>{" "}
@@ -780,6 +786,12 @@ function LandscapeReportInner() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          {/* Trust caveat — ГОСТ Р 15.011-96 disclaimer (mandatory before any demo) */}
+          <section className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
+            <strong className="text-amber-900">{t("caveatTitle")}</strong>
+            <p className="mt-1 text-sm leading-6 text-amber-900">{t("caveatBody")}</p>
           </section>
 
           {/* Actions */}
