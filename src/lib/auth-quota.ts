@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import {
   requireVerifiedUser,
+  requireVerifiedUserCached,
   UnauthorizedError,
   UnverifiedEmailError,
 } from "./supabase-server";
@@ -15,13 +16,12 @@ export type AuthGuardResult =
   | { ok: true; user: User }
   | { ok: false; response: NextResponse };
 
-/**
- * Verified-email gate. Use in routes that need to know who the user is but
- * don't consume a quota slot (e.g. clarifying questions, cheap gate checks).
- */
-export async function requireAuth(): Promise<AuthGuardResult> {
+// Shared error → HTTP-response mapping for the verified-user guards.
+async function guardWith(
+  fetchUser: () => Promise<{ user: User }>
+): Promise<AuthGuardResult> {
   try {
-    const { user } = await requireVerifiedUser();
+    const { user } = await fetchUser();
     return { ok: true, user };
   } catch (e) {
     if (e instanceof UnauthorizedError) {
@@ -51,6 +51,27 @@ export async function requireAuth(): Promise<AuthGuardResult> {
       ),
     };
   }
+}
+
+/**
+ * Verified-email gate. Use in routes that need to know who the user is but
+ * don't consume a quota slot (e.g. clarifying questions, cheap gate checks).
+ * Validates the session FRESH on every call (uncached) — use this on any
+ * mutating / billed / quota-charging path.
+ */
+export async function requireAuth(): Promise<AuthGuardResult> {
+  return guardWith(requireVerifiedUser);
+}
+
+/**
+ * Same gate, but backed by the ~60s validated-user cache. Use ONLY on read-only
+ * internal fan-out routes (facet-decompose, landscape/search, landscape/plan,
+ * prior-art-rank) where one novelty search fires hundreds of auth validations
+ * and would otherwise trip the Supabase auth rate limit. NEVER on a payment /
+ * webhook / quota-charge path — see the guardrail note on requireVerifiedUserCached.
+ */
+export async function requireAuthCached(): Promise<AuthGuardResult> {
+  return guardWith(requireVerifiedUserCached);
 }
 
 /**

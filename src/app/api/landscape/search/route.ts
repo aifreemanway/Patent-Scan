@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { requireAuth } from "@/lib/auth-quota";
+import { requireAuthCached } from "@/lib/auth-quota";
 import {
   normalizeHit,
   type PatSearchHit,
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   });
   if (rl) return rl;
 
-  const guard = await requireAuth();
+  const guard = await requireAuthCached();
   if (!guard.ok) return guard.response;
 
   const token = process.env.PATSEARCH_TOKEN;
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     ipcSubclasses?: string[];
     ipcGroups?: string[];
     limit?: number;
+    offset?: number;
     datasets?: string[];
   };
   try {
@@ -65,6 +66,12 @@ export async function POST(req: Request) {
   }
 
   const limit = Math.min(Math.max(body.limit ?? 30, 1), 50);
+  // Offset enables depth-pagination of a class-sweep beyond the first page:
+  // the novelty class-sweep walks a high-value subclass (e.g. G01R, ~65k docs)
+  // limit×N pages deep to surface in-class analogs past the top-30. PatSearch
+  // caps `available` at 1000, so clamp accordingly. Defaults to 0 → existing
+  // single-page callers are unchanged.
+  const offset = Math.min(Math.max(body.offset ?? 0, 0), 1000);
   const userDatasets = Array.isArray(body.datasets)
     ? body.datasets.filter(
         (d): d is string => typeof d === "string" && PATSEARCH_DATASETS_ALLOWED.has(d)
@@ -86,7 +93,7 @@ export async function POST(req: Request) {
   const payload: Record<string, unknown> = {
     qn,
     limit,
-    offset: 0,
+    offset,
     datasets,
     include_facets: false,
     highlight: false,

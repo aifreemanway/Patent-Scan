@@ -21,6 +21,7 @@ export const GEMINI_TIMEOUT_MS = {
   assess: 15_000,
   extract: 30_000,
   plan: 30_000,
+  facet: 30_000,
   synthesize: 120_000,
   rank: 60_000,
 } as const;
@@ -110,11 +111,17 @@ export const RATE_MAX = {
   searchWeb: 5,
   gate: 30,
   landscapePlan: 5,
+  // Decompose a verbose invention into atomic facet queries (one LLM call) — the
+  // facet stage of full-depth novelty retrieval. Same backstop rationale as plan.
+  facetDecompose: 5,
   // Both landscape and novelty fan out many search calls per run. Novelty's
   // class-sweep probes ~10 IPC groups × 4 region buckets × several phrasings, so
-  // one run reaches ~180 calls; this must clear a single run with headroom.
-  // Per-user abuse is metered by the auth quota layer, not this per-IP limit.
-  landscapeSearch: 200,
+  // a lite run reaches ~180 calls. Full-depth retrieval (v2) adds facet queries
+  // (~10 facets) plus offset-pagination of high-value subclasses (depth 90–150),
+  // pushing a single run to ~400 calls; this ceiling must clear one full run with
+  // headroom. Per-user abuse is metered by the auth quota layer, not this per-IP
+  // limit — so a generous backstop is safe.
+  landscapeSearch: 500,
   landscapeSynthesize: 5,
   // Novelty's two-pass ranking makes up to ~6 calls per run (chunk maps +
   // reduce), so this must clear a couple of runs/min per IP.

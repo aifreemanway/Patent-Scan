@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { requireAuth } from "@/lib/auth-quota";
+import { requireAuthCached } from "@/lib/auth-quota";
 import { planLandscape } from "@/lib/landscape-plan";
 import {
   MAX_DESCRIPTION_LEN,
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   });
   if (rl) return rl;
 
-  const guard = await requireAuth();
+  const guard = await requireAuthCached();
   if (!guard.ok) return guard.response;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;

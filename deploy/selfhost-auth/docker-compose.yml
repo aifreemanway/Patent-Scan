@@ -1,0 +1,156 @@
+# Self-hosted auth/data stack for ПатентСкан (152-ФЗ RU localization, path B).
+#
+# WHY: account PDn (email) must be physically stored in RF (152-ФЗ ст.18.5), and
+# Supabase Cloud Free (EU/Frankfurt) also rate-limits getUser, which poisoned the
+# P2-recall runs. We run a MINIMAL, Kong-less Supabase-compatible stack on our own
+# RU VPS (ap-prod-msk, Moscow). Postgres lives on this box for now (free); a later
+# move to managed RU Postgres is just swapping POSTGRES_HOST + a pg_dump/restore.
+#
+# TRIM (vs the official supabase/docker monolith): NO Studio, Realtime, Analytics
+# (logflare), Vector, Meta, Functions, imgproxy, Supavisor, Kong. On a 3.8 GiB box
+# the full stack would OOM-kill the live Next.js app. We keep only what the app
+# actually uses (verified in code): Auth (GoTrue), REST (PostgREST), Storage. The
+# API GATEWAY is our existing nginx (routes /auth/v1 /rest/v1 /storage/v1) — not
+# Kong — saving a container + memory. Realtime is NOT used (no .channel calls).
+#
+# All service ports bind to 127.0.0.1 only; nginx (host) proxies the public
+# auth.patent-scan.ru → these loopback ports. Postgres is NEVER published.
+#
+# Mem limits are deliberate: the box also runs pm2 patent-scan + worker + nginx.
+# Budget: db 768M, gotrue 192M, rest 192M, storage 256M ≈ 1.4G of 3.8G.
+
+name: ps-auth
+
+services:
+  db:
+    # Supabase's Postgres image ships the role/extension scaffolding GoTrue +
+    # PostgREST + Storage expect (anon / authenticated / service_role /
+    # supabase_auth_admin / supabase_storage_admin, pgcrypto, uuid-ossp, pgjwt).
+    # Pin to a current stable tag; verify it pulls before bring-up.
+    image: supabase/postgres:15.8.1.060
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXP:-3600}
+    volumes:
+      - ps_auth_db:/var/lib/postgresql/data
+      # Our app schema (migrations 0001-0009) is applied AFTER first boot via the
+      # runbook (psql), not as an init script, so we control ordering vs GoTrue's
+      # own auth-schema migrations.
+    ports:
+      - "127.0.0.1:5432:5432" # loopback only — for psql/migrations from host
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${PUBLIC_AUTH_URL} # https://auth.patent-scan.ru
+      GOTRUE_DB_DRIVER: postgres
+      # supabase_auth_admin owns the auth schema (created by the supabase/postgres image).
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      GOTRUE_SITE_URL: ${SITE_URL} # https://patent-scan.ru
+      GOTRUE_URI_ALLOW_LIST: ${URI_ALLOW_LIST} # https://patent-scan.ru/**,https://patent-scan.ru
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      # Magic-link only (no password). Email confirm required (matches requireVerifiedUser).
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL} # noreply@patent-scan.ru
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-ПатентСкан}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      # Send Email Hook → our Next.js endpoint → Unisender GO HTTP API. The VPS
+      # blocks outbound SMTP, so GoTrue delegates delivery to us over 443. The
+      # hook overrides SMTP, so the (empty) SMTP_* above are unused at runtime.
+      GOTRUE_HOOK_SEND_EMAIL_ENABLED: "true"
+      GOTRUE_HOOK_SEND_EMAIL_URI: ${SEND_EMAIL_HOOK_URI:-http://host.docker.internal:3000/api/internal/auth-email-hook}
+      GOTRUE_HOOK_SEND_EMAIL_SECRETS: ${SEND_EMAIL_HOOK_SECRET}
+    # Reach the host's Next.js (pm2, port 3000) from inside the container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:9999:9999"
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCMODE: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "127.0.0.1:3001:3000" # 3001 on host → 3000 in container (3000 is taken by Next.js)
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+
+  storage:
+    image: supabase/storage-api:v1.11.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      FILE_SIZE_LIMIT: "52428800" # 50 MB (literature-review PDFs)
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: ru-msk
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false" # we only do PDF upload+signedURL, no imgproxy
+    volumes:
+      - ps_auth_storage:/var/lib/storage
+    ports:
+      - "127.0.0.1:5000:5000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  ps_auth_db:
+  ps_auth_storage:
