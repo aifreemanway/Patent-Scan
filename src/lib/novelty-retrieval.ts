@@ -39,6 +39,11 @@ export type NoveltyRetrievalResult = {
     poolSemantic: number;
     poolSweep: number;
     topGroups: string[];
+    // Subclasses the planner declared vs the subclasses actually swept (the
+    // latter also derived from plan/probe groups). Logged so a recall miss can
+    // be traced to "the relevant subclass was never swept".
+    planSubclasses: string[];
+    sweptSubclasses: string[];
     ranked: number;
   };
 };
@@ -228,6 +233,8 @@ export async function retrieveNoveltyPriorArt(opts: {
   let planned = false;
   let usedLegacyFallback = false;
   let topGroups: string[] = [];
+  let planSubclassesDiag: string[] = [];
+  let sweptSubclassesDiag: string[] = [];
   let poolSemanticLen = 0;
   let poolSweepLen = 0;
   let inClassPool: PatentHit[] = [];
@@ -360,6 +367,23 @@ export async function retrieveNoveltyPriorArt(opts: {
     }
     topGroups = topGroups.slice(0, 14);
 
+    // Reliable recall NET: sweep the 4-char SUBCLASS of every plan/probe group,
+    // not only the planner's explicit ipcSubclasses. PatSearch classification.ipc
+    // is exact-subgroup match, so when the planner names the wrong subgroup
+    // (G01R19/00 where the analog is actually G01R19/02 — Samara RU2854805) the
+    // exact-group sweep silently misses it; sweeping the SUBCLASS (G01R via
+    // classification.ipc_subclass) catches EVERY sibling subgroup under it. Derive
+    // from topGroups (already merges plan + probe groups) and union with the
+    // planner's explicit subclasses. Cap to keep the sweep call-budget bounded.
+    const groupDerivedSubclasses = topGroups
+      .map((g) => g.slice(0, 4))
+      .filter((s) => IPC_SUBCLASS_RE.test(s));
+    const sweepSubclasses = [
+      ...new Set([...planSubclasses, ...groupDerivedSubclasses]),
+    ].slice(0, 6);
+    planSubclassesDiag = planSubclasses;
+    sweptSubclassesDiag = sweepSubclasses;
+
     // Sweep each group under its IPC filter with SEVERAL phrasings (function +
     // structure facets). A given analog surfaces only for the phrasing that
     // paraphrases it (US6322610 sits anywhere #3-#11 in C21C5/46 depending on
@@ -388,7 +412,7 @@ export async function retrieveNoveltyPriorArt(opts: {
     //    (G01R19/02) #1, RU2799985 (G01R31/34) #4.
     const sweepUnits: { key: string; filter: SweepFilter }[] = [
       ...topGroups.map((g) => ({ key: `g:${g}`, filter: { ipcGroups: [g] } })),
-      ...planSubclasses.map((s) => ({
+      ...sweepSubclasses.map((s) => ({
         key: `s:${s}`,
         filter: { ipcSubclasses: [s] },
       })),
@@ -519,6 +543,8 @@ export async function retrieveNoveltyPriorArt(opts: {
       poolSemantic: poolSemanticLen,
       poolSweep: poolSweepLen,
       topGroups,
+      planSubclasses: planSubclassesDiag,
+      sweptSubclasses: sweptSubclassesDiag,
       ranked,
     },
   };
