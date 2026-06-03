@@ -150,6 +150,7 @@
       "unknown": "undetermined",
       "nonRu": "—",
       "caption": "Status as of {date} · source: Rospatent",
+      "sourceChanged": "Rospatent upd. {date}",
       "deepLine": "Status: {state}. {fee} Status as of {date}. Source: Rospatent.",
       "caveat": "Legal status is current as of the generation date and may change — verify at FIPS. Not a legal opinion.",
       "loading": "Requesting RU patent legal status from FIPS…"

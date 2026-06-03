@@ -243,9 +243,15 @@ function buildSearchReportHtml(args: {
           } else {
             const ui = EXPORT_STATUS_KEY[st.state] ?? EXPORT_STATUS_KEY["не определён"];
             const date = st.extractedAt.replace(/^(\d{4})-(\d{2})-(\d{2})$/, "$3.$2.$1");
-            const caption = t("legalStatus.caption", { date });
+            const changed = st.lastChangeDate
+              ? ` · ${t("legalStatus.sourceChanged", { date: st.lastChangeDate })}`
+              : "";
+            const caption = `${t("legalStatus.caption", { date })}${changed}`;
             const href = safeHref(st.sourceUrl);
-            const label = `${ui.emoji} ${esc(t(`legalStatus.${ui.key}`))}`;
+            // Anti-fab: show ФИПС's verbatim phrase, not our coarse state label
+            // (e.g. "может прекратить свое действие", not "восстановим").
+            const labelText = st.statusText?.trim() || t(`legalStatus.${ui.key}`);
+            const label = `${ui.emoji} ${esc(labelText)}`;
             statusCell = `${
               href
                 ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
@@ -1032,8 +1038,12 @@ function ReportPageInner() {
                 const st = num ? legalStatuses[num] : undefined;
                 if (!st) return null;
                 const ui = LEGAL_STATUS_UI[st.state] ?? LEGAL_STATUS_UI["не определён"];
+                // Anti-fab: ФИПС's verbatim phrase, not our coarse state label.
+                const stateText =
+                  st.statusText?.trim() ||
+                  t(`legalStatus.${ui.key}` as "legalStatus.active");
                 const line = t("legalStatus.deepLine", {
-                  state: `${ui.emoji} ${t(`legalStatus.${ui.key}` as "legalStatus.active")}`,
+                  state: `${ui.emoji} ${stateText}`,
                   fee: st.feeInfo ?? "",
                   date: formatExtractedDate(st.extractedAt),
                 });
