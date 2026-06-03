@@ -8,7 +8,8 @@
     "tagline": "Check your invention's uniqueness in a minute",
     "cta": "Check my invention",
     "ctaSecondary": "Start check",
-    "ctaLandscape": "Build patent landscape"
+    "ctaLandscape": "Build patent landscape",
+    "ctaPricing": "Pricing"
   },
   "Landing": {
     "hero": {
@@ -464,11 +465,8 @@
       "deleteSubmit": "Delete account"
     },
     "billing": {
-      "title": "Billing & subscription",
-      "subtitle": "Paid plans launch with the public release.",
-      "stubBody1": "Subscription and payment management will be available once paid plans go live.",
-      "stubBody2": "Need a paid plan today? Email support@patent-scan.com and we'll set up the subscription manually.",
-      "contactSupport": "Contact support"
+      "title": "Pricing & subscription",
+      "subtitle": "Choose a plan or order a one-off report."
     }
   },
   "LiteratureReview": {
@@ -592,7 +590,8 @@
     "rkn": "Roskomnadzor PDn Operator Registry",
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
-    "enterprise": "For institutes & R&D"
+    "enterprise": "For institutes & R&D",
+    "pricing": "Pricing"
   },
   "Enterprise": {
     "meta": {
@@ -670,6 +669,184 @@
         "captcha_failed": "Bot check failed. Please try again.",
         "send_failed": "We can't send the request right now. Please email support@patent-scan.com directly.",
         "rate_limited": "Too many submissions from this IP. Please try again in a few minutes."
+      }
+    }
+  },
+  "Pricing": {
+    "meta": {
+      "title": "Pricing",
+      "description": "Patent-Scan pricing: subscriptions and one-off reports. Express patent-uniqueness checks and R&D reviews — before you turn to an attorney or institute."
+    },
+    "preliminaryBanner": "Preliminary pricing — still being refined. We'd love your opinion on the price.",
+    "hero": {
+      "title": "Pricing",
+      "subtitle": "Express patent-uniqueness checks and R&D reviews. AI analysis in minutes, before you turn to a patent attorney or institute."
+    },
+    "perMonth": " / mo",
+    "priceFree": "$0",
+    "custom": "on request",
+    "popular": "Popular",
+    "flagship": "Flagship",
+    "currentPlan": "Your plan",
+    "yourPlan": "Your current plan",
+    "cta": {
+      "free": "Start free",
+      "request": "Request access",
+      "contact": "Contact us"
+    },
+    "subscription": {
+      "title": "Subscription",
+      "subtitle": "Regular checks and analyses at a fixed monthly price. Quotas reset monthly."
+    },
+    "searchFree": "A quick idea check (Search) is free on every plan. If you need an analysis of why an idea is unique or not — that's Deep.",
+    "oneOff": {
+      "title": "One-off reports",
+      "subtitle": "For those who need a single report without a subscription.",
+      "packs": "Buying in volume? Credit packs: 10 Screenings — {screening10}, 20 Deep — {deep20}.",
+      "packsCta": "Contact us"
+    },
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "desc": "Get acquainted. Check your idea for free.",
+        "quota": {
+          "searches": "3 Searches per month"
+        },
+        "feat": {
+          "worldwide": "Search across world patent databases (RU, CIS, US, EP, CN, JP)",
+          "history": "Check history in your account"
+        }
+      },
+      "starter": {
+        "name": "Starter",
+        "desc": "For the inventor. Regularly check your ideas and get a deep analysis.",
+        "quota": {
+          "searches": "10 Searches per month",
+          "deep": "1 Deep per month"
+        },
+        "feat": {
+          "export": "Report export (HTML)",
+          "priority": "Basic support"
+        }
+      },
+      "team": {
+        "name": "Team",
+        "desc": "For teams and patent practice. A flow of checks, analyses, landscapes.",
+        "quota": {
+          "searches": "50 Searches per month",
+          "deep": "5 Deep per month",
+          "landscape": "2 Landscapes per month",
+          "seats": "Up to 3 users"
+        },
+        "feat": {
+          "iul": "Industrial Usage in reports",
+          "export": "Report export (HTML)",
+          "priority": "Priority support"
+        }
+      },
+      "team_plus": {
+        "name": "Team Plus",
+        "desc": "For R&D departments. Everything in Team plus Screenings and Industrial Usage.",
+        "quota": {
+          "searches": "100 Searches per month",
+          "deep": "15 Deep per month",
+          "landscape": "5 Landscapes per month",
+          "screening": "4 Screening credits per year"
+        },
+        "feat": {
+          "iul": "Industrial Usage by default",
+          "allTeam": "All Team features"
+        }
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "desc": "Institute and corporation. Unlimited, API, SSO, contract.",
+        "quota": {
+          "unlimited": "Unlimited checks and reports"
+        },
+        "feat": {
+          "api": "API access",
+          "sso": "SSO for employees",
+          "contract": "Contract and closing documents"
+        }
+      }
+    },
+    "products": {
+      "deep": {
+        "name": "Deep",
+        "desc": "Whether your development can be patented and on what grounds. Feature-by-feature analysis and an honest assessment.",
+        "time": "≈ 2–5 minutes"
+      },
+      "landscape": {
+        "name": "Landscape",
+        "desc": "A map of patent activity in your field: who, where and what is being patented.",
+        "time": "≈ 2–5 minutes"
+      },
+      "screening": {
+        "name": "Screening",
+        "desc": "A map of the field plus synthesis: comparison, Industrial Usage and conclusions. Pre-screening before an institute or attorney.",
+        "time": "≈ 10–15 minutes"
+      }
+    },
+    "faq": {
+      "title": "FAQ",
+      "items": [
+        {
+          "q": "How does Search differ from Deep?",
+          "a": "Search is a quick, free check of whether an idea is unique in principle. Deep is an in-depth feature-by-feature analysis of whether it can be patented and why."
+        },
+        {
+          "q": "What is a quota and when does it reset?",
+          "a": "A quota is the number of checks and reports available on your plan. It resets monthly, on the first day of the month."
+        },
+        {
+          "q": "What if my quota runs out?",
+          "a": "You can buy a one-off report or upgrade to a higher plan."
+        },
+        {
+          "q": "Can I order a report without a subscription?",
+          "a": "Yes — one-off reports (Deep, Landscape, Screening) are available without a subscription."
+        },
+        {
+          "q": "Where does the data come from?",
+          "a": "Patent search runs across world databases via Rospatent PatSearch: Russia and CIS, the US, Europe, China and Japan."
+        },
+        {
+          "q": "Does this replace a patent attorney or institute?",
+          "a": "No. We are an express assessment BEFORE them, so you arrive prepared or save on ideas that are clearly already taken."
+        }
+      ]
+    },
+    "feedback": {
+      "title": "Help us make pricing fair",
+      "body": "What price feels fair to you? What is unclear? Write to us — it helps us finalize the pricing.",
+      "cta": "Write to us"
+    },
+    "addons": {
+      "title": "Add-ons",
+      "fto_opinion": {
+        "title": "FTO opinion",
+        "body": ""
+      },
+      "monitoring": {
+        "title": "Monitoring & alerts",
+        "body": ""
+      },
+      "gost_export": {
+        "title": "Formal GOST export",
+        "body": ""
+      },
+      "foreign_legal_status": {
+        "title": "Foreign legal status",
+        "body": ""
+      },
+      "api_access": {
+        "title": "API access",
+        "body": ""
+      },
+      "iul": {
+        "title": "Industrial Usage",
+        "body": ""
       }
     }
   }

@@ -60,6 +60,12 @@ export function Header() {
           {tc("appName")}
         </Link>
         <div className="flex items-center gap-4">
+          <Link
+            href="/pricing"
+            className="hidden text-sm font-medium text-slate-700 transition hover:text-slate-900 sm:inline"
+          >
+            {tc("ctaPricing")}
+          </Link>
           {authLoaded && email ? (
             <div className="flex items-center gap-3 text-sm">
               <Link
