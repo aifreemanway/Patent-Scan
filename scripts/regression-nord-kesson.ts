@@ -6,17 +6,53 @@
 // against a running dev server, so it can't drift from what the UI ships.
 //
 // Run:  cd web && npm run dev            (separate terminal, loads .env.local)
-//       node scripts/regression-nord-kesson.ts
+//       npx tsx scripts/regression-nord-kesson.ts
 // Env:  BASE_URL (default http://localhost:3000)
 //       RUNS     (default 3)
 //       SLEEP_MS (default 65000 — clears the per-IP rate-limit window between runs)
+//
+// AUTH (B1): the internal routes (landscape/plan, landscape/search,
+// prior-art-rank) are now behind requireAuth, so the harness must present a
+// session cookie or every call 401s. Drop a Supabase session token into
+// SESSION_FILE (same as t1-recall-test.ts) and we inject it on every fetch:
+//   • locally: start dev, then hit /api/qa-preview-login on a preview to mint a
+//     token, or paste an existing qa-team session token into the file.
+//   • the token is the value of the `sb-<ref>-auth-token` cookie.
 
+import { readFileSync } from "fs";
 import { retrieveNoveltyPriorArt, type PatentHit } from "../src/lib/novelty-retrieval.ts";
 
 const BASE_URL = process.env.BASE_URL ?? "http://localhost:3000";
 const RUNS = Number(process.env.RUNS ?? 3);
 const SLEEP_MS = Number(process.env.SLEEP_MS ?? 65_000);
 const ANALYZE_WINDOW = 60; // MAX_PATENTS_ANALYZE — patents the judge actually sees.
+const SESSION_FILE =
+  process.env.QA_SESSION_FILE ??
+  "C:\\Users\\kobzar\\AppData\\Local\\Temp\\qa_session_token.txt";
+
+// Auth-injecting fetch — attaches the Supabase session cookie to every internal
+// call so requireAuth passes. Falls back to plain fetch if the token file is
+// missing (the run will then 401 and surface that clearly rather than silently).
+function makeFetch(): typeof fetch {
+  let token = "";
+  try {
+    token = readFileSync(SESSION_FILE, "utf-8").trim();
+  } catch {
+    console.warn(
+      `[regression] no session token at ${SESSION_FILE} — internal routes will 401. ` +
+        `Mint one via /api/qa-preview-login and save it there.`
+    );
+  }
+  if (!token) return fetch;
+  return ((input, init = {}) => {
+    const headers = new Headers((init as RequestInit).headers ?? {});
+    headers.set("Cookie", `sb-ycwtxilrkswlzjhvyiea-auth-token=${token}`);
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+    return fetch(input, { ...(init as RequestInit), headers });
+  }) as typeof fetch;
+}
+
+const fetchWithAuth = makeFetch();
 
 const DESCRIPTION =
   "Водоохлаждаемый медный кессон с двумя отверстиями под фурмы с подачей " +
@@ -55,6 +91,7 @@ async function oneRun(): Promise<RunOutcome> {
   const { hits, total, diagnostics } = await retrieveNoveltyPriorArt({
     description: DESCRIPTION,
     base: BASE_URL,
+    fetchImpl: fetchWithAuth,
   });
   const positions: Record<string, number> = {};
   const inWindow: Record<string, boolean> = {};
