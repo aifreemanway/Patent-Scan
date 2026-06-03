@@ -222,6 +222,7 @@
     "IndustrialUsage": {
       "toggleLabel": "Industrial usage",
       "loading": "Gathering owner and competitor data…",
+      "loadingHint": "Querying Rospatent, open registries and the web — this can take up to a minute.",
       "lockedTitle": "Available from the Team plan",
       "lockedDefault": "This section shows the patent owner, products and competitors. Available on the Team plan and above.",
       "errorTitle": "Could not gather data",

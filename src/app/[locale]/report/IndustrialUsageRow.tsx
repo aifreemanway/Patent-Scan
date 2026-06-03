@@ -101,7 +101,22 @@ export function IndustrialUsageRow({
         {open && (
           <div className="mt-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
             {state.kind === "loading" && (
-              <div className="text-slate-500">{t("loading")}</div>
+              <div className="space-y-2" role="status" aria-live="polite">
+                <div className="flex items-center gap-2 text-slate-600">
+                  <span
+                    className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-blue-500"
+                    aria-hidden
+                  />
+                  <span>{t("loading")}</span>
+                </div>
+                {/* Indeterminate bar — IU fans out to PatSearch /docs + Tavily +
+                    Gemini, so duration is variable; a pulsing bar signals work
+                    in progress without a misleading percentage. */}
+                <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full w-full animate-pulse rounded-full bg-blue-400" />
+                </div>
+                <div className="text-xs text-slate-400">{t("loadingHint")}</div>
+              </div>
             )}
 
             {state.kind === "locked" && (
