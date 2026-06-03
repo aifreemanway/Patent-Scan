@@ -53,7 +53,9 @@ export async function extractSearchTerms(
     label: "extract",
     systemPrompt: SYSTEM_PROMPT,
     userText: description,
-    temperature: 0.2,
+    // ZERO temperature (greedy) for reproducible query terms run-to-run — same
+    // rationale as landscape-plan/facet-decompose (drift → unstable recall).
+    temperature: 0,
     thinkingBudget: 512,
     timeoutMs,
   });

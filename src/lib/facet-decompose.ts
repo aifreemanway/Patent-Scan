@@ -71,10 +71,12 @@ export async function decomposeFacets(
     label: "facet-decompose",
     systemPrompt: SYSTEM_PROMPT,
     userText: invention,
-    // Low temperature: facet phrasings must land on canonical, reliable wording
-    // run-to-run (the recall fix has to be reproducible). Diversity comes from
-    // the prompt's explicit per-grain instructions, not sampling randomness.
-    temperature: 0.1,
+    // ZERO temperature (greedy): facet phrasings must be REPRODUCIBLE run-to-run
+    // (the recall fix has to be deterministic). Each facet phrase becomes a sweep
+    // qn, so any drift swings a target's raw rank in its IPC class and flips
+    // recall through downstream cutoffs. Diversity comes from the prompt's
+    // explicit per-grain instructions, not sampling randomness.
+    temperature: 0,
     timeoutMs,
   });
 

@@ -136,11 +136,13 @@ export async function planLandscape(
     label: "landscape-plan",
     systemPrompt: SYSTEM_PROMPT,
     userText: topic,
-    // Low temperature: the de-anchored probes must land on canonical, reliable
-    // phrasing run-to-run (high temp drifts them into wordings that miss the
-    // analog within its own IPC class). Aspect diversity comes from the prompt's
-    // explicit per-facet instructions, not from sampling randomness.
-    temperature: 0.1,
+    // ZERO temperature (greedy): the de-anchored probes must be REPRODUCIBLE
+    // run-to-run. Even temp 0.1 drifts probe wording between runs, and since each
+    // probe is the qn of an IPC-class sweep, that drift swings a target analog's
+    // raw rank within its own class by 10+ positions — which every downstream
+    // top-K cutoff then turns into a run-to-run recall flip. Aspect diversity
+    // comes from the prompt's explicit per-facet instructions, not from sampling.
+    temperature: 0,
     thinkingBudget: 1024,
     timeoutMs,
   });
