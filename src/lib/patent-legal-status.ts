@@ -35,11 +35,20 @@ export type LegalStatus = {
   sourceUrl: string;
 };
 
-// In-memory module-level cache. Status changes ~1x/year (fee cycle), so a 14-day
-// TTL is safe and keeps a 400-patent landscape from re-fetching ФИПС every load.
-// Etap1 deliberately stays in-memory (no Upstash) — acceptable for this cadence;
-// a process restart simply re-warms it. Key = numeric RU number (string).
-const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+// In-memory module-level cache. STABLE statuses (действует / не действует /
+// истёк) change ~1x/year, so a 14-day TTL is safe and keeps a 400-patent
+// landscape from re-fetching ФИПС every load. TRANSITIONAL statuses (восстановим
+// = ФИПС "может прекратить" — a fee window in flux — and не определён) are
+// time-sensitive and can flip within days as a deadline passes, so they get a
+// short 1-day TTL: the cache never outlives the window (ba qgate 2026-06-03).
+// Etap1 deliberately stays in-memory (no Upstash); a restart re-warms it.
+const TTL_STABLE_MS = 14 * 24 * 60 * 60 * 1000;
+const TTL_TRANSITIONAL_MS = 24 * 60 * 60 * 1000;
+function ttlFor(state: LegalStatusState): number {
+  return state === "восстановим" || state === "не определён"
+    ? TTL_TRANSITIONAL_MS
+    : TTL_STABLE_MS;
+}
 const cache = new Map<string, { value: LegalStatus; expires: number }>();
 
 const FETCH_TIMEOUT_MS = 12_000;
@@ -225,7 +234,7 @@ export async function fetchRuLegalStatus(ruNumber: string): Promise<LegalStatus>
     clearTimeout(timer);
   }
 
-  cache.set(num, { value: result, expires: Date.now() + CACHE_TTL_MS });
+  cache.set(num, { value: result, expires: Date.now() + ttlFor(result.state) });
   return result;
 }
 

@@ -64,9 +64,15 @@ function pickCanonicalAssignee(patentees: string[]): string {
   const PERSON_RE = /^[A-ZА-ЯЁ][a-zа-яё]+( [A-ZА-ЯЁ]\.?)+( [A-ZА-ЯЁ][a-zа-яё]+)?$/;
   const candidates = patentees.filter((p) => !PERSON_RE.test(p));
   if (candidates.length === 0) return patentees[0];
-  const withMarker = candidates.find((p) => COMPANY_MARKERS.test(p));
+  // RU-facing product: ФИПС /docs returns BOTH the Cyrillic original
+  // (biblio.ru.patentee) and a Latin transliteration (biblio.en.patentee). The
+  // transliteration is longer, so the longest-fallback below would pick
+  // "OAO NIITKD" over "ОАО НИИТКД". Prefer the Cyrillic original when present.
+  const cyrillic = candidates.filter((p) => /[А-Яа-яЁё]/.test(p));
+  const pool = cyrillic.length > 0 ? cyrillic : candidates;
+  const withMarker = pool.find((p) => COMPANY_MARKERS.test(p));
   if (withMarker) return withMarker;
-  return candidates.reduce((longest, p) => (p.length > longest.length ? p : longest), candidates[0]);
+  return pool.reduce((longest, p) => (p.length > longest.length ? p : longest), pool[0]);
 }
 
 function dedupeNames(names: string[]): string[] {

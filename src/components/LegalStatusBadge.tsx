@@ -24,10 +24,27 @@ export function formatExtractedDate(iso: string): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
 }
 
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
+}
+
 export function LegalStatusBadge({ status }: { status: LegalStatus }) {
   const t = useTranslations("Report.legalStatus");
   const ui = LEGAL_STATUS_UI[status.state] ?? LEGAL_STATUS_UI["не определён"];
-  const caption = t("caption", { date: formatExtractedDate(status.extractedAt) });
+  // Anti-fab (Этап1 = mirror the registry, don't interpret): show ФИПС's VERBATIM
+  // status phrase as the label, NOT our coarse state word. e.g. ФИПС "может
+  // прекратить свое действие" must not be presented as the bare claim
+  // "восстановим" (ba qgate 2026-06-03 — that over-asserts restorability). The
+  // chip COLOR still reflects our mapping; the TEXT is the source's own words.
+  // Fall back to the state label only when ФИПС gave no phrase (не определён).
+  const verbatim = status.statusText?.trim();
+  const label = verbatim ? truncate(verbatim, 52) : t(ui.key);
+  const checkedOn = t("caption", { date: formatExtractedDate(status.extractedAt) });
+  const changed = status.lastChangeDate
+    ? t("sourceChanged", { date: status.lastChangeDate })
+    : "";
+  const caption = [checkedOn, changed].filter(Boolean).join(" · ");
+  const title = [verbatim, caption].filter(Boolean).join(" — ");
 
   return (
     <span className="inline-flex flex-col gap-0.5">
@@ -35,11 +52,11 @@ export function LegalStatusBadge({ status }: { status: LegalStatus }) {
         href={status.sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        title={caption}
+        title={title}
         className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium no-underline ${ui.chip}`}
       >
         <span aria-hidden>{ui.emoji}</span>
-        <span>{t(ui.key)}</span>
+        <span>{label}</span>
       </a>
       <span className="text-[10px] leading-tight text-slate-400">{caption}</span>
     </span>
