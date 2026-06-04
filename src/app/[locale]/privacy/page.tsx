@@ -2,7 +2,8 @@
 //
 // Юридически значимый документ, текст согласован с ap-ba
 // (legal/legal-gate-152fz-2026-05-28.md). Реквизиты подтверждены Vsevolod:
-// ИНН 773273461708 / ОГРНИП 318774600263547 / РКН №100282901.
+// ИНН 773273461708 / ОГРНИП 318774600263547 / РКН рег. № 77-26-552292
+// (см. единый источник src/lib/legal.ts — OPERATOR).
 //
 // Машинный перевод юр-текста на EN запрещён — для locale=en показываем
 // disclaimer + ссылку на RU-версию. Полная EN-версия — после native legal
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
     "Какие персональные данные обрабатывает Patent-Scan, на каких основаниях и каким третьим лицам передаются.",
 };
 
-const UPDATED_AT = "30 мая 2026";
+const UPDATED_AT = "4 июня 2026";
 
 export default async function PrivacyPage({
   params,
@@ -58,7 +59,7 @@ export default async function PrivacyPage({
               <br />
               ОГРНИП: 318774600263547
               <br />
-              Регистрация в Реестре операторов ПДн Роскомнадзора: №100282901
+              Регистрация в Реестре операторов ПДн Роскомнадзора: рег. № 77-26-552292
               <br />
               Email для обращений по ПДн:{" "}
               <a className="underline" href="mailto:support@patent-scan.com">
@@ -78,7 +79,7 @@ export default async function PrivacyPage({
               </li>
               <li>
                 <strong>Cookies / данные сессии</strong> — для поддержания
-                авторизованного сеанса (Supabase).
+                авторизованного сеанса.
               </li>
               <li>
                 <strong>Тексты описаний изобретений и ответы на уточняющие
@@ -124,36 +125,20 @@ export default async function PrivacyPage({
 
           <Section title="5. Передача третьим лицам и трансграничная передача">
             <p>
-              Для работы Сервиса данные обрабатываются следующими поставщиками:
+              Сервер и персональные данные пользователей Сервиса (email,
+              идентификаторы аккаунта, IP-адрес) размещаются и обрабатываются на
+              территории Российской Федерации. Трансграничная передача
+              персональных данных не осуществляется.
             </p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-slate-300 bg-slate-50 text-left">
-                    <th className="p-2 font-semibold">Поставщик</th>
-                    <th className="p-2 font-semibold">Что передаётся</th>
-                    <th className="p-2 font-semibold">Где</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <Row p="Google (Gemini API)" d="тексты описаний и сгенерированные запросы — для AI-анализа" w="США" />
-                  <Row p="Supabase" d="аккаунты и сессии (email, идентификаторы)" w="ЕС (Франкфурт)" />
-                  <Row p="Роспатент (PatSearch)" d="обработанные поисковые запросы" w="РФ" />
-                  <Row p="Tavily" d="веб-поисковые запросы" w="США" />
-                  <Row p="Cloudflare (Turnstile)" d="IP-адрес и заголовки запроса — анти-бот" w="глобально" />
-                  <Row p="Upstash (Redis)" d="счётчики частоты запросов (хэш IP)" w="ЕС/США" />
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3">
-              <strong>Хостинг инфраструктуры:</strong> Timeweb VPS (РФ, Москва) —
-              продакшен и бэкенд. Российский хостинг снимает вопрос
-              трансграничной передачи для инфраструктурного слоя.
+            <p>
+              Для AI-анализа во внешние сервисы передаются только обезличенные
+              технические описания изобретений и сформированные на их основе
+              поисковые запросы — без персональных данных пользователя.
             </p>
-            <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">
-              ⚠ Трансграничная передача в США и иные страны осуществляется через
-              AI-сервисы (Google Gemini, Tavily) и глобальную CDN (Cloudflare) —
-              в объёме, необходимом для оказания услуги.
+            <p>
+              Обработчики, привлекаемые для оказания услуги, действуют по
+              поручению Оператора и в объёме, необходимом для предоставления
+              Сервиса.
             </p>
           </Section>
 
@@ -228,9 +213,15 @@ export default async function PrivacyPage({
 
           <Section title="10. Cookies">
             <p>
-              Сервис использует только технически необходимые cookies для
-              поддержания сессии. Маркетинговых и трекинговых cookies в текущей
-              бете нет.
+              Сервис использует технически необходимые cookies (для поддержания
+              авторизованного сеанса) и аналитические cookies сервиса
+              веб-аналитики — для измерения посещаемости и улучшения Сервиса.
+              Данные веб-аналитики обрабатываются на территории Российской
+              Федерации. Рекламных cookies Сервис не использует.
+            </p>
+            <p className="mt-2">
+              Продолжая пользоваться Сервисом, вы соглашаетесь на использование
+              cookies. Отключить cookies можно в настройках вашего браузера.
             </p>
           </Section>
 
@@ -257,16 +248,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
       <div className="space-y-2 text-slate-700">{children}</div>
     </section>
-  );
-}
-
-function Row({ p, d, w }: { p: string; d: string; w: string }) {
-  return (
-    <tr className="border-b border-slate-200">
-      <td className="p-2 align-top">{p}</td>
-      <td className="p-2 align-top">{d}</td>
-      <td className="p-2 align-top">{w}</td>
-    </tr>
   );
 }
 
