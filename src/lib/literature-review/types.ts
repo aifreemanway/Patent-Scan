@@ -37,6 +37,15 @@ export type LitReviewParams = {
   attachments?: string[];
 };
 
+/**
+ * How much of the source we could actually read.
+ * - `open`          — full text reachable (patent page, OA paper, web page, wiki).
+ * - `abstract_only` — only an abstract/annotation was available (paywalled paper).
+ * - `unknown`       — no reliable access signal; do NOT claim full text.
+ * NORD feedback: closed sources were cited from the abstract — mark it honestly.
+ */
+export type LitReviewAccessLevel = "open" | "abstract_only" | "unknown";
+
 export type LitReviewSource = {
   /** Numeric reference index in the final report's §5 source list. */
   ref: number;
@@ -44,6 +53,8 @@ export type LitReviewSource = {
   url: string;
   /** ISO date when the URL was last reachable; null = archived/broken. */
   reachedAt: string | null;
+  /** Access depth we actually had to the source (anti-fab: unknown ≠ full text). */
+  accessLevel: LitReviewAccessLevel;
   /** Origin so a reader knows the provenance (PatSearch / Crossref / web / wiki). */
   provenance:
     | "patsearch"
@@ -67,6 +78,7 @@ export type LitReviewPatentHit = {
   country: string;
   abstract?: string;
   url: string;
+  accessLevel?: LitReviewAccessLevel;
 };
 
 export type LitReviewScholarHit = {
@@ -77,6 +89,7 @@ export type LitReviewScholarHit = {
   venue?: string;
   url: string;
   abstract?: string;
+  accessLevel?: LitReviewAccessLevel;
 };
 
 export type LitReviewWebHit = {
@@ -84,6 +97,7 @@ export type LitReviewWebHit = {
   url: string;
   snippet?: string;
   publishedAt?: string;
+  accessLevel?: LitReviewAccessLevel;
 };
 
 export type LitReviewHarvest = {

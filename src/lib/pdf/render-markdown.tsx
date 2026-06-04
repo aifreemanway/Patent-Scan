@@ -15,6 +15,7 @@
 // PDF is self-contained.
 
 import * as React from "react";
+import { join } from "path";
 import {
   Document,
   Page,
@@ -28,29 +29,22 @@ import {
 import { marked, type Tokens } from "marked";
 
 // ── Font registration ────────────────────────────────────────
-// Noto Sans Light + Regular + Bold + Italic from Google Fonts CDN.
-// React PDF resolves URLs at render time (renderToBuffer awaits font
-// load). For full offline render later, mirror into /public/fonts.
-// URLs fetched live from Google Fonts CSS endpoint at module-load is fragile
-// (CSS rotates filenames per version bump). Hardcoded v42 — bump if Google
-// rotates. Italic uses 400-normal + style hint (React PDF synthesizes italic
-// when no italic font is registered; acceptable for emphasis runs).
+// Noto Sans Regular + Bold + Italic (full Cyrillic+Latin), bundled LOCALLY in
+// web/public/fonts/. Server-side render only (worker + scripts; cwd = web/).
+//
+// Why local, not the Google Fonts CDN: React PDF's URL-based font load is an
+// async fetch the renderer races against — if it isn't resolved in time (or the
+// VPS can't reach gstatic) glyph metrics come back undefined and pdfkit throws
+// `unsupported number: <NaN-ish>` while building the text transform matrix.
+// Reading the TTFs off disk is synchronous and reliable. (TTFs are the v42 Noto
+// Sans weights, mirrored once via gstatic — re-download if typography changes.)
+const FONT_DIR = join(process.cwd(), "public", "fonts");
 Font.register({
   family: "NotoSans",
   fonts: [
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A99d.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyAaBN9d.ttf",
-      fontWeight: 700,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0kIpQlx3QUlC5A4PNr4C5OaxRsfNNlKbCePevHtVtX57DGjDU1QDce6Vc.ttf",
-      fontWeight: 400,
-      fontStyle: "italic",
-    },
+    { src: join(FONT_DIR, "NotoSans-Regular.ttf"), fontWeight: 400 },
+    { src: join(FONT_DIR, "NotoSans-Bold.ttf"), fontWeight: 700 },
+    { src: join(FONT_DIR, "NotoSans-Italic.ttf"), fontWeight: 400, fontStyle: "italic" },
   ],
 });
 
