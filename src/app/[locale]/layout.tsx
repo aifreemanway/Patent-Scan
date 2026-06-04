@@ -7,6 +7,7 @@ import { JetBrains_Mono } from "next/font/google";
 import { routing } from "@/i18n/routing";
 import { Footer } from "@/components/Footer";
 import { YandexMetrika } from "@/components/YandexMetrika";
+import { CookieConsent } from "@/components/CookieConsent";
 import "../globals.css";
 
 // Gilroy — основной (display + body) шрифт лендинга v7. Self-host через
@@ -94,6 +95,7 @@ export default async function LocaleLayout({
         <NextIntlClientProvider>
           {children}
           <Footer />
+          <CookieConsent />
         </NextIntlClientProvider>
       </body>
     </html>
