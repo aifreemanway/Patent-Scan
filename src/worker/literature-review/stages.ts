@@ -39,6 +39,7 @@ import type {
   LitReviewHarvest,
   LitReviewSource,
   LitReviewWebHit,
+  LitReviewAccessLevel,
 } from "@/lib/literature-review/types";
 
 // ─────────────────────────────────────────────────────────────
@@ -625,7 +626,8 @@ export function harvestToSources(harvest: LitReviewHarvest): {
     title: string,
     url: string,
     provenance: LitReviewSource["provenance"],
-    snippet?: string
+    snippet?: string,
+    accessLevel: LitReviewAccessLevel = "unknown"
   ) => {
     if (!url || seenUrl.has(url)) return;
     if (isBlacklistedUrl(url)) {
@@ -638,23 +640,24 @@ export function harvestToSources(harvest: LitReviewHarvest): {
       title: title.slice(0, 300),
       url,
       reachedAt: null, // filled by stage 7
+      accessLevel,
       provenance,
     });
     if (snippet) snippets.set(url, snippet);
   };
 
   for (const p of harvest.patents) {
-    push(`${p.id} — ${p.title || "(без названия)"} (${p.country} ${p.year})`, p.url, "patsearch", p.abstract);
+    push(`${p.id} — ${p.title || "(без названия)"} (${p.country} ${p.year})`, p.url, "patsearch", p.abstract, p.accessLevel ?? "open");
   }
   for (const s of harvest.scholar) {
     const authors = s.authors.slice(0, 3).join(", ");
-    push(`${authors ? authors + ". " : ""}${s.title}${s.year ? " (" + s.year + ")" : ""}`, s.url, s.doi ? "crossref" : "openalex", s.abstract);
+    push(`${authors ? authors + ". " : ""}${s.title}${s.year ? " (" + s.year + ")" : ""}`, s.url, s.doi ? "crossref" : "openalex", s.abstract, s.accessLevel ?? "unknown");
   }
   for (const w of harvest.web) {
-    push(w.title, w.url, "tavily", w.snippet);
+    push(w.title, w.url, "tavily", w.snippet, w.accessLevel ?? "open");
   }
   for (const w of harvest.wiki) {
-    push(w.title, w.url, "wikipedia", w.snippet);
+    push(w.title, w.url, "wikipedia", w.snippet, w.accessLevel ?? "open");
   }
 
   return { sources, snippets, blacklistedCount };

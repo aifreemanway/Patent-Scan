@@ -15,6 +15,7 @@
 // PDF is self-contained.
 
 import * as React from "react";
+import { join } from "path";
 import {
   Document,
   Page,
@@ -28,29 +29,22 @@ import {
 import { marked, type Tokens } from "marked";
 
 // ── Font registration ────────────────────────────────────────
-// Noto Sans Light + Regular + Bold + Italic from Google Fonts CDN.
-// React PDF resolves URLs at render time (renderToBuffer awaits font
-// load). For full offline render later, mirror into /public/fonts.
-// URLs fetched live from Google Fonts CSS endpoint at module-load is fragile
-// (CSS rotates filenames per version bump). Hardcoded v42 — bump if Google
-// rotates. Italic uses 400-normal + style hint (React PDF synthesizes italic
-// when no italic font is registered; acceptable for emphasis runs).
+// Noto Sans Regular + Bold + Italic (full Cyrillic+Latin), bundled LOCALLY in
+// web/public/fonts/. Server-side render only (worker + scripts; cwd = web/).
+//
+// Why local, not the Google Fonts CDN: React PDF's URL-based font load is an
+// async fetch the renderer races against — if it isn't resolved in time (or the
+// VPS can't reach gstatic) glyph metrics come back undefined and pdfkit throws
+// `unsupported number: <NaN-ish>` while building the text transform matrix.
+// Reading the TTFs off disk is synchronous and reliable. (TTFs are the v42 Noto
+// Sans weights, mirrored once via gstatic — re-download if typography changes.)
+const FONT_DIR = join(process.cwd(), "public", "fonts");
 Font.register({
   family: "NotoSans",
   fonts: [
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyD9A99d.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0mIpQlx3QUlC5A4PNB6Ryti20_6n1iPHjcz6L1SoM-jCpoiyAaBN9d.ttf",
-      fontWeight: 700,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/notosans/v42/o-0kIpQlx3QUlC5A4PNr4C5OaxRsfNNlKbCePevHtVtX57DGjDU1QDce6Vc.ttf",
-      fontWeight: 400,
-      fontStyle: "italic",
-    },
+    { src: join(FONT_DIR, "NotoSans-Regular.ttf"), fontWeight: 400 },
+    { src: join(FONT_DIR, "NotoSans-Bold.ttf"), fontWeight: 700 },
+    { src: join(FONT_DIR, "NotoSans-Italic.ttf"), fontWeight: 400, fontStyle: "italic" },
   ],
 });
 
@@ -425,6 +419,64 @@ function splitBySection(tokens: Tokens.Generic[]): Tokens.Generic[][] {
   return sections;
 }
 
+// Max list items rendered on a single <Page>. A list longer than this is
+// split into multiple <Page>s (see paginateSection).
+//
+// Why: splitBySection keeps each section on its own <Page wrap>, but a single
+// section can still hold a list that wraps across ~15+ pages (e.g. the Sb₂O₃
+// «Источники» section = one 171-item ordered list). With a `fixed` footer that
+// is re-laid-out per page, React-PDF's page-break math for that one tall
+// wrapping block overflows to NaN and pdfkit throws
+// «unsupported number: -3.87e+22» while building a text transform.
+//
+// Minimal repro confirmed: same 171-item list renders fine WITHOUT a footer
+// and fails WITH one; chunking the list across multiple <Page>s fixes it while
+// the footer stays. Breaking the long URL tokens did NOT help (React-PDF
+// ignores ZWSP); only bounding per-page wrap depth does. 50 keeps each page's
+// block shallow with margin (140 full items still rendered; 171 did not).
+const MAX_LIST_ITEMS_PER_PAGE = 50;
+
+// Split one section's tokens into page-sized groups. Sections without an
+// oversized list pass through unchanged (single group → single <Page>, no
+// behaviour change for normal reports). A list longer than
+// MAX_LIST_ITEMS_PER_PAGE is sliced into multiple list tokens, each on its own
+// page, with `start` carried forward so ordered numbering stays continuous.
+function paginateSection(section: Tokens.Generic[]): Tokens.Generic[][] {
+  const hasBigList = section.some(
+    (t) => t.type === "list" && (t as Tokens.List).items.length > MAX_LIST_ITEMS_PER_PAGE
+  );
+  if (!hasBigList) return [section];
+
+  const pages: Tokens.Generic[][] = [];
+  let current: Tokens.Generic[] = [];
+  for (const t of section) {
+    if (t.type === "list" && (t as Tokens.List).items.length > MAX_LIST_ITEMS_PER_PAGE) {
+      const list = t as Tokens.List;
+      const startNum = typeof list.start === "number" ? list.start : 1;
+      for (let i = 0; i < list.items.length; i += MAX_LIST_ITEMS_PER_PAGE) {
+        const slice = list.items.slice(i, i + MAX_LIST_ITEMS_PER_PAGE);
+        const listChunk: Tokens.List = {
+          ...list,
+          items: slice,
+          start: list.ordered ? startNum + i : list.start,
+        };
+        // First chunk continues the current page (keeps the section heading
+        // with its first items); subsequent chunks start a fresh page.
+        if (i === 0) {
+          current.push(listChunk);
+        } else {
+          pages.push(current);
+          current = [listChunk];
+        }
+      }
+    } else {
+      current.push(t);
+    }
+  }
+  if (current.length > 0) pages.push(current);
+  return pages;
+}
+
 // ── Public renderer ──────────────────────────────────────────
 // Return type pinned to ReactElement<DocumentProps> so renderToBuffer can
 // accept it without a cast (PR #70 deploy failed on this: TS rejected the
@@ -438,9 +490,13 @@ export function MarkdownDocument({
 }): React.ReactElement<DocumentProps> {
   const tokens = marked.lexer(markdown);
   const sections = splitBySection(tokens);
+  // Each section becomes one or more page-groups: normally one, but a section
+  // with an oversized list is paginated so no single <Page> wraps too deep
+  // (which overflows React-PDF's footer-aware page-break math → NaN).
+  const pageGroups = sections.flatMap(paginateSection);
   return (
     <Document>
-      {sections.map((sectionTokens, i) => (
+      {pageGroups.map((sectionTokens, i) => (
         <Page key={i} size="A4" style={styles.page} wrap>
           {renderBlocks(sectionTokens, { footerText })}
           {footerText && (

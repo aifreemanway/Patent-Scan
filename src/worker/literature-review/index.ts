@@ -31,6 +31,7 @@ import {
   applyRelevanceFilter,
 } from "./stages";
 import { renderReportMarkdown } from "./markdown";
+import { renderReportPdf } from "./render-pdf";
 import {
   sendReadyEmail,
   sendErrorEmail,
@@ -146,17 +147,22 @@ async function getUserEmail(admin: SupabaseClient, userId: string): Promise<stri
 async function uploadReport(
   admin: SupabaseClient,
   requestId: string,
-  markdown: string
+  body: string | Buffer,
+  ext: string,
+  contentType: string
 ): Promise<string | null> {
-  const path = `${requestId}.md`;
+  const path = `${requestId}.${ext}`;
+  // Normalize to a BlobPart: a Node Buffer is backed by ArrayBufferLike which TS
+  // won't accept as BlobPart directly, so copy into a plain Uint8Array.
+  const part: BlobPart = typeof body === "string" ? body : new Uint8Array(body);
   const { error: uploadErr } = await admin.storage
     .from(STORAGE_BUCKET)
-    .upload(path, new Blob([markdown], { type: "text/markdown; charset=utf-8" }), {
-      contentType: "text/markdown; charset=utf-8",
+    .upload(path, new Blob([part], { type: contentType }), {
+      contentType,
       upsert: true,
     });
   if (uploadErr) {
-    console.error("[worker/upload] failed", { requestId, message: uploadErr.message });
+    console.error("[worker/upload] failed", { requestId, ext, message: uploadErr.message });
     return null;
   }
   const { data: signed } = await admin.storage
@@ -236,10 +242,24 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
   await updateStage(admin, row.id, 7, 80);
   report.sources = await stage7VerifySources(report.sources);
 
-  // Stage 9 — render + upload
+  // Stage 9 — render + upload. Deliver a real PDF (the headline artefact);
+  // also keep the .md alongside for support / re-render / ba head-to-head diff.
+  // If the PDF render throws (e.g. font fetch fails on the VPS), degrade to the
+  // markdown artefact so a paid review never hard-errors.
   await updateStage(admin, row.id, 9, 90);
   const md = renderReportMarkdown(report);
-  const reportUrl = await uploadReport(admin, row.id, md);
+  let reportUrl: string | null;
+  try {
+    const pdf = await renderReportPdf(md);
+    reportUrl = await uploadReport(admin, row.id, pdf, "pdf", "application/pdf");
+    await uploadReport(admin, row.id, md, "md", "text/markdown; charset=utf-8");
+  } catch (e) {
+    console.error("[worker/pdf] render failed — degrading to markdown", {
+      id: row.id,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    reportUrl = await uploadReport(admin, row.id, md, "md", "text/markdown; charset=utf-8");
+  }
 
   // Persist final state
   await admin

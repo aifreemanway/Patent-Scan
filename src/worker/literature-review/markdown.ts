@@ -98,7 +98,10 @@ export function renderReportMarkdown(report: LitReviewReport): string {
   lines.push("");
   for (const s of report.sources) {
     const archived = s.reachedAt === null ? " *(на момент проверки недоступен)*" : "";
-    lines.push(`${s.ref}. ${s.title} — ${s.url}${archived}`);
+    // Honest access marking (NORD feedback): flag paywalled sources we could
+    // only read in abstract. open/unknown stay unmarked — never claim full text.
+    const access = s.accessLevel === "abstract_only" ? " *(только аннотация)*" : "";
+    lines.push(`${s.ref}. ${s.title} — ${s.url}${archived}${access}`);
   }
   lines.push("");
 

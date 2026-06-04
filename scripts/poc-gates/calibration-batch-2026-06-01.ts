@@ -26,8 +26,11 @@ import { renderReportMarkdown } from "../../src/worker/literature-review/markdow
 import { renderReportHtml } from "../../src/lib/literature-review/render-html";
 import type { LitReviewParams } from "../../src/lib/literature-review/types";
 
+// Run date is parameterized so the banner + filenames don't go stale on reruns.
+// Override with CALIB_DATE=YYYY-MM-DD; defaults to today.
+const RUN_DATE = process.env.CALIB_DATE ?? new Date().toISOString().slice(0, 10);
 const CALIB_BANNER =
-  "Калибровочный прогон пайплайна (v2.2) — сырой автоматический вывод, 2026-06-01.";
+  `Калибровочный прогон пайплайна (v2.2) — сырой автоматический вывод, ${RUN_DATE}.`;
 
 // Themes verbatim from the spec §2 (as a client would type them).
 const THEMES: Array<{ slug: string; topic: string }> = [
@@ -119,8 +122,8 @@ async function runOne(
   const md = renderReportMarkdown(report);
   const html = renderReportHtml(md, report.title || theme.topic, { banner: CALIB_BANNER });
 
-  const mdPath = resolve(`${OUT_DIR}/sample-${theme.slug}-2026-06-01-calib.md`);
-  const htmlPath = resolve(`${OUT_DIR}/sample-${theme.slug}-2026-06-01-calib.html`);
+  const mdPath = resolve(`${OUT_DIR}/sample-${theme.slug}-${RUN_DATE}-calib.md`);
+  const htmlPath = resolve(`${OUT_DIR}/sample-${theme.slug}-${RUN_DATE}-calib.html`);
   await mkdir(dirname(mdPath), { recursive: true });
   await writeFile(mdPath, md, "utf-8");
   await writeFile(htmlPath, html, "utf-8");

@@ -11,11 +11,13 @@
 // the current sources are enough for the Sb₂O3 case.
 
 import { PATSEARCH_URL, TAVILY_URL } from "@/lib/config";
+import { buildUrl, countryFromId } from "@/lib/patsearch-normalize";
 import type {
   LitReviewPatentHit,
   LitReviewScholarHit,
   LitReviewWebHit,
   LitReviewRegion,
+  LitReviewAccessLevel,
 } from "./types";
 
 // ── Region → PatSearch datasets mapping ────────────────────────
@@ -282,7 +284,13 @@ export async function harvestPatSearch(opts: {
         year,
         country,
         abstract: pickLang(d.snippet?.description) || undefined,
-        url: `https://searchplatform.rospatent.gov.ru/patent/${encodeURIComponent(id)}`,
+        // Real, clickable patent page: RU → ФИПС registers-doc-view, foreign →
+        // Google Patents. The old `searchplatform.rospatent.gov.ru/patent/{id}`
+        // built a non-existent page (NORD feedback). country may be empty for
+        // ST96 records, so fall back to the country code embedded in the id.
+        url: buildUrl(id, (country || countryFromId(id)).toUpperCase()),
+        // Patent full text is openly readable (ФИПС / Google Patents).
+        accessLevel: "open" as const,
       }];
     });
   } catch (e) {
@@ -364,6 +372,9 @@ export async function harvestCrossref(opts: {
         venue: it["container-title"]?.[0],
         url,
         abstract: it.abstract,
+        // Crossref carries no reliable open-access flag in our select set →
+        // don't claim full text. Anti-fab: unknown, never inferred from abstract.
+        accessLevel: "unknown" as LitReviewAccessLevel,
       }];
     });
   } catch (e) {
@@ -389,6 +400,7 @@ type OpenAlexWork = {
   authorships?: OpenAlexAuthorship[];
   abstract_inverted_index?: Record<string, number[]>;
   primary_location?: OpenAlexLocation;
+  open_access?: { is_oa?: boolean };
 };
 
 function reconstructAbstract(idx: Record<string, number[]> | undefined): string | undefined {
@@ -451,6 +463,11 @@ export async function harvestOpenAlex(opts: {
         venue: it.primary_location?.source?.display_name,
         url,
         abstract,
+        // OpenAlex flags open-access works; non-OA papers expose only the
+        // (reconstructed) abstract → mark honestly so §5 says so.
+        accessLevel: (it.open_access?.is_oa
+          ? "open"
+          : "abstract_only") as LitReviewAccessLevel,
       }];
     });
   } catch (e) {
@@ -498,6 +515,8 @@ export async function harvestTavily(opts: {
         url: r.url,
         snippet: r.content?.slice(0, 400),
         publishedAt: r.published_date,
+        // Web page fetched in full by Tavily.
+        accessLevel: "open" as LitReviewAccessLevel,
       }];
     });
   } catch (e) {
@@ -544,6 +563,8 @@ export async function harvestWikipedia(query: string): Promise<LitReviewWebHit[]
         title: p.title,
         url: `https://ru.wikipedia.org/?curid=${p.id}`,
         snippet: p.description || p.excerpt,
+        // Public full article.
+        accessLevel: "open" as LitReviewAccessLevel,
       }];
     });
   } catch (e) {

@@ -241,6 +241,9 @@ function registerSource(
     title: title.slice(0, 300),
     url,
     reachedAt: null, // stage 7 verifies later
+    // All augmentation resolvers (infobox / corp site / industry news / SEC /
+    // HKEX) read full public documents → open access.
+    accessLevel: "open",
     provenance,
   });
   ctx.newRefsByUrl.set(url, ref);
