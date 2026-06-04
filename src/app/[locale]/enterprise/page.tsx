@@ -78,9 +78,12 @@ export default async function EnterprisePage({
               </h1>
               <p className="hero-sub">{t("hero.sub")}</p>
               <p className="ent-hero-promise">
-                {/* Promise contains an <em>-wrapped phrase; render as plain text since
-                    the original markup uses inline styling. Keeps anti-fab rule. */}
-                {t("hero.promise")}
+                {/* Строка содержит <em>…</em> → рендерим через t.rich с обработчиком
+                    тега (next-intl парсит теги при форматировании; обычный t()
+                    бросает FORMATTING_ERROR). .em = синий акцент v7. */}
+                {t.rich("hero.promise", {
+                  em: (chunks) => <span className="em">{chunks}</span>,
+                })}
               </p>
               <div className="ent-cta-row">
                 <TrackedLink
