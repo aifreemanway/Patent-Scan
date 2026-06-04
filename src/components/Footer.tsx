@@ -1,47 +1,72 @@
-// Site-wide footer. Renders operator reqs (ИНН/ОГРНИП per ЮKassa requirement),
-// the РКН-operator-number disclosure required by 152-ФЗ, and links to /privacy
-// + /terms (which are linked from the login consent checkbox as well).
+// Site-wide footer (v7 design). Rendered by the locale layout on every page.
+// Wraps itself in `.lp` + imports landing.css so the v7 footer styles (scoped
+// under .lp) apply even on app pages that aren't .lp-wrapped.
 //
-// Home address is intentionally NOT published (per legal spec — ИП can register
-// at home address, publishing it would expose Vsevolod personally).
+// 152-ФЗ: operator legal line (ИП / ИНН / ОГРНИП / РКН) stays in the footer AND
+// has a dedicated /requisites page. All values come from lib/legal (OPERATOR) —
+// single source of truth (the РКН number previously drifted across two hardcoded
+// spots; never again). Home address intentionally NOT published.
+//
+// Links point only to routes that exist — О нас / Партнёрам / Контакты /
+// Безопасность from the mockup are dropped (no pages → would 404); contact is
+// the support email in the bottom bar.
 
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { TrackedLink } from "@/components/TrackedLink";
+import { OPERATOR } from "@/lib/legal";
+import "../app/[locale]/landing.css";
 
 export function Footer() {
   const t = useTranslations("Footer");
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-slate-50">
-      <div className="mx-auto max-w-5xl px-6 py-8 text-xs leading-relaxed text-slate-600">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <p className="font-medium text-slate-800">{t("operatorTitle")}</p>
-            <p>{t("operatorName")}</p>
-            <p>{t("inn")}: 773273461708 · {t("ogrnip")}: 318774600263547</p>
-            <p>{t("rkn")}: №100282901</p>
+    <div className="lp">
+      <footer>
+        <div className="container">
+          <div className="foot-grid foot-grid-3">
+            <div className="foot-col foot-brand">
+              <Link href="/" className="logo">
+                <span className="logo-mark">◄</span>
+                <span className="logo-text">
+                  Патент<span className="dot">·</span>Скан
+                </span>
+              </Link>
+              <p>{t("tagline")}</p>
+              <p className="foot-legal">
+                {t("operatorTitle")}: {OPERATOR.name} · {t("inn")}{" "}
+                {OPERATOR.inn} · {t("ogrnip")} {OPERATOR.ogrnip} · {t("rkn")}:
+                рег. № {OPERATOR.rknRegNumber}
+              </p>
+            </div>
+
+            <div className="foot-col">
+              <h5>{t("products")}</h5>
+              <Link href="/search">{t("search")}</Link>
+              <Link href="/login?intent=landscape">{t("landscape")}</Link>
+              <Link href="/login?intent=screening">{t("screening")}</Link>
+              <TrackedLink href="/pricing" goal="pricing_view">
+                {t("pricing")}
+              </TrackedLink>
+            </div>
+
+            <div className="foot-col">
+              <h5>{t("documents")}</h5>
+              <Link href="/requisites">{t("requisites")}</Link>
+              <Link href="/privacy">{t("privacy")}</Link>
+              <Link href="/terms">{t("terms")}</Link>
+            </div>
           </div>
-          <nav className="flex flex-wrap gap-x-4 gap-y-1">
-            <Link href="/pricing" className="hover:text-slate-900 hover:underline">
-              {t("pricing")}
-            </Link>
-            <Link href="/enterprise" className="hover:text-slate-900 hover:underline">
-              {t("enterprise")}
-            </Link>
-            <Link href="/privacy" className="hover:text-slate-900 hover:underline">
-              {t("privacy")}
-            </Link>
-            <Link href="/terms" className="hover:text-slate-900 hover:underline">
-              {t("terms")}
-            </Link>
-            <a
-              href="mailto:support@patent-scan.com"
-              className="hover:text-slate-900 hover:underline"
-            >
-              support@patent-scan.com
-            </a>
-          </nav>
+
+          <div className="foot-bot">
+            <div>© 2026 ПатентСкан</div>
+            <div>
+              <a href={`mailto:${OPERATOR.supportEmail}`}>
+                {OPERATOR.supportEmail}
+              </a>
+            </div>
+          </div>
         </div>
-      </div>
-    </footer>
+      </footer>
+    </div>
   );
 }

@@ -1,15 +1,16 @@
-// Public /pricing — tariffs + one-off reports (CANON + ТЗ). Accessible without
-// login (shareable for the WTP/ОС round, SEO, landing CTA). The actual cards,
-// prices, copy and CTA logic live in <PricingView /> so the ЛК mirror reuses it.
+// Public /pricing — v7 design (PRESERVE из макета v7-pricing.html).
 //
-// Pre-launch: CTAs route to the заявка flow, NOT a checkout (BILLING_LIVE=false).
-// Premium-track + addons gated by flags in lib/pricing (hidden now).
+// Обёртка: .lp + <SiteNav /> внутри. Footer — рендерит layout (общий), здесь
+// НЕ дублируем (исправляет задвоение Footer'а). <Header /> тоже убран.
+//
+// Цены / тарифы / CTA — всё в <PricingV7> (клиентский компонент).
+// PricingView.tsx НЕ тронут — он живёт для ЛК-зеркала (/account/billing).
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import { PricingView } from "@/components/PricingView";
+import { SiteNav } from "@/components/SiteNav";
+import { PricingV7 } from "@/components/PricingV7";
+import "../landing.css";
 
 export async function generateMetadata({
   params,
@@ -33,14 +34,12 @@ export default async function PricingPage({
   setRequestLocale(locale);
 
   return (
-    <>
-      <Header />
-      <main className="flex flex-1 flex-col">
-        <div className="mx-auto w-full max-w-6xl px-6 py-16">
-          <PricingView locale={locale} />
-        </div>
-      </main>
-      <Footer />
-    </>
+    <div className="lp">
+      <SiteNav />
+      {/* PricingV7 is a client component — renders the full v7 pricing UI with
+          toggle state. It also wraps its content in .lp class sections so the
+          nav styles from SiteNav apply correctly. */}
+      <PricingV7 />
+    </div>
   );
 }

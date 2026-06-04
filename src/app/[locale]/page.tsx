@@ -1,9 +1,34 @@
 import { setRequestLocale, getTranslations } from "next-intl/server";
-import { Link } from "@/i18n/navigation";
+import { TrackedLink } from "@/components/TrackedLink";
+import { SiteNav } from "@/components/SiteNav";
+import { FaqItem } from "@/components/FaqItem";
+import { LandingPricing } from "@/components/LandingPricing";
+import "./landing.css";
+
+// Лендинг v7 (PRESERVE из макета v7-index-C). Разметка/стили один-в-один,
+// «живыми» сделаны: ссылки (реальные роуты), цели Метрики (reachGoal на 13 CTA),
+// блок подписок (цены из lib/pricing). Стили скоуплены под .lp (landing.css).
+// Footer рендерит layout (общий) — здесь не дублируем.
 
 type Step = { n: string; title: string; body: string };
-type Item = { title: string; body: string };
-type Source = { name: string; meta: string };
+type Tile = { tag: string; h3: string; tagline: string; desc: string; bullets: string[]; who: string; cta: string };
+type Cell = { num: string; h4: string; p: string };
+type MatrixRow = { task: string; cells: { t: string; k: "yes" | "no" | "partial" }[] };
+type SourceItem = { name: string; sub: string };
+type Faq = { q: string; a: string };
+type HeroRow = { label: string; value: string };
+
+const ARROW = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const TILES: { key: "search" | "landscape" | "screening"; free?: boolean; href: string; goal: "tile_search_cta" | "tile_landscape_click" | "tile_screening_click" }[] = [
+  { key: "search", free: true, href: "/search", goal: "tile_search_cta" },
+  { key: "landscape", href: "/login?intent=landscape", goal: "tile_landscape_click" },
+  { key: "screening", href: "/login?intent=screening", goal: "tile_screening_click" },
+];
 
 export default async function LandingPage({
   params,
@@ -13,135 +38,252 @@ export default async function LandingPage({
   const { locale } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("Landing");
-  const tc = await getTranslations("Common");
 
   const steps = t.raw("how.steps") as Step[];
-  const items = t.raw("get.items") as Item[];
-  const sources = t.raw("sources.items") as Source[];
+  const tiles = t.raw("tiles.items") as Record<string, Tile>;
+  const cells = t.raw("trust.cells") as Cell[];
+  const rows = t.raw("matrix.rows") as MatrixRow[];
+  const sources = t.raw("sources.items") as SourceItem[];
+  const faqs = t.raw("faq.items") as Faq[];
+  const heroRows = t.raw("hero.card.rows") as HeroRow[];
+  const pills = t.raw("hero.pills") as string[];
 
   return (
-    <main className="flex flex-1 flex-col">
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-white">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32">
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
-            {t("hero.badge")}
-          </span>
-          <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-            {t("hero.title")}
-          </h1>
-          <p className="max-w-2xl text-lg text-slate-600">
-            {t("hero.subtitle")}
-          </p>
-          <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row">
-            <Link
-              href="/search"
-              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
-            >
-              {tc("cta")}
-            </Link>
-            <Link
-              href="/landscape"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
-            >
-              {tc("ctaLandscape")}
-            </Link>
-          </div>
-          <p className="max-w-xl text-xs text-slate-500">
-            {t("hero.disclaimer")}
-          </p>
-        </div>
-      </section>
+    <div className="lp">
+      {/* NAV */}
+      <SiteNav />
 
-      {/* How it works */}
-      <section className="border-t border-slate-100 bg-white">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            {t("how.title")}
-          </h2>
-          <ol className="mt-12 grid gap-6 sm:grid-cols-3">
-            {steps.map((s) => (
-              <li
-                key={s.n}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-              >
-                <div className="text-sm font-semibold text-slate-400">
-                  {s.n}
+      {/* HERO */}
+      <section className="hero">
+        <div className="container">
+          <div className="hero-inner">
+            <div>
+              <span className="eyebrow">
+                <span className="live"></span>
+                {t("hero.eyebrow")}
+              </span>
+              <h1 className="hero-h1">
+                {t("hero.titleA")} <span className="em">{t("hero.titleEm")}</span>
+              </h1>
+              <p className="hero-sub">{t("hero.sub")}</p>
+              <p className="hero-promise">
+                {t("hero.promiseA")} <span className="em">{t("hero.promiseEm")}</span>{t("hero.promiseB")}
+              </p>
+              <TrackedLink href="/search" goal="search_start" className="btn-primary">
+                {t("hero.cta")}
+                {ARROW}
+              </TrackedLink>
+              <div className="pills">
+                {pills.map((p) => (
+                  <span key={p} className="pill">
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="hero-right">
+              <div className="hero-card">
+                <div className="hc-head">
+                  <span className="hc-label">{t("hero.card.label")}</span>
+                  <span className="hc-tag">{t("hero.card.tag")}</span>
                 </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">
-                  {s.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {s.body}
-                </p>
-              </li>
-            ))}
-          </ol>
+                <div className="hc-verdict">
+                  <div className="hc-verdict-label">{t("hero.card.verdictLabel")}</div>
+                  <div className="hc-verdict-value">{t("hero.card.verdictValue")}</div>
+                </div>
+                {heroRows.map((r, i) => (
+                  <div className="hc-row" key={i}>
+                    <span className="hc-row-label">{r.label}</span>
+                    <span className="hc-row-value">{r.value}</span>
+                  </div>
+                ))}
+                <div className="hc-foot">{t("hero.card.foot")}</div>
+              </div>
+
+              <TrackedLink href="/enterprise#form" goal="b2b_click" className="b2b-card">
+                <div className="b2b-card-head">
+                  <span className="b2b-tag">{t("hero.b2b.tag")}</span>
+                  <span className="b2b-arrow">→</span>
+                </div>
+                <div className="b2b-card-title">{t("hero.b2b.title")}</div>
+                <div className="b2b-card-sub">{t("hero.b2b.sub")}</div>
+                <span className="b2b-card-cta">
+                  {t("hero.b2b.cta")} <span className="arr">→</span>
+                </span>
+              </TrackedLink>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* What you get */}
-      <section className="border-t border-slate-100 bg-slate-50">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            {t("get.title")}
-          </h2>
-          <ul className="mt-12 grid gap-6 sm:grid-cols-2">
-            {items.map((it) => (
-              <li
-                key={it.title}
-                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-              >
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {it.title}
-                </h3>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {it.body}
-                </p>
-              </li>
+      {/* HOW IT WORKS */}
+      <section className="how">
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("how.eyebrow")}</span>
+            <h2 className="section-h2">
+              {t("how.titleA")} <span className="em">{t("how.titleEm")}</span>
+            </h2>
+            <p className="section-sub">{t("how.sub")}</p>
+          </div>
+          <div className="steps">
+            {steps.map((s) => (
+              <div className="step" key={s.n}>
+                <span className="step-n">{s.n}</span>
+                <h3>{s.title}</h3>
+                <p>{s.body}</p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       </section>
 
-      {/* Sources */}
-      <section className="border-t border-slate-100 bg-white">
-        <div className="mx-auto max-w-5xl px-6 py-20">
-          <h2 className="text-center text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            {t("sources.title")}
-          </h2>
-          <p className="mt-3 text-center text-sm text-slate-600">
-            {t("sources.subtitle")}
-          </p>
-          <ul className="mx-auto mt-10 grid max-w-xl gap-4">
+      {/* PRODUCT TILES */}
+      <section>
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("tiles.eyebrow")}</span>
+            <h2 className="section-h2">
+              {t("tiles.titleA")} <span className="em">{t("tiles.titleEm")}</span>
+            </h2>
+            <p className="section-sub">{t("tiles.sub")}</p>
+          </div>
+          <div className="tiles">
+            {TILES.map(({ key, free, href, goal }) => {
+              const tile = tiles[key];
+              return (
+                <div className="tile" key={key}>
+                  <span className={`tile-tag${free ? " free" : ""}`}>{tile.tag}</span>
+                  <div className="tile-h3">{tile.h3}</div>
+                  <div className="tile-tagline">{tile.tagline}</div>
+                  <p className="tile-desc">{tile.desc}</p>
+                  <ul className="tile-bullets">
+                    {tile.bullets.map((b, i) => (
+                      <li key={i} dangerouslySetInnerHTML={{ __html: b }} />
+                    ))}
+                  </ul>
+                  <div className="tile-meta">
+                    <span className="tile-meta-label">{t("tiles.whoLabel")}</span>
+                    <strong>{tile.who}</strong>
+                  </div>
+                  <TrackedLink href={href} goal={goal} className={`tile-cta${free ? " free" : ""}`}>
+                    {tile.cta}
+                    {ARROW}
+                  </TrackedLink>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* SUBSCRIPTIONS (client: toggle + prices from lib/pricing) */}
+      <LandingPricing />
+
+      {/* TRUST */}
+      <section className="trust">
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("trust.eyebrow")}</span>
+            <h2 className="section-h2" dangerouslySetInnerHTML={{ __html: t.raw("trust.titleHtml") as string }} />
+            <p className="section-sub">{t("trust.sub")}</p>
+          </div>
+          <div className="trust-grid">
+            {cells.map((c) => (
+              <div className="trust-cell" key={c.num}>
+                <span className="num">{c.num}</span>
+                <h4>{c.h4}</h4>
+                <p>{c.p}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* DECISION MATRIX */}
+      <section>
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("matrix.eyebrow")}</span>
+            <h2 className="section-h2">{t("matrix.title")}</h2>
+            <p className="section-sub">{t("matrix.sub")}</p>
+          </div>
+          <div className="matrix-wrap">
+            <table className="matrix">
+              <thead>
+                <tr>
+                  <th>{t("matrix.colTask")}</th>
+                  <th>{t("matrix.colSearch")}</th>
+                  <th>{t("matrix.colLandscape")}</th>
+                  <th>{t("matrix.colScreening")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={i}>
+                    <td>{r.task}</td>
+                    {r.cells.map((c, j) => (
+                      <td key={j} className={c.k}>
+                        {c.t}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* SOURCES STRIP */}
+      <div className="sources">
+        <div className="container">
+          <div className="sources-head">{t("sources.head")}</div>
+          <div className="sources-row">
             {sources.map((s) => (
-              <li
-                key={s.name}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="font-semibold text-slate-900">{s.name}</div>
-                <div className="mt-1 text-xs text-slate-500">{s.meta}</div>
-              </li>
+              <div className="src" key={s.name}>
+                {s.name}
+                <span className="sub">{s.sub}</span>
+              </div>
             ))}
-          </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* FAQ */}
+      <section>
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("faq.eyebrow")}</span>
+            <h2 className="section-h2">
+              {t("faq.titleA")} <span className="em">{t("faq.titleEm")}</span>
+            </h2>
+          </div>
+          <div className="faq-list">
+            {faqs.map((f, i) => (
+              <FaqItem key={i} question={f.q} answerHtml={f.a} />
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="border-t border-slate-100 bg-slate-900">
-        <div className="mx-auto flex max-w-5xl flex-col items-center gap-5 px-6 py-20 text-center">
-          <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            {t("ctaBlock.title")}
-          </h2>
-          <p className="max-w-2xl text-slate-300">{t("ctaBlock.subtitle")}</p>
-          <Link
-            href="/search"
-            className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 text-base font-semibold text-slate-900 shadow-sm transition hover:bg-slate-100"
-          >
-            {tc("ctaSecondary")}
-          </Link>
+      {/* PILOT BAND */}
+      <div className="pilot-wrap">
+        <div className="container">
+          <div className="pilot">
+            <h3>{t("pilot.title")}</h3>
+            <p>{t("pilot.sub")}</p>
+            <TrackedLink href="/search" goal="pilot_cta" className="btn-primary">
+              {t("pilot.cta")}
+              {ARROW}
+            </TrackedLink>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+
+      {/* LEGAL LINE */}
+      <div className="legal-line">{t("legal")}</div>
+    </div>
   );
 }
