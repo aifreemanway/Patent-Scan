@@ -26,6 +26,9 @@ type LoginBody = {
    *  consent). When true, the signup trigger stamps profiles.marketing_consent_at;
    *  false / omitted leaves it null. Defaults to false. */
   marketingConsent?: unknown;
+  /** Куда вернуть после магик-линка (path, напр. /account/billing?plan=team).
+   *  Протаскивается в emailRedirectTo → читается серверным /auth/callback. */
+  next?: unknown;
 };
 
 function clientIp(req: NextRequest): string | null {
@@ -92,7 +95,16 @@ export async function POST(req: NextRequest) {
     locale === routing.defaultLocale
       ? "/auth/callback"
       : `/${locale}/auth/callback`;
-  const emailRedirectTo = `${origin}${callbackPath}`;
+  // Optional post-login destination from landing/pricing CTAs. Validate it's a
+  // same-origin path (starts with "/", reject protocol-relative "//") before
+  // threading it into the magic link; the callback re-validates and defaults to
+  // /search if absent/unsafe.
+  const rawNext = typeof body.next === "string" ? body.next : "";
+  const safeNext =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "";
+  const emailRedirectTo = safeNext
+    ? `${origin}${callbackPath}?next=${encodeURIComponent(safeNext)}`
+    : `${origin}${callbackPath}`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: validation.normalized,

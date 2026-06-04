@@ -1,9 +1,38 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+
+/** Куда вернуть пользователя ПОСЛЕ магик-линка, по query лендинга/тарифов:
+ *  - ?next=/... (явная цель, напр. /account/billing от тарифных CTA) — приоритет;
+ *    если есть ?plan= и next ведёт в биллинг без plan — добавляем plan туда;
+ *  - ?intent=landscape|screening (плитки «Заказать») → страница продукта;
+ *  - ?plan=<id> (подписка) без next → биллинг с предвыбором тарифа.
+ *  next протаскивается в emailRedirectTo (см. /api/auth/login) и читается
+ *  серверным callback'ом — sessionStorage тут не подходит (callback серверный,
+ *  и письмо могут открыть на другом устройстве). Возвращает path или undefined. */
+function computePostLoginNext(params: URLSearchParams): string | undefined {
+  const next = params.get("next");
+  const plan = params.get("plan");
+  const intent = params.get("intent");
+
+  const isSafe = (p: string) => p.startsWith("/") && !p.startsWith("//");
+
+  if (next && isSafe(next)) {
+    if (plan && next.startsWith("/account/billing") && !next.includes("plan=")) {
+      const sep = next.includes("?") ? "&" : "?";
+      return `${next}${sep}plan=${encodeURIComponent(plan)}`;
+    }
+    return next;
+  }
+  if (intent === "landscape") return "/landscape";
+  if (intent === "screening") return "/literature-review";
+  if (plan) return `/account/billing?plan=${encodeURIComponent(plan)}`;
+  return undefined;
+}
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -54,6 +83,11 @@ export function LoginForm({
   siteKey: string;
 }) {
   const t = useTranslations("Auth.login");
+  const searchParams = useSearchParams();
+  const postLoginNext = useMemo(
+    () => computePostLoginNext(searchParams),
+    [searchParams],
+  );
   const [email, setEmail] = useState("");
   const [consent, setConsent] = useState(false);
   // Optional marketing opt-in (NOT pre-checked, NOT required to submit).
@@ -114,6 +148,7 @@ export function LoginForm({
           turnstileToken: token,
           locale,
           marketingConsent,
+          next: postLoginNext,
         }),
       });
 
@@ -145,51 +180,38 @@ export function LoginForm({
 
   if (status === "success") {
     return (
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          {t("successTitle")}
-        </h1>
-        <p className="mt-3 text-slate-600">
-          {t("successBody", { email })}
-        </p>
+      <div className="auth-card">
+        <h1 className="auth-h1">{t("successTitle")}</h1>
+        <p className="auth-sub">{t("successBody", { email })}</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-md">
+    <div className="auth-card-wrap">
       <Script
         src="https://challenges.cloudflare.com/turnstile/v0/api.js"
         strategy="afterInteractive"
         onReady={renderWidget}
       />
-      <form
-        onSubmit={onSubmit}
-        className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
-      >
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          {t("title")}
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">{t("subtitle")}</p>
+      <form onSubmit={onSubmit} className="auth-card">
+        <h1 className="auth-h1">{t("title")}</h1>
+        <p className="auth-sub">{t("subtitle")}</p>
 
-        <label
-          htmlFor="email"
-          className="mt-6 block text-sm font-medium text-slate-900"
-        >
-          {t("emailLabel")}
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder={t("emailPlaceholder")}
-          className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
-        />
+        <div className="field">
+          <label htmlFor="email">{t("emailLabel")}</label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t("emailPlaceholder")}
+          />
+        </div>
 
-        <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
+        <label className="consent">
           <input
             type="checkbox"
             checked={consent}
@@ -197,25 +219,16 @@ export function LoginForm({
               setConsent(e.target.checked);
               if (e.target.checked) setConsentError(false);
             }}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
           />
           <span>
             {t.rich("consent", {
               terms: (chunks) => (
-                <Link
-                  href="/terms"
-                  target="_blank"
-                  className="underline hover:text-slate-900"
-                >
+                <Link href="/terms" target="_blank">
                   {chunks}
                 </Link>
               ),
               privacy: (chunks) => (
-                <Link
-                  href="/privacy"
-                  target="_blank"
-                  className="underline hover:text-slate-900"
-                >
+                <Link href="/privacy" target="_blank">
                   {chunks}
                 </Link>
               ),
@@ -223,39 +236,38 @@ export function LoginForm({
           </span>
         </label>
         {consentError && (
-          <p className="mt-1 text-xs text-red-600">{t("consentRequired")}</p>
+          <p className="auth-consent-error">{t("consentRequired")}</p>
         )}
 
-        <label className="mt-3 flex items-start gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(e) => setMarketingConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-          />
-          <span>{t("marketingConsent")}</span>
-        </label>
-
-        <div className="mt-5 min-h-[70px]" ref={widgetRef} />
+        <div className="turnstile-wrap" ref={widgetRef} />
         {!siteKey && (
-          <p className="text-xs text-amber-600">
+          <p className="auth-turnstile-warn">
             Turnstile site key is missing — login is disabled.
           </p>
         )}
 
         {errorCode && (
-          <p className="mt-3 text-sm text-red-600">
-            {t(`errors.${errorCode}`)}
-          </p>
+          <p className="auth-error">{t(`errors.${errorCode}`)}</p>
         )}
 
         <button
           type="submit"
           disabled={status === "submitting" || !token}
-          className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="btn-submit"
         >
           {status === "submitting" ? t("submitting") : t("submit")}
         </button>
+
+        <label className="consent consent-after">
+          <input
+            type="checkbox"
+            checked={marketingConsent}
+            onChange={(e) => setMarketingConsent(e.target.checked)}
+          />
+          <span>{t("marketingConsent")}</span>
+        </label>
+
+        <p className="auth-foot">{t("loginNote")}</p>
       </form>
     </div>
   );
