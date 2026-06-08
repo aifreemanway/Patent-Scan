@@ -48,8 +48,31 @@ export default async function LandingPage({
   const heroRows = t.raw("hero.card.rows") as HeroRow[];
   const pills = t.raw("hero.pills") as string[];
 
+  // FAQPage JSON-LD — built from the SAME `faqs` rendered below, so the
+  // structured data always matches the visible accordion (Google/Yandex require
+  // schema↔page parity). Strip HTML tags from answers for the plain-text schema.
+  // Per ap-mediabuyer SEO package — enables FAQ rich-snippets + AI-citation
+  // (Яндекс GenSearch / Perplexity / ChatGPT).
+  const stripHtml = (s: string) =>
+    s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${siteUrl}/#faq`,
+    mainEntity: faqs.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) },
+    })),
+  };
+
   return (
     <div className="lp">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       {/* NAV */}
       <SiteNav />
 
