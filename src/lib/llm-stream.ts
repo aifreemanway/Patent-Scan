@@ -201,9 +201,17 @@ async function streamOnce(opts: {
 // status codes, and our own idle-timeout / network breaks. The Timeweb gateway
 // was observed flapping (408 deadline, 500, stalls) under load — a single blip
 // otherwise surfaces to the user as "Analysis service error" on a one-shot call
-// (novelty analyze / landscape synthesize have no outer retry). NOT retried:
-// other 4xx (400/401/403 — bad payload / auth — a retry can't fix those).
-const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+// (novelty analyze / landscape synthesize have no outer retry).
+//
+// 403 IS retried (added 2026-06-08): this gateway returns intermittent 403 as a
+// throttle/capacity signal, NOT an auth verdict — verified with the SAME key that
+// succeeds on adjacent calls and on the very next retry (observed 502,502,200 and
+// 403→200 on isolated sequential plan calls; even a 94-char topic flapped). It
+// was forcing recall-v2's plan/rank to fail → silent legacy fallback. A truly
+// dead/rotated key returns 401 (see memory reference_prod_env_secret_rotation:
+// TIMEWEB_AI_KEY 2026-06-03 → Gemini 401), so 401 stays non-retryable.
+// NOT retried: 400 (bad payload) and 401 (real auth) — a retry can't fix those.
+const RETRYABLE_STATUS = new Set([403, 408, 409, 425, 429, 500, 502, 503, 504]);
 function isRetryable(e: LlmStreamError): boolean {
   if (e.kind === "timeout" || e.kind === "network") return true;
   if (e.kind === "http" && e.status != null && RETRYABLE_STATUS.has(e.status)) {

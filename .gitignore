@@ -42,3 +42,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 scripts/poc-gates/out/
+
+# Confidential Samara recall эталон (client IP — must NOT be committed)
+scripts/samara-fixture.ts
+scripts/samara-extract-probe.ts

@@ -57,13 +57,18 @@ export async function generateMetadata({
       title,
       description,
       siteName: "Patent-Scan",
+      url: `/${locale}`,
       locale: locale === "ru" ? "ru_RU" : "en_US",
       type: "website",
+      images: [
+        { url: "/og-image.png", width: 1200, height: 630, alt: title },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: ["/og-image.png"],
     },
     robots: {
       index: true,
@@ -85,12 +90,57 @@ export default async function LocaleLayout({
   }
   setRequestLocale(locale);
 
+  // JSON-LD @graph (Organization + WebSite + Service) — per ap-mediabuyer SEO/LLM
+  // package (seo-content-package-v7-2026-06-03). Anti-fab: NO telephone/address/
+  // sameAs (no confirmed data); logo points to og-image.png (real asset) until a
+  // dedicated logo.png lands.
+  const siteUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${siteUrl}/#org`,
+        name: "ПатентСкан",
+        url: `${siteUrl}/`,
+        email: "support@patent-scan.ru",
+        description:
+          "ИИ-сервис патентного поиска и анализа патентной чистоты по мировым базам через государственный API Роспатент PatSearch.",
+        logo: `${siteUrl}/og-image.png`,
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${siteUrl}/#website`,
+        url: `${siteUrl}/`,
+        name: "ПатентСкан",
+        inLanguage: "ru",
+        publisher: { "@id": `${siteUrl}/#org` },
+      },
+      {
+        "@type": "Service",
+        "@id": `${siteUrl}/#service`,
+        name: "Патентный поиск и анализ патентной чистоты",
+        serviceType: "Патентный поиск",
+        provider: { "@id": `${siteUrl}/#org` },
+        areaServed: ["RU", "US", "EP", "CN", "JP"],
+        url: `${siteUrl}/`,
+        description:
+          "Экспресс-проверка уникальности изобретения по патентным базам России, СНГ, США, Европы, Китая и Японии с оценкой патентной чистоты и ссылками на источники.",
+      },
+    ],
+  };
+
   return (
     <html
       lang={locale}
       className={`${gilroy.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-slate-900">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <YandexMetrika />
         <NextIntlClientProvider>
           {children}

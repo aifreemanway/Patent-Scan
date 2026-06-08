@@ -120,6 +120,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       .join("\n")}`,
   ].join("\n\n");
 
+  // Rank thinking A/B (cofounder-gated, reversible). Default UNSET = keep the
+  // model's default thinking (prod behavior unchanged). Set RANK_REASONING_EFFORT
+  // = "none"|"low"|"medium"|"high" to override. Thinking-ON on rank is ~95% of the
+  // call's output tokens (≈5₽/call) AND makes the call run 1–3 min → it times out
+  // under load, which silently zeroes the precision-rank tier and drops in-class
+  // analogs from the window (observed on Samara input A, 2026-06-08).
+  const rankEffort = process.env.RANK_REASONING_EFFORT as
+    | "none"
+    | "low"
+    | "medium"
+    | "high"
+    | undefined;
   try {
     const { data } = await callGeminiJson<{ ids?: unknown }>({
       apiKey,
@@ -127,6 +139,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       systemPrompt,
       userText,
       temperature: 0.2,
+      ...(rankEffort ? { reasoningEffort: rankEffort } : {}),
       timeoutMs: GEMINI_TIMEOUT_MS.rank,
     });
     const ids = Array.isArray(data.ids)
