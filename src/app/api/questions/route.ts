@@ -81,7 +81,7 @@ export async function POST(req: Request): Promise<NextResponse> {
       systemPrompt: SYSTEM_PROMPT,
       userText: description,
       temperature: 0.4,
-      thinkingBudget: 512,
+      reasoningEffort: "none",
       timeoutMs: GEMINI_TIMEOUT_MS.questions,
     });
 

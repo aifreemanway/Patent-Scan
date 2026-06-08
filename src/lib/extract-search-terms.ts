@@ -42,7 +42,11 @@ export type SearchTerms = {
 export async function extractSearchTerms(
   description: string,
   apiKey: string,
-  timeoutMs: number = GEMINI_TIMEOUT_MS.extract
+  timeoutMs: number = GEMINI_TIMEOUT_MS.extract,
+  // Recall-critical call (qn/qnEn/IPC drive PatSearch). Default keeps Gemini
+  // thinking ON; pass "none" only after a before/after recall-diff proves the
+  // extracted queries don't degrade (cofounder guardrail 2026-06-08).
+  reasoningEffort?: "none" | "low" | "medium" | "high"
 ): Promise<SearchTerms> {
   const { data } = await callGeminiJson<{
     qn?: unknown;
@@ -56,7 +60,7 @@ export async function extractSearchTerms(
     // ZERO temperature (greedy) for reproducible query terms run-to-run — same
     // rationale as landscape-plan/facet-decompose (drift → unstable recall).
     temperature: 0,
-    thinkingBudget: 512,
+    reasoningEffort,
     timeoutMs,
   });
 

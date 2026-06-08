@@ -106,7 +106,6 @@ export async function synthesizeLandscape(
     systemPrompt: SYSTEM_PROMPT,
     userText,
     temperature: 0.4,
-    thinkingBudget: 1024,
     timeoutMs,
   });
 

@@ -182,6 +182,7 @@ export async function buildIndustrialUsage(opts: BuildIUOpts): Promise<IUReport>
     label: "iu/synth",
     systemPrompt: SYNTH_PROMPT,
     userText,
+    reasoningEffort: "none",
     timeoutMs: 120_000,
   });
 

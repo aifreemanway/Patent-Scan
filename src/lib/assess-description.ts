@@ -49,7 +49,6 @@ export async function assessDescription(
     systemPrompt: SYSTEM_PROMPT,
     userText: description,
     temperature: 0.1,
-    thinkingBudget: 512,
     timeoutMs,
   });
 
