@@ -49,3 +49,4 @@ scripts/samara-extract-probe.ts
 scripts/samara-rank-probe.ts
 scripts/samara-stability-batch.ps1
 scripts/samara-determinism-probe.ts
+scripts/samara-fieldview-verify.ts
