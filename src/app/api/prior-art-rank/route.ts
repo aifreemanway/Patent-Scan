@@ -12,6 +12,7 @@ import {
   GeminiError,
   geminiErrorToStatus,
 } from "@/lib/gemini";
+import { cacheKey, memo } from "@/lib/llm-cache";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -132,21 +133,36 @@ export async function POST(req: Request): Promise<NextResponse> {
     | "medium"
     | "high"
     | undefined;
+  // Determinism: memoise the ranking by (description + exact candidate id list +
+  // n + effort). The gateway isn't bit-deterministic even at temp 0.2, so an
+  // identical rank request would otherwise reorder the window run-to-run. With
+  // retrieval already deterministic (cached plan/facets), caching rank makes one
+  // search reproducible end-to-end (see llm-cache.ts). Keyed on the candidate ids
+  // in input order, so a different pool re-ranks.
+  const rankCacheKey = cacheKey(
+    "rank-v1",
+    rankEffort ?? "default",
+    String(n),
+    description,
+    candidates.map((c) => c.id).join(",")
+  );
   try {
-    const { data } = await callGeminiJson<{ ids?: unknown }>({
-      apiKey,
-      label: "rank",
-      systemPrompt,
-      userText,
-      temperature: 0.2,
-      ...(rankEffort ? { reasoningEffort: rankEffort } : {}),
-      timeoutMs: GEMINI_TIMEOUT_MS.rank,
+    const ids = await memo(rankCacheKey, async () => {
+      const { data } = await callGeminiJson<{ ids?: unknown }>({
+        apiKey,
+        label: "rank",
+        systemPrompt,
+        userText,
+        temperature: 0.2,
+        ...(rankEffort ? { reasoningEffort: rankEffort } : {}),
+        timeoutMs: GEMINI_TIMEOUT_MS.rank,
+      });
+      return Array.isArray(data.ids)
+        ? data.ids
+            .filter((id): id is string => typeof id === "string" && validIds.has(id))
+            .slice(0, n)
+        : [];
     });
-    const ids = Array.isArray(data.ids)
-      ? data.ids
-          .filter((id): id is string => typeof id === "string" && validIds.has(id))
-          .slice(0, n)
-      : [];
     return NextResponse.json({ ids });
   } catch (e) {
     if (e instanceof GeminiError) {

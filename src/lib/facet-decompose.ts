@@ -18,6 +18,7 @@
 
 import { GEMINI_TIMEOUT_MS } from "./config";
 import { callGeminiJson } from "./gemini";
+import { cacheKey, memo } from "./llm-cache";
 
 const SYSTEM_PROMPT = `Ты — патентный аналитик-поисковик. На вход: подробное описание одного изобретения (устройства или способа), часто многословное, с маркой, моделью контроллера, интерфейсами, перечнем функций.
 
@@ -68,6 +69,19 @@ export async function decomposeFacets(
   invention: string,
   apiKey: string,
   timeoutMs: number = GEMINI_TIMEOUT_MS.facet
+): Promise<Facet[]> {
+  // Memoise by invention text (same rationale as planLandscape — see llm-cache.ts).
+  // "facets-v2" tag: bump because the prompt gained the compound measure+transmit
+  // grain, so old cached facet sets must not be reused.
+  return memo(cacheKey("facets-v2", invention), () =>
+    decomposeFacetsUncached(invention, apiKey, timeoutMs)
+  );
+}
+
+async function decomposeFacetsUncached(
+  invention: string,
+  apiKey: string,
+  timeoutMs: number
 ): Promise<Facet[]> {
   const { data } = await callGeminiJson<{ facets?: unknown }>({
     apiKey,
