@@ -19,26 +19,20 @@ import {
   retrieveNoveltyPriorArt,
   type RetrievalDepth,
 } from "../src/lib/novelty-retrieval-v2";
+import { ETALON_IDS, HARD_GATE, INPUT_A } from "./samara-fixture";
 
 const BASE = process.env.T1_BASE ?? "http://localhost:3000";
 const DEPTH = (process.env.T1_DEPTH as RetrievalDepth) ?? "full";
 const SESSION_FILE = "C:\\Users\\kobzar\\AppData\\Local\\Temp\\qa_session_token.txt";
 
-// EMM-описание (СамГТУ, КОНФИДЕНЦИАЛЬНО)
-const EMM_DESCRIPTION = `Модуль контроля электродвигателей EMM для непрерывного мониторинга технического состояния трёхфазных асинхронных электродвигателей напряжением 0,4 кВ методом анализа сигнатуры тока (MCSA). Устройство включает микроконтроллер STM32F407, аналого-цифровой преобразователь с разрядностью 12 бит и частотой дискретизации 10 кГц, интерфейс RS-485, протокол обмена MODBUS RTU, питание 24В DC. Система обнаруживает дефекты подшипников, обрывы стержней ротора, межвитковые замыкания статора по гармоническому составу спектра тока. Алгоритм MCSA выполняет спектральный анализ мгновенных значений тока в режиме реального времени и сравнивает полученные гармоники с пороговыми значениями для классификации типа и степени дефекта. Устройство также включает защитную функцию отключения двигателя при обнаружении критического дефекта.`;
+// Вход теста: A (best-case) по умолчанию, либо B через файл (SAMARA_DESC_FILE).
+// Эталон/хард-гейт — из samara-fixture (реальный набор СамГТУ).
+const EMM_DESCRIPTION = process.env.SAMARA_DESC_FILE
+  ? readFileSync(process.env.SAMARA_DESC_FILE, "utf-8").trim()
+  : INPUT_A;
+const INPUT_LABEL = process.env.SAMARA_DESC_FILE ? "B (file)" : "A (best-case)";
 
-// Эталонный набор СамГТУ (32 патента). КОНФИДЕНЦИАЛЬНО.
-const ETALON_IDS = new Set([
-  "RU2854805", "RU2799985", "RU2781595", "RU2769378", "RU2769369",
-  "RU2764774", "RU2758826", "RU2756916", "RU2755800", "RU2752085",
-  "RU2748410", "RU2747267", "RU2745395", "RU2738628", "RU2737534",
-  "RU2729765", "RU2727559", "RU2727203", "RU2723691", "RU2723444",
-  "RU2715371", "RU2710834", "RU2707697", "RU2706058", "RU2703490",
-  "RU2701508", "RU2699047", "RU2695939", "RU2694809", "RU2687951",
-  "RU2686440", "RU2685094",
-]);
-
-const RED_LINE_IDS = ["RU2854805", "RU2799985"];
+const RED_LINE_IDS = HARD_GATE;
 
 function normalizeId(raw: string): string {
   return raw
@@ -66,8 +60,9 @@ async function main() {
     return fetch(input, { ...(init as RequestInit), headers });
   };
 
-  console.log("=== T1 recall re-test — P2 v2 (facets + depth + subgroup enum) ===");
+  console.log("=== T1 recall — v2 (recall-v2-hold) · САМАРА эталон ===");
   console.log(`Base: ${BASE}  Depth: ${DEPTH}`);
+  console.log(`Input: ${INPUT_LABEL}  ·  Эталон: ${ETALON_IDS.size} док.`);
   console.log(`Description: ${EMM_DESCRIPTION.length} chars`);
   console.log("Starting full retrieval...\n");
 
@@ -77,6 +72,7 @@ async function main() {
     base: BASE,
     fetchImpl: fetchWithAuth,
     depth: DEPTH,
+    traceIds: [...ETALON_IDS], // localise where each etalon falls per stage
   });
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
@@ -91,7 +87,8 @@ async function main() {
   console.log(`Total PatSearch hits seen: ${total}`);
   console.log(`Pool size (result.hits): ${hits.length}`);
   console.log(`Ranked window size: ${windowSize}`);
-  console.log(`diagnostics: ${JSON.stringify(diagnostics, null, 2)}`);
+  const { trace, ...diagNoTrace } = diagnostics;
+  console.log(`diagnostics: ${JSON.stringify(diagNoTrace, null, 2)}`);
 
   console.log("\n=== RED-LINE CHECK ===");
   let redLinePassed = true;
@@ -113,9 +110,45 @@ async function main() {
 
   const unionPool = poolIds.filter((id) => ETALON_IDS.has(id));
   const unionWindow = windowIds.filter((id) => ETALON_IDS.has(id));
+  const denom = ETALON_IDS.size;
   console.log("\n=== UNION CHECK ===");
-  console.log(`Etalon in POOL:   ${unionPool.length}/32 — ${unionPool.join(", ") || "(none)"}`);
-  console.log(`Etalon in WINDOW: ${unionWindow.length}/32 — ${unionWindow.join(", ") || "(none)"}`);
+  console.log(`Etalon in POOL:   ${unionPool.length}/${denom} — ${unionPool.join(", ") || "(none)"}`);
+  console.log(`Etalon in WINDOW: ${unionWindow.length}/${denom} — ${unionWindow.join(", ") || "(none)"}`);
+
+  // ── GATE-TRACE table ── per-stage localisation of every etalon id. Shows the
+  // EXACT stage a recall miss happens: retrieve (sem/fac), sweep-targeting
+  // (sweep/seed), or LLM-rank (pR/bR/win). idx values are 0-based; "—" = absent.
+  if (trace) {
+    const fmt = (n: number) => (n < 0 ? "—" : String(n));
+    const bestSweep = (units: { key: string; idx: number }[]) =>
+      units.length
+        ? units.reduce((a, b) => (b.idx < a.idx ? b : a)).key.replace(/^[gs]:/, "") +
+          ":" +
+          units.reduce((a, b) => (b.idx < a.idx ? b : a)).idx
+        : "—";
+    console.log("\n=== GATE-TRACE (per etalon, per stage; idx 0-based, —=absent) ===");
+    console.log("  id          ipc0       sem  fac  sweep(unit:idx)  seed  pool  pRank bRank  WIN");
+    const order = [...ETALON_IDS].sort((a, b) => {
+      const ga = RED_LINE_IDS.includes(a) ? 0 : 1;
+      const gb = RED_LINE_IDS.includes(b) ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      return (trace[b]?.poolIdx ?? -1) >= 0 ? 1 : -1;
+    });
+    for (const id of order) {
+      const tr = trace[id];
+      if (!tr) continue;
+      const tag = RED_LINE_IDS.includes(id) ? "*" : " ";
+      const ipc0 = (tr.ipc?.[0] ?? "—").padEnd(9).slice(0, 9);
+      console.log(
+        `  ${tag}${id.padEnd(11)} ${ipc0} ` +
+          `${fmt(tr.semanticIdx).padStart(4)} ${fmt(tr.facetIdx).padStart(4)}  ` +
+          `${bestSweep(tr.sweepUnits).padEnd(15)} ${fmt(tr.prioritySeedIdx).padStart(4)} ` +
+          `${fmt(tr.poolIdx).padStart(5)} ${fmt(tr.priorityRankedIdx).padStart(5)} ` +
+          `${fmt(tr.broadRankedIdx).padStart(5)} ${fmt(tr.windowIdx).padStart(4)}`
+      );
+    }
+    console.log("  (* = hard-gate · sem/fac=semantic/facet pool · seed=in-class precision seed · WIN=ranked window)");
+  }
 
   console.log("\n=== WINDOW (first 40) ===");
   hits.slice(0, 40).forEach((h, i) => {
@@ -131,7 +164,7 @@ async function main() {
 
   console.log("\n=== VERDICT (interim, paraphrase) ===");
   console.log(`  Red-line gates (RU2854805∈pool & RU2799985∈window): ${redLinePassed ? "PASS" : "FAIL"}`);
-  console.log(`  Union pool ${unionPool.length}/32, window ${unionWindow.length}/32 (baseline was 1/32)`);
+  console.log(`  Union pool ${unionPool.length}/${denom}, window ${unionWindow.length}/${denom} (baseline was 1/32)`);
   console.log("  (18/32 НЕ хард на парафразе; финал — на точном входе Самары)");
   process.exit(redLinePassed ? 0 : 1);
 }

@@ -9,6 +9,7 @@
 
 import { readFileSync, existsSync } from "fs";
 import { retrieveNoveltyPriorArt } from "../src/lib/novelty-retrieval";
+import { ETALON_IDS, HARD_GATE, INPUT_A } from "./samara-fixture";
 
 // LOCAL: http://localhost:3000 (требует TIMEWEB_AI_KEY в .env.local, нет auth-guard на /api/qa-preview-login)
 // STAGING: https://patent-scan-git-fix-recall-class-4ab407-aifreemanways-projects.vercel.app
@@ -16,21 +17,15 @@ const BASE = process.env.T1_BASE ?? "http://localhost:3000";
 
 const SESSION_FILE = "C:\\Users\\kobzar\\AppData\\Local\\Temp\\qa_session_token.txt";
 
-// EMM-описание (СамГТУ, КОНФИДЕНЦИАЛЬНО)
-const EMM_DESCRIPTION = `Модуль контроля электродвигателей EMM для непрерывного мониторинга технического состояния трёхфазных асинхронных электродвигателей напряжением 0,4 кВ методом анализа сигнатуры тока (MCSA). Устройство включает микроконтроллер STM32F407, аналого-цифровой преобразователь с разрядностью 12 бит и частотой дискретизации 10 кГц, интерфейс RS-485, протокол обмена MODBUS RTU, питание 24В DC. Система обнаруживает дефекты подшипников, обрывы стержней ротора, межвитковые замыкания статора по гармоническому составу спектра тока. Алгоритм MCSA выполняет спектральный анализ мгновенных значений тока в режиме реального времени и сравнивает полученные гармоники с пороговыми значениями для классификации типа и степени дефекта. Устройство также включает защитную функцию отключения двигателя при обнаружении критического дефекта.`;
+// Вход теста: A (best-case) по умолчанию, либо B через файл (SAMARA_DESC_FILE) —
+// ИИ-экстракт из реальных 4 документов EMM. Эталон/хард-гейт — из samara-fixture
+// (реальный набор СамГТУ; раньше тут был плейсхолдер-парафраз).
+const EMM_DESCRIPTION = process.env.SAMARA_DESC_FILE
+  ? readFileSync(process.env.SAMARA_DESC_FILE, "utf-8").trim()
+  : INPUT_A;
+const INPUT_LABEL = process.env.SAMARA_DESC_FILE ? "B (file)" : "A (best-case)";
 
-// Эталонный набор СамГТУ (32 патента). КОНФИДЕНЦИАЛЬНО.
-const ETALON_IDS = new Set([
-  "RU2854805", "RU2799985", "RU2781595", "RU2769378", "RU2769369",
-  "RU2764774", "RU2758826", "RU2756916", "RU2755800", "RU2752085",
-  "RU2748410", "RU2747267", "RU2745395", "RU2738628", "RU2737534",
-  "RU2729765", "RU2727559", "RU2727203", "RU2723691", "RU2723444",
-  "RU2715371", "RU2710834", "RU2707697", "RU2706058", "RU2703490",
-  "RU2701508", "RU2699047", "RU2695939", "RU2694809", "RU2687951",
-  "RU2686440", "RU2685094",
-]);
-
-const RED_LINE_IDS = ["RU2854805", "RU2799985"];
+const RED_LINE_IDS = HARD_GATE;
 
 function normalizeId(raw: string): string {
   // Handles: "RU2854805C1_20241022" / "RU2854805C1" / "RU 2854805 C1" → "RU2854805"
@@ -68,8 +63,9 @@ async function main() {
     return fetch(input, { ...(init as RequestInit), headers });
   };
 
-  console.log("=== T1 recall re-test — PR #85 (fix/recall-class-sweep-seeding) ===");
+  console.log("=== T1 recall — v1 (prod novelty-retrieval) · САМАРА эталон ===");
   console.log(`Base: ${BASE}`);
+  console.log(`Input: ${INPUT_LABEL}  ·  Эталон: ${ETALON_IDS.size} док.`);
   console.log(`Description: ${EMM_DESCRIPTION.length} chars`);
   console.log("Starting full retrieval (1-3 min)...\n");
 
@@ -112,15 +108,17 @@ async function main() {
   // Union check: how many etalon patents appear in hits
   const foundEtalon = hitIds.filter((id) => ETALON_IDS.has(id));
   const union = foundEtalon.length;
+  const denom = ETALON_IDS.size;
   console.log(`\n=== UNION CHECK ===`);
-  console.log(`Found ${union}/32 etalon patents in final window`);
+  console.log(`Found ${union}/${denom} etalon patents in final window`);
   console.log(`Found IDs: ${foundEtalon.join(", ") || "(none)"}`);
 
-  const unionPassed = union >= 18;
+  // Порог-ориентир (≈ половина набора); финальный verdict — за кофаундером.
+  const unionPassed = union >= Math.ceil(denom / 2);
   console.log(
     unionPassed
-      ? `  ✓ union ${union}/32 >= 18 — PASS`
-      : `  ✗ union ${union}/32 < 18 — FAIL`
+      ? `  ✓ union ${union}/${denom} >= ${Math.ceil(denom / 2)} — PASS`
+      : `  ✗ union ${union}/${denom} < ${Math.ceil(denom / 2)} — FAIL`
   );
 
   console.log("\n=== FINAL HITS (first 30) ===");

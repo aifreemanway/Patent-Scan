@@ -46,3 +46,5 @@ scripts/poc-gates/out/
 # Confidential Samara recall эталон (client IP — must NOT be committed)
 scripts/samara-fixture.ts
 scripts/samara-extract-probe.ts
+scripts/samara-rank-probe.ts
+scripts/samara-stability-batch.ps1
