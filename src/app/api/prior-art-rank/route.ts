@@ -127,7 +127,6 @@ export async function POST(req: Request): Promise<NextResponse> {
       systemPrompt,
       userText,
       temperature: 0.2,
-      thinkingBudget: 512,
       timeoutMs: GEMINI_TIMEOUT_MS.rank,
     });
     const ids = Array.isArray(data.ids)

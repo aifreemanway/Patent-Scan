@@ -143,7 +143,6 @@ export async function planLandscape(
     // top-K cutoff then turns into a run-to-run recall flip. Aspect diversity
     // comes from the prompt's explicit per-facet instructions, not from sampling.
     temperature: 0,
-    thinkingBudget: 1024,
     timeoutMs,
   });
 

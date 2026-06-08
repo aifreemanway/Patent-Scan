@@ -48,9 +48,14 @@ export type CallGeminiJsonOptions = {
   userText: string;
   /** 0.0–1.0, default 0.3 */
   temperature?: number;
-  /** Accepted for source compatibility but ignored: the OpenAI-compatible gateway
-   *  exposes no thinking-budget control (gemini-2.5-flash reasons at its default). */
-  thinkingBudget?: number;
+  /** Gemini "thinking" control via the gateway's OpenAI-compatible `reasoning_effort`
+   *  field. VERIFIED on api.timeweb.ai (2026-06-08 probe): "none" drops reasoning
+   *  tokens — ~75% of output on extraction tasks — with no quality loss, cutting
+   *  ~73% of a call's ₽. (The native nested thinkingConfig / thinking_budget forms
+   *  are silently IGNORED by this gateway — only reasoning_effort works.) Omit to
+   *  keep the model's default thinking. Use "none" ONLY on calls whose output does
+   *  NOT feed retrieval (recall is the beta-blocker — see cofounder guardrail). */
+  reasoningEffort?: "none" | "low" | "medium" | "high";
   /** Client-side abort timeout, default 30s */
   timeoutMs?: number;
   /** Caller-supplied ID for correlating logs across a user flow */
@@ -81,6 +86,7 @@ export async function callGeminiJson<T>(
     systemPrompt,
     userText,
     temperature = 0.3,
+    reasoningEffort,
     timeoutMs = 30_000,
     traceId,
   } = opts;
@@ -89,9 +95,12 @@ export async function callGeminiJson<T>(
   // lib/llm-stream.ts): a non-streamed call is killed by the gateway's ~187s
   // server-side deadline (HTTP 408) on long generations — e.g. a landscape
   // synthesis over ≤150 patents — while a streamed response is not.
-  // - `thinkingBudget` (in opts) is intentionally NOT sent: the gateway has no
-  //   thinking-budget control; gemini-2.5-flash reasons at the gateway default.
-  // - `max_tokens` is intentionally omitted so large syntheses don't truncate.
+  // - `reasoning_effort` (from opts.reasoningEffort) controls Gemini thinking via
+  //   the gateway's OpenAI-compatible field — "none" cuts ~73% of a call's ₽ with
+  //   no quality loss on extraction. Omitted ⇒ model's default thinking stays on.
+  // - `max_tokens` is intentionally omitted so large syntheses don't truncate
+  //   (and it's UNSAFE while thinking is on: thinking eats the budget first → the
+  //   answer truncates — verified. Only cap output together with reasoning_effort).
   // - `response_format: json_object` IS sent (verified to work with stream on
   //   this gateway): it steers the model to emit a bare, valid JSON object even
   //   on a large/messy synthesis, cutting the "invalid JSON" failures we hit
@@ -104,6 +113,7 @@ export async function callGeminiJson<T>(
     ],
     temperature,
     response_format: { type: "json_object" },
+    ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
   };
 
   // Parse a streamed response into T, or null if it isn't valid JSON. Strips a
