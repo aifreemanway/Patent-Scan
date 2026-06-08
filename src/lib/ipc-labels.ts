@@ -28,12 +28,39 @@ const LABELS_RU: Record<string, string> = {
   F27D: "Детали и оборудование промышленных печей",
 };
 
-/** Plain-Russian label for an IPC main-group ("G01R31" → "Испытание...") or its
+// EN mirror of the curated map (ТЗ §4.1 i18n / AC#9). Same keys; an entry absent
+// here falls back to the RU label, then to null — never a fabricated title.
+const LABELS_EN: Record<string, string> = {
+  G01R: "Measuring electric variables",
+  G01R19: "Measuring current and voltage",
+  G01R31: "Testing and diagnostics of electric circuits and components",
+  G01R23: "Measuring frequency and spectrum",
+  H02K: "Electric machines (motors and generators)",
+  H02P: "Control of electric motors",
+  H02H: "Protection of electrical devices against fault conditions",
+  G01M: "Testing of machine parts and balancing",
+  G01M13: "Testing of gears and bearings",
+  G01H: "Measurement of mechanical vibrations",
+  G06F: "Electric digital data processing",
+  C21C: "Processing of pig iron and steelmaking",
+  C22B: "Metallurgy of non-ferrous metals",
+  F27B: "Industrial furnaces",
+  F27D: "Details and accessories of industrial furnaces",
+};
+
+/** Plain-language label for an IPC main-group ("G01R31" → "Испытание...") or its
  *  subclass ("G01R"), or null if not in the curated map. Tries the full main-group
- *  first, then the 4-char subclass. Never fabricates. */
-export function ipcMainGroupLabel(mainGroup: string): string | null {
+ *  first, then the 4-char subclass. EN falls back to the RU label when no EN entry
+ *  exists. Never fabricates — an unknown code returns null and the UI shows the
+ *  raw code only. */
+export function ipcMainGroupLabel(
+  mainGroup: string,
+  locale: "ru" | "en" = "ru"
+): string | null {
   const mg = mainGroup.replace(/\s+/g, "").toUpperCase();
-  if (LABELS_RU[mg]) return LABELS_RU[mg];
   const subclass = mg.slice(0, 4);
-  return LABELS_RU[subclass] ?? null;
+  if (locale === "en") {
+    return LABELS_EN[mg] ?? LABELS_EN[subclass] ?? LABELS_RU[mg] ?? LABELS_RU[subclass] ?? null;
+  }
+  return LABELS_RU[mg] ?? LABELS_RU[subclass] ?? null;
 }
