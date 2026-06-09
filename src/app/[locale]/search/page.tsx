@@ -5,6 +5,9 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
+import { retrieveNoveltyPriorArt as retrieveNoveltyPriorArtV2 } from "@/lib/novelty-retrieval-v2";
+import { RETRIEVAL_V2_ENABLED } from "@/lib/config";
+import type { FieldPatentInput } from "@/lib/field-view";
 import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
 import { useRotatingText } from "@/hooks/useRotatingText";
 
@@ -93,10 +96,20 @@ export default function SearchPage() {
     try {
       const cleanAnswers = answers.filter((a) => a.trim().length > 0);
 
-      const { hits, total } = await retrieveNoveltyPriorArt({
-        description: description.trim(),
-        answers: cleanAnswers,
-      });
+      // v2 retrieval (gated by RETRIEVAL_V2_ENABLED) returns the full pool
+      // window-first plus diagnostics.ranked (the LLM-ranked window size). Both
+      // versions share the same result shape; v2 additionally feeds the Expert
+      // Field-View. v1 stays the verdict-only prod path until the recall-v2 hold lifts.
+      const { hits, total, diagnostics } = RETRIEVAL_V2_ENABLED
+        ? await retrieveNoveltyPriorArtV2({
+            description: description.trim(),
+            answers: cleanAnswers,
+            depth: "full",
+          })
+        : await retrieveNoveltyPriorArt({
+            description: description.trim(),
+            answers: cleanAnswers,
+          });
 
       if (hits.length === 0) {
         sessionStorage.setItem("ps_report", JSON.stringify({ empty: true }));
@@ -141,6 +154,27 @@ export default function SearchPage() {
         answers: cleanAnswers,
         patents: hits.slice(0, 60),
       };
+
+      // Account tier — drives the report's smart Verdict/Field default.
+      report._tier = report.tier ?? null;
+
+      // Expert Field-View payload: the FULL pool (window-first) trimmed to the
+      // fields the field view needs (abstracts dropped to keep sessionStorage
+      // bounded), plus the ranked-window size that marks "close" patents. Only
+      // attached under the v2 flag — without it the report stays verdict-only.
+      if (RETRIEVAL_V2_ENABLED && hits.length > 0) {
+        const pool: FieldPatentInput[] = hits.map((h) => ({
+          id: h.id,
+          title: h.title,
+          titleRu: h.titleRu,
+          titleEn: h.titleEn,
+          year: h.year,
+          country: h.country,
+          url: h.url,
+          ipc: h.ipc,
+        }));
+        report._field = { pool, ranked: diagnostics?.ranked ?? 0 };
+      }
 
       sessionStorage.setItem("ps_report", JSON.stringify(report));
       router.push("/report");
