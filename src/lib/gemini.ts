@@ -62,6 +62,10 @@ export type CallGeminiJsonOptions = {
   traceId?: string;
   /** Short call-site tag for the `[cost]` telemetry line (e.g. "analyze", "rank"). */
   label?: string;
+  /** Optional cost-attribution IDs forwarded to logCost → llm_cost_events
+   *  (per-request / per-user views in /admin). Omit on fan-out machinery. */
+  requestId?: string | null;
+  userId?: string | null;
 };
 
 /**
@@ -213,7 +217,13 @@ export async function callGeminiJson<T>(
     thinking: 0, // gateway doesn't report a separate thinking-token count
   };
 
-  logCost({ label: opts.label ?? "gemini", model: GEMINI_MODEL, usage });
+  logCost({
+    label: opts.label ?? "gemini",
+    model: GEMINI_MODEL,
+    usage,
+    requestId: opts.requestId,
+    userId: opts.userId,
+  });
 
   return { data: data as T, text, usage };
 }

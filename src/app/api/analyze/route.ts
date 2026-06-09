@@ -234,6 +234,9 @@ export async function POST(req: Request): Promise<NextResponse> {
       temperature: 0.3,
       reasoningEffort: "none",
       timeoutMs: GEMINI_TIMEOUT_MS.analyze,
+      // Cost attribution for /admin (per-user / per-request views).
+      requestId: sr?.id ?? null,
+      userId: guard.user.id,
     });
 
     // Anti-fabrication: a uniqueness verdict is legally consequential, so every
