@@ -51,7 +51,7 @@ export default function SearchPage() {
   );
   const useV2 = RETRIEVAL_V2_ENABLED || expert;
 
-  const canContinue = description.trim().length >= 80;
+  const canContinue = description.trim().length >= 60;
 
   async function handleNext() {
     if (!canContinue) return;

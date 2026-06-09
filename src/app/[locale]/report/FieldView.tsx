@@ -47,6 +47,19 @@ export function FieldView({ pool, ranked, legalStatuses, legalLoading }: FieldVi
 
   const field = useMemo(() => buildFieldView(pool, ranked), [pool, ranked]);
 
+  // #7 — все «близкие» (in-window) патенты, собранные из всех классов в один
+  // плоский список и отсортированные по релевантности (poolIndex asc = window-
+  // first). Свёрнут по умолчанию, чтобы не заслонять навигацию по классам.
+  const closeFlat = useMemo(() => {
+    const all = [
+      ...field.classes.flatMap((c) => c.patents),
+      ...field.unclassified,
+    ].filter((p) => p.inWindow);
+    all.sort((a, b) => a.poolIndex - b.poolIndex);
+    return all;
+  }, [field]);
+  const [showAllClose, setShowAllClose] = useState(false);
+
   // Class-jump (ТЗ §4.4): an expert types/clicks an IPC class → we show every
   // pool patent carrying that code in ANY position (multi-class match).
   const [jumpInput, setJumpInput] = useState("");
@@ -216,6 +229,37 @@ export function FieldView({ pool, ranked, legalStatuses, legalLoading }: FieldVi
         </div>
       )}
 
+      {/* Overview navigation (all-close list + class sections) — hidden while a
+          class-jump is active so the jump result is the focus; «Сбросить» clears
+          the jump and restores it (#4). */}
+      {!activeJump && (
+        <>
+          {/* #7 — все близкие одним списком (relevance-sorted), свёрнуто по умолчанию */}
+          {closeFlat.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => setShowAllClose((v) => !v)}
+                className="flex w-full items-center justify-between gap-3 px-6 py-4 text-left"
+                aria-expanded={showAllClose}
+              >
+                <span className="text-base font-semibold text-slate-900">
+                  {t("field.allCloseTitle")}
+                </span>
+                <span className="shrink-0 text-sm font-medium text-slate-600">
+                  {showAllClose
+                    ? t("field.allCloseHide")
+                    : t("field.allCloseShow", { n: closeFlat.length })}
+                </span>
+              </button>
+              {showAllClose && (
+                <ul className="space-y-3 border-t border-slate-100 p-6">
+                  {closeFlat.map(card)}
+                </ul>
+              )}
+            </div>
+          )}
+
       {/* Class sections (ТЗ §4.1, §4.3) */}
       <div className="mt-4 space-y-4">
         {field.classes.map((cls) => {
@@ -314,6 +358,8 @@ export function FieldView({ pool, ranked, legalStatuses, legalLoading }: FieldVi
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Field never claims completeness — escape to the expert/attorney. */}
       <p className="mt-4 text-xs leading-5 text-slate-500">{t("field.escapeAttorney")}</p>

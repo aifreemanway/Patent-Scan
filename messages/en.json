@@ -7,7 +7,7 @@
     "quotaUnlimited": "Unlimited",
     "items": {
       "search": {
-        "title": "Novelty search",
+        "title": "Patent search",
         "desc": "A fast uniqueness check of your idea and a list of similar patents with a breakdown of differences.",
         "who": "inventor, small business before filing",
         "cta": "Start search"
@@ -499,14 +499,14 @@
     "legal": "Это экспресс-предварительная оценка по открытым патентным базам. Не заменяет официальный отчёт о патентных исследованиях по ГОСТ Р 15.011-96 и заключение патентного поверенного."
   },
   "Search": {
-    "typeBadge": "Novelty search",
+    "typeBadge": "Patent search",
     "typeBadgeExpert": "Expert search",
     "title": "Describe your invention",
     "subtitle": "The more detail you provide, the sharper the search. Russian, English, and technical jargon all work.",
     "textareaLabel": "Invention description",
     "textareaPlaceholder": "For example: An automatic plastic waste sorting system using infrared spectral analysis and neural network classification by polymer type…",
     "charCount": "{n} characters",
-    "minHint": "Minimum 80 characters",
+    "minHint": "Minimum 60 characters",
     "clarifyTitle": "Follow-up questions",
     "clarifySubtitle": "AI will ask a few questions to narrow the search. Answers are optional.",
     "questions": [
@@ -612,6 +612,9 @@
       "closeCount": "{n} close",
       "showMore": "Show {n} more",
       "showLess": "Collapse",
+      "allCloseTitle": "All close patents — one list",
+      "allCloseShow": "Show ({n})",
+      "allCloseHide": "Collapse list",
       "cardClose": "close",
       "allCodes": "IPC codes",
       "whyHere": "Why here",
@@ -853,7 +856,7 @@
       "ctaUpgrade": "Switch to a paid plan",
       "ctaManage": "Manage subscription",
       "quotas": "Quotas",
-      "quotaSearch": "Novelty search",
+      "quotaSearch": "Patent search",
       "quotaLandscape": "Patent landscape",
       "quotaDeep": "Deep Analysis",
       "quotaLitReview": "Literature review",

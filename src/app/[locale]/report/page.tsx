@@ -804,9 +804,9 @@ function ReportPageInner() {
                   ·{" "}
                 </>
               )}
-              <span className="font-medium text-slate-700">
-                {t("verdictEscapeAttorney")}
-              </span>
+              {/* «обсудить с поверенным» — plain text, НЕ выделяем и не делаем
+                  ссылкой пока destination не решён (#6, реш. Vsevolod 09.06). */}
+              <span>{t("verdictEscapeAttorney")}</span>
             </p>
 
             <div className="mt-5 rounded-xl bg-slate-50 p-4">
