@@ -229,7 +229,7 @@
           "bullets": [
             "<strong>10 Поисков</strong> + <strong>1 Глубокий анализ</strong>/мес",
             "Карта промышленного применения",
-            "HTML-экспорт отчётов",
+            "Экспорт отчётов: HTML и PDF",
             "Базовая поддержка",
             "Доп. отчёты со скидкой −50%",
             "1 пользователь"
@@ -246,7 +246,7 @@
             "<strong>50 Поисков</strong> + <strong>5 Глубоких</strong> + <strong>2 Ландшафта</strong>/мес",
             "До 3 пользователей",
             "Карта промышленного применения",
-            "HTML-экспорт · приоритетная поддержка",
+            "Экспорт HTML и PDF · приоритетная поддержка",
             "Доп. отчёты со скидкой −50%"
           ]
         },
@@ -261,7 +261,7 @@
             "<strong>100 Поисков</strong> + <strong>15 Глубоких</strong> + <strong>5 Ландшафтов</strong> + <strong>4 Скрининга</strong>/год",
             "3+ пользователей",
             "Карта промышленного применения",
-            "HTML-экспорт · приоритетная поддержка",
+            "Экспорт HTML и PDF · приоритетная поддержка",
             "Доп. отчёты со скидкой −50%"
           ]
         }
@@ -689,11 +689,13 @@
       "toggleLabel": "Industrial usage",
       "loading": "Gathering owner and competitor data…",
       "loadingHint": "Querying Rospatent, open registries and the web — this can take up to a minute.",
-      "lockedTitle": "Available from the Team plan",
-      "lockedDefault": "This section shows the patent owner, products and competitors. Available on the Team plan and above.",
+      "lockedTitle": "Section disabled",
+      "lockedDefault": "This section shows the patent owner, products and competitors. Enable “Industrial usage” in your profile settings to see it.",
       "errorTitle": "Could not gather data",
       "errorAuth": "Sign-in required.",
       "errorPipeline": "Sources temporarily unavailable, try again later.",
+      "anonTeaser": "Register for free to unlock the industrial-usage map for this patent.",
+      "anonCta": "Register",
       "assigneeTitle": "Patent owner",
       "productsTitle": "Products / lines",
       "productsEmpty": "No public sources linking this patent to a specific product were found.",
@@ -1361,6 +1363,7 @@
           "searches": "3 Searches per month"
         },
         "feat": {
+          "iul": "Industrial usage in reports",
           "worldwide": "Search across world patent databases (RU, CIS, US, EP, CN, JP)",
           "history": "Check history in your account"
         }
@@ -1377,7 +1380,8 @@
           "deep": "1 Deep per month"
         },
         "feat": {
-          "export": "Report export (HTML)",
+          "iul": "Industrial usage in reports",
+          "export": "Report export (HTML & PDF)",
           "priority": "Basic support"
         }
       },
@@ -1395,8 +1399,8 @@
           "seats": "Up to 3 users"
         },
         "feat": {
-          "iul": "Industrial Usage in reports",
-          "export": "Report export (HTML)",
+          "iul": "Industrial usage in reports",
+          "export": "Report export (HTML & PDF)",
           "priority": "Priority support"
         }
       },
@@ -1414,7 +1418,7 @@
           "screening": "4 Screening credits per year"
         },
         "feat": {
-          "iul": "Industrial Usage by default",
+          "iul": "Industrial usage in reports",
           "allTeam": "All Team features"
         }
       },

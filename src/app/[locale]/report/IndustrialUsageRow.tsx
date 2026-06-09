@@ -9,6 +9,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 
 type IUSource = { ref: number; title: string; url: string; reachedAt: string | null };
 type IUAssignee = {
@@ -35,6 +36,7 @@ type FetchState =
   | { kind: "loading" }
   | { kind: "ok"; data: IUReport }
   | { kind: "locked"; upsell?: string }
+  | { kind: "anon" }
   | { kind: "error"; message: string };
 
 export function IndustrialUsageRow({
@@ -59,7 +61,8 @@ export function IndustrialUsageRow({
         body: JSON.stringify({ patentId, patentTitle }),
       });
       if (resp.status === 401) {
-        setState({ kind: "error", message: t("errorAuth") });
+        // Not logged in → friendly register teaser, not a generic error.
+        setState({ kind: "anon" });
         return;
       }
       if (resp.status === 403) {
@@ -123,6 +126,18 @@ export function IndustrialUsageRow({
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
                 <div className="font-medium">{t("lockedTitle")}</div>
                 <div className="mt-1 text-xs">{state.upsell ?? t("lockedDefault")}</div>
+              </div>
+            )}
+
+            {state.kind === "anon" && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-blue-900">
+                <div className="text-xs">{t("anonTeaser")}</div>
+                <Link
+                  href="/login"
+                  className="mt-2 inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                >
+                  {t("anonCta")}
+                </Link>
               </div>
             )}
 
