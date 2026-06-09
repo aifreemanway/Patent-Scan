@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { requireAuthAndQuota } from "@/lib/auth-quota";
+import { requireAuth } from "@/lib/auth-quota";
+import { checkAndChargeQuota } from "@/lib/quota";
 import {
   GEMINI_TIMEOUT_MS,
   MAX_DESCRIPTION_LEN,
@@ -16,6 +17,7 @@ import {
   geminiErrorToStatus,
 } from "@/lib/gemini";
 import {
+  countExpertRuns,
   createSearchRequest,
   deriveTopic,
   markSearchRequestCompleted,
@@ -102,7 +104,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   });
   if (rl) return rl;
 
-  const guard = await requireAuthAndQuota("search");
+  const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;
@@ -117,6 +119,8 @@ export async function POST(req: Request): Promise<NextResponse> {
     description?: string;
     answers?: string[];
     patents?: InputPatent[];
+    // "v2" marks an «Экспертный поиск» run (opt-in recall-v2 path).
+    engine?: string;
     // Silent-capture calibration extras (optional, backward-compatible).
     questions?: string[];
     diagnostics?: { topGroups?: string[]; queries?: string[]; total?: number };
@@ -139,6 +143,33 @@ export async function POST(req: Request): Promise<NextResponse> {
       { error: `description must be at most ${MAX_DESCRIPTION_LEN} characters` },
       { status: 413 }
     );
+  }
+
+  // Quota (Guardrail B): «Экспертный поиск» (engine="v2") gets 1 free run per
+  // account — a SEPARATE entitlement, NOT drawn from the monthly Поиск quota.
+  // The first expert run (no prior engine='v2' rows) is free; after that it
+  // spends the search quota (or 402-upsells on exceed). Consumer search always
+  // spends the search quota. Auth already happened above without charging.
+  const isExpert = body.engine === "v2";
+  let tier: string | null = null;
+  const freeExpertRun = isExpert && (await countExpertRuns(guard.user.id)) === 0;
+  if (!freeExpertRun) {
+    const quota = await checkAndChargeQuota(guard.user.id, "search");
+    if (!quota.ok) {
+      return quota.reason === "quota_exceeded"
+        ? NextResponse.json(
+            {
+              error: "quota_exceeded",
+              tier: quota.tier,
+              limit: quota.limit,
+              used: quota.used,
+              operation: "search",
+            },
+            { status: 402 }
+          )
+        : NextResponse.json({ error: "internal_error" }, { status: 500 });
+    }
+    tier = quota.tier ?? null;
   }
 
   const patents = (body.patents ?? []).slice(0, MAX_PATENTS_ANALYZE);
@@ -174,7 +205,14 @@ export async function POST(req: Request): Promise<NextResponse> {
     type: "novelty",
     topic: deriveTopic(description),
     description,
-    params: { answers, patentsInput: patents.length },
+    params: {
+      answers,
+      patentsInput: patents.length,
+      // Instrumentation (Guardrail E, no new PII surface): engine/mode let us
+      // pull side-by-side v1-vs-v2 pairs and back the 1-free expert counter.
+      engine: isExpert ? "v2" : "v1",
+      mode: isExpert ? "field" : "verdict",
+    },
     calibration: {
       session_id: sessionId,
       input_richness: computeInputRichness(description),
@@ -262,8 +300,9 @@ export async function POST(req: Request): Promise<NextResponse> {
       ...responsePayload,
       requestId: sr?.id ?? null,
       // Account tier — lets the report pick a smart Verdict/Field default
-      // (institute/team+/enterprise → Field). Not sensitive; the user owns it.
-      tier: guard.tier ?? null,
+      // (institute/team+/enterprise → Field). Null on a free expert run (no
+      // charge happened); the report still defaults to Field via _expert.
+      tier,
     });
   } catch (e) {
     const message =

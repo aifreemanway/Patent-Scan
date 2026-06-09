@@ -136,7 +136,10 @@ export default function SearchPage() {
           description: description.trim(),
           answers: cleanAnswers,
           patents: hits,
-          engine: useV2 ? "v2" : "v1",
+          // Tag the PRODUCT (Экспертный поиск), not the retrieval version — so a
+          // QA flag-driven v2 run on normal /search isn't treated as an expert
+          // run by the 1-free quota gate. Retrieval still follows useV2 above.
+          engine: expert ? "v2" : "v1",
         }),
       });
 
