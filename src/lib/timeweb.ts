@@ -53,6 +53,10 @@ export async function callTimewebJson<T>(opts: {
   timeoutMs?: number;
   /** Short call-site tag for the `[cost]` telemetry line. */
   label?: string;
+  /** Optional cost-attribution IDs forwarded to logCost → llm_cost_events
+   *  (per-request / per-user views in /admin). */
+  requestId?: string | null;
+  userId?: string | null;
 }): Promise<TimewebJsonResult<T>> {
   const {
     apiKey,
@@ -142,7 +146,13 @@ export async function callTimewebJson<T>(opts: {
     output: usageRaw.completion_tokens ?? 0,
   };
 
-  logCost({ label: opts.label ?? "timeweb", model, usage });
+  logCost({
+    label: opts.label ?? "timeweb",
+    model,
+    usage,
+    requestId: opts.requestId,
+    userId: opts.userId,
+  });
 
   return { data, text, usage };
 }
