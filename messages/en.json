@@ -3,13 +3,14 @@
     "title": "New search",
     "subtitle": "Choose what you want to do — each tool has its own purpose and output.",
     "whoLabel": "Best for",
+    "quotaRemaining": "{remaining} of {limit} left",
+    "quotaUnlimited": "Unlimited",
     "items": {
       "search": {
         "title": "Novelty search",
         "desc": "A fast uniqueness check of your idea and a list of similar patents with a breakdown of differences.",
         "who": "inventor, small business before filing",
-        "cta": "Start search",
-        "tag": "Free"
+        "cta": "Start search"
       },
       "landscape": {
         "title": "Patent landscape",

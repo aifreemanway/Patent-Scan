@@ -1,12 +1,13 @@
 // /new-search — product chooser. The account "+ Новый поиск" button lands here
 // so the user picks WHICH product (Поиск новизны / Патентный ландшафт / Скрининг)
 // before being dropped into a form, instead of silently defaulting to novelty.
-// Server component: locale + header, then a static card grid of Links to each
-// product's own page (those pages keep their own auth/quota/tier gating).
+// Server component: locale + header + the user's live per-product quota, then a
+// card grid of Links to each product's own page (those keep their own gating).
 
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { Header } from "@/components/Header";
 import { Link } from "@/i18n/navigation";
+import { createSupabaseServer } from "@/lib/supabase-server";
 
 type ProductKey = "search" | "landscape" | "screening";
 
@@ -15,6 +16,20 @@ const PRODUCTS: { key: ProductKey; href: string }[] = [
   { key: "landscape", href: "/landscape" },
   { key: "screening", href: "/literature-review" },
 ];
+
+// Which get_quota_status() bucket backs each product's badge. Screening has no
+// monthly quota counter (paid/ordered separately), so it shows no badge.
+const QUOTA_KEY: Record<ProductKey, "search" | "landscape" | null> = {
+  search: "search",
+  landscape: "landscape",
+  screening: null,
+};
+
+// Unlimited sentinel — matches get_quota_status() / the account quota grid.
+const UNLIMITED = 999999;
+
+type QuotaInfo = { limit: number; used: number; remaining: number };
+type QuotaStatus = { search?: QuotaInfo; landscape?: QuotaInfo };
 
 // Minimal line icons (inherit currentColor) — one per product.
 const ICONS: Record<ProductKey, React.ReactNode> = {
@@ -51,8 +66,45 @@ export default async function NewSearchPage({
   const t = await getTranslations("NewSearch");
   const items = t.raw("items") as Record<
     ProductKey,
-    { title: string; desc: string; who: string; cta: string; tag?: string }
+    { title: string; desc: string; who: string; cta: string }
   >;
+
+  // Live per-product quota for the signed-in user. The chooser is reachable both
+  // authed (from the account sidebar) and not, so this is best-effort: no user →
+  // no badges (the product pages still gate). Anti-fab: we only show a quota
+  // badge for a product the RPC actually returned a counter for.
+  let quota: QuotaStatus = {};
+  try {
+    const supabase = await createSupabaseServer();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase.rpc("get_quota_status");
+      quota = (data ?? {}) as QuotaStatus;
+    }
+  } catch {
+    quota = {};
+  }
+
+  const badgeFor = (key: ProductKey) => {
+    const bucket = QUOTA_KEY[key];
+    const q = bucket ? quota[bucket] : undefined;
+    if (!q || typeof q.limit !== "number") return null;
+    if (q.limit >= UNLIMITED) {
+      return { text: t("quotaUnlimited"), tone: "ok" as const };
+    }
+    const remaining = typeof q.remaining === "number" ? q.remaining : q.limit - q.used;
+    return {
+      text: t("quotaRemaining", { remaining: Math.max(0, remaining), limit: q.limit }),
+      tone: remaining <= 0 ? ("out" as const) : ("ok" as const),
+    };
+  };
+
+  const BADGE_TONE = {
+    ok: "bg-emerald-100 text-emerald-800",
+    out: "bg-rose-100 text-rose-800",
+  };
 
   return (
     <>
@@ -67,6 +119,7 @@ export default async function NewSearchPage({
           <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {PRODUCTS.map(({ key, href }) => {
               const it = items[key];
+              const badge = badgeFor(key);
               return (
                 <Link
                   key={key}
@@ -86,9 +139,11 @@ export default async function NewSearchPage({
                         {ICONS[key]}
                       </svg>
                     </span>
-                    {it.tag && (
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-                        {it.tag}
+                    {badge && (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${BADGE_TONE[badge.tone]}`}
+                      >
+                        {badge.text}
                       </span>
                     )}
                   </div>
