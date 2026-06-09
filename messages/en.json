@@ -1,4 +1,30 @@
 {
+  "NewSearch": {
+    "title": "New search",
+    "subtitle": "Choose what you want to do — each tool has its own purpose and output.",
+    "whoLabel": "Best for",
+    "items": {
+      "search": {
+        "title": "Novelty search",
+        "desc": "A fast uniqueness check of your idea and a list of similar patents with a breakdown of differences.",
+        "who": "inventor, small business before filing",
+        "cta": "Start search",
+        "tag": "Free"
+      },
+      "landscape": {
+        "title": "Patent landscape",
+        "desc": "A map of patents on a topic: key directions, geography, timeline, trends and the competitive field.",
+        "who": "IP manager, R&D strategist, investor",
+        "cta": "Build landscape"
+      },
+      "screening": {
+        "title": "Screening (lit review)",
+        "desc": "An in-depth review of a technology area: patents, scientific publications and the web — with conclusions and recommendations.",
+        "who": "development team, research institute",
+        "cta": "Order screening"
+      }
+    }
+  },
   "Meta": {
     "title": "Patent-Scan — check your invention's uniqueness",
     "description": "AI portal for patent clearance: Russia, US, Europe, Japan, China in one minute."
@@ -449,6 +475,7 @@
     "legal": "Это экспресс-предварительная оценка по открытым патентным базам. Не заменяет официальный отчёт о патентных исследованиях по ГОСТ Р 15.011-96 и заключение патентного поверенного."
   },
   "Search": {
+    "typeBadge": "Novelty search",
     "title": "Describe your invention",
     "subtitle": "The more detail you provide, the sharper the search. Russian, English, and technical jargon all work.",
     "textareaLabel": "Invention description",
@@ -615,6 +642,7 @@
     }
   },
   "Landscape": {
+    "typeBadge": "Patent landscape",
     "title": "Patent landscape",
     "subtitle": "Describe a technology area — we build a patent map: key directions, geography, timeline, trends.",
     "textareaLabel": "Technology area description",
@@ -851,6 +879,7 @@
     "explainer": "Industry-tech overview of your topic: producers, technologies, competitors, sources.",
     "short": "review",
     "intake": {
+      "typeBadge": "Screening (lit review)",
       "h1": "Literature review on your topic",
       "lead": "We gather scientific publications, patents and open industry sources and synthesise a structured report with tables of producers, technologies and competitors.",
       "explainer": "Industry-tech overview of your topic: producers, technologies, competitors, sources. Not an academic literature review and not a formal patentability study.",
