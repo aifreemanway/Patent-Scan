@@ -12,6 +12,12 @@
         "who": "inventor, small business before filing",
         "cta": "Start search"
       },
+      "expert": {
+        "title": "Expert search",
+        "desc": "A navigable field of candidates organised by IPC class — for finding the closest analogs and the prototype.",
+        "who": "patent expert, R&D team, design institute",
+        "cta": "Open expert search"
+      },
       "landscape": {
         "title": "Patent landscape",
         "desc": "A map of patents on a topic: key directions, geography, timeline, trends and the competitive field.",
@@ -477,6 +483,7 @@
   },
   "Search": {
     "typeBadge": "Novelty search",
+    "typeBadgeExpert": "Expert search",
     "title": "Describe your invention",
     "subtitle": "The more detail you provide, the sharper the search. Russian, English, and technical jargon all work.",
     "textareaLabel": "Invention description",

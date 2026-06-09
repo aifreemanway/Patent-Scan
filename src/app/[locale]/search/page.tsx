@@ -41,6 +41,15 @@ export default function SearchPage() {
   const rotatingMsg = useRotatingText(activePhrases, 7000);
   const [errorMsg, setErrorMsg] = useState("");
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
+  // Экспертный поиск (opt-in из чузера: ?mode=expert) форсит recall-v2 + поле
+  // независимо от прод-флага RETRIEVAL_V2_ENABLED (он держит /search-дефолт на v1,
+  // Гардрейл A). Читаем из URL один раз на маунте — без useSearchParams (Suspense).
+  const [expert] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("mode") === "expert"
+  );
+  const useV2 = RETRIEVAL_V2_ENABLED || expert;
 
   const canContinue = description.trim().length >= 80;
 
@@ -100,7 +109,7 @@ export default function SearchPage() {
       // window-first plus diagnostics.ranked (the LLM-ranked window size). Both
       // versions share the same result shape; v2 additionally feeds the Expert
       // Field-View. v1 stays the verdict-only prod path until the recall-v2 hold lifts.
-      const { hits, total, diagnostics } = RETRIEVAL_V2_ENABLED
+      const { hits, total, diagnostics } = useV2
         ? await retrieveNoveltyPriorArtV2({
             description: description.trim(),
             answers: cleanAnswers,
@@ -127,6 +136,7 @@ export default function SearchPage() {
           description: description.trim(),
           answers: cleanAnswers,
           patents: hits,
+          engine: useV2 ? "v2" : "v1",
         }),
       });
 
@@ -157,12 +167,14 @@ export default function SearchPage() {
 
       // Account tier — drives the report's smart Verdict/Field default.
       report._tier = report.tier ?? null;
+      // Expert-search runs land on the Field view by default (report reads this).
+      report._expert = expert;
 
       // Expert Field-View payload: the FULL pool (window-first) trimmed to the
       // fields the field view needs (abstracts dropped to keep sessionStorage
       // bounded), plus the ranked-window size that marks "close" patents. Only
-      // attached under the v2 flag — without it the report stays verdict-only.
-      if (RETRIEVAL_V2_ENABLED && hits.length > 0) {
+      // attached under v2 (flag OR expert) — without it the report stays verdict-only.
+      if (useV2 && hits.length > 0) {
         const pool: FieldPatentInput[] = hits.map((h) => ({
           id: h.id,
           title: h.title,
@@ -192,7 +204,7 @@ export default function SearchPage() {
           {step === "input" && (
             <section>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {t("typeBadge")}
+                {expert ? t("typeBadgeExpert") : t("typeBadge")}
               </span>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 {t("title")}

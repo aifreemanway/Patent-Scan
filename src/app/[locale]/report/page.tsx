@@ -76,6 +76,9 @@ type ReportData = {
   };
   // Account tier — drives the smart Verdict/Field default.
   _tier?: string | null;
+  // Set when the run came from the «Экспертный поиск» entry (?mode=expert) —
+  // the report opens on the Field view by default for this intent.
+  _expert?: boolean;
 };
 
 type ReportMode = "verdict" | "field";
@@ -462,13 +465,19 @@ function ReportPageInner() {
     } catch {
       saved = null;
     }
+    // Expert-search entry → Field view is the intent; it wins over the global
+    // saved toggle and tier default (the user can still switch within the report).
+    if (data?._expert) {
+      setMode("field");
+      return;
+    }
     if (saved === "field" || saved === "verdict") {
       setMode(saved);
       return;
     }
     const tier = (data?._tier ?? "").toLowerCase();
     setMode(FIELD_DEFAULT_TIERS.has(tier) ? "field" : "verdict");
-  }, [hasField, data?._tier]);
+  }, [hasField, data?._tier, data?._expert]);
 
   const setModePersist = (m: ReportMode) => {
     setMode(m);
