@@ -50,3 +50,8 @@ scripts/samara-rank-probe.ts
 scripts/samara-stability-batch.ps1
 scripts/samara-determinism-probe.ts
 scripts/samara-fieldview-verify.ts
+
+# Samara-coupled recall harnesses (import gitignored samara-fixture) — local-only,
+# else a clean checkout (Vercel/VPS) fails next build type-check.
+scripts/t1-recall-test.ts
+scripts/t1-recall-test-v2.ts
