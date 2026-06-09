@@ -1001,8 +1001,8 @@ function ReportPageInner() {
                             })()}
                           </td>
                         </tr>
-                        {/* Industrial Usage — lazy-loaded on click. Free/Starter
-                            users get a lock + upsell from the endpoint (403). */}
+                        {/* Industrial Usage — lazy-loaded on click. Available on
+                            all tiers; the endpoint 403s only if toggled off in profile. */}
                         <IndustrialUsageRow
                           patentId={p.id}
                           patentTitle={p.title}

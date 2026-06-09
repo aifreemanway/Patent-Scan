@@ -70,6 +70,28 @@ function SubBullets({ items }: { items: string[] }) {
   );
 }
 
+// Value-anchor блок (ba v3.1) — ориентировочная экономия времени специалиста на
+// тарифе. Hard-слова (ДО / ориентировочная / рутинного / специалиста) — verbatim
+// из i18n. ₽ не показываем (клиент считает по своей ставке). Период-независим.
+function ValueAnchor({ head, units }: { head: string; units: string }) {
+  return (
+    <div
+      style={{
+        borderLeft: "3px solid var(--accent, #2563eb)",
+        background: "rgba(37,99,235,0.06)",
+        padding: "10px 12px",
+        borderRadius: 8,
+        margin: "2px 0 14px",
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong, #0f172a)", lineHeight: 1.45 }}>
+        {head}
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--slate, #64748b)", marginTop: 4 }}>{units}</div>
+    </div>
+  );
+}
+
 // ─── Main component ─────────────────────────────────────────────────────────
 export function PricingV7() {
   const t = useTranslations("Pricing");
@@ -147,6 +169,10 @@ export function PricingV7() {
               <span className="sub-amount">{formatRub(PRICE_FREE, locale)}</span>
             </div>
             <div className="sub-for">{t("tiers.free.desc")}</div>
+            <ValueAnchor
+              head={t("tiers.free.valueAnchor.head")}
+              units={t("tiers.free.valueAnchor.units")}
+            />
             <SubBullets
               items={[
                 ...SUBSCRIPTION_TIERS.find((x) => x.id === "free")!.quotaKeys.map((k) => t(k)),
@@ -201,6 +227,11 @@ export function PricingV7() {
 
                 <div className="sub-for month-only">{t(`tiers.${tierKey}.desc`)}</div>
                 <div className="sub-for year-only">{t("forYearNote")}</div>
+
+                <ValueAnchor
+                  head={t(`tiers.${tierKey}.valueAnchor.head`)}
+                  units={t(`tiers.${tierKey}.valueAnchor.units`)}
+                />
 
                 <SubBullets items={bullets} />
 
@@ -300,14 +331,8 @@ export function PricingV7() {
                     {formatRub(oneOffPrice(product), locale)}
                   </span>
                 </div>
-                <div className="sub-for" style={{ marginBottom: 4 }}>
+                <div className="sub-for" style={{ marginBottom: 20 }}>
                   {t(`products.${product.id}.desc`)}
-                </div>
-                <div
-                  className="sub-for"
-                  style={{ fontSize: 12, color: "var(--slate-soft)", marginBottom: 20 }}
-                >
-                  {t(`products.${product.id}.time`)}
                 </div>
                 <TrackedLink
                   href={ctaHref(product.cta)}
