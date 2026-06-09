@@ -833,7 +833,7 @@
       "enterprise": "Enterprise",
       "descFree": "Free trial: 1 novelty search, 1 landscape, 1 Deep Analysis — for the lifetime of the account.",
       "descStarter": "Subscription for occasional checks: 20 novelty searches per month + full landscape access.",
-      "descTeam": "Team subscription: unlimited searches, 1 review per month included, Industrial Usage by default.",
+      "descTeam": "Team subscription: unlimited searches, 1 review per month included, industrial usage in reports.",
       "descEnterprise": "Enterprise plan: unlimited everything, 2 reviews per month, priority support."
     },
     "type": {
@@ -922,7 +922,7 @@
       "industrialTitle": "Industrial Usage",
       "industrialBody": "Include a commercial market-map block for top patents in novelty reports: assignee, product lines, competitors, licensing.",
       "industrialAvailable": "Available on your plan. On by default.",
-      "industrialUpsell": "Available from the Team plan.",
+      "industrialUpsell": "Available on all plans after registration.",
       "emailReadyTitle": "Review-ready notifications",
       "emailReadyBody": "Send an email when a literature review is ready. Usually takes 1-3 business days.",
       "emailReadyNote": "The receipt-confirmation email always sends — it is a protected transactional message.",
