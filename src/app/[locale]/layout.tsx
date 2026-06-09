@@ -91,9 +91,10 @@ export default async function LocaleLayout({
   setRequestLocale(locale);
 
   // JSON-LD @graph (Organization + WebSite + Service) — per ap-mediabuyer SEO/LLM
-  // package (seo-content-package-v7-2026-06-03). Anti-fab: NO telephone/address/
-  // sameAs (no confirmed data); logo points to og-image.png (real asset) until a
-  // dedicated logo.png lands.
+  // package (seo-content-package-v7-2026-06-03). Anti-fab: NO telephone/address
+  // (no confirmed data); sameAs = verified Wikidata Q140137856 (raw API P856 →
+  // patent-scan.ru confirms the entity is ours); logo points to og-image.png
+  // (real asset) until a dedicated logo.png lands.
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
   const jsonLd = {
@@ -108,6 +109,10 @@ export default async function LocaleLayout({
         description:
           "ИИ-сервис патентного поиска и анализа патентной чистоты по мировым базам через государственный API Роспатент PatSearch.",
         logo: `${siteUrl}/og-image.png`,
+        // Verified Wikidata entity (Q140137856: instance-of business, industry
+        // patent, official website = patent-scan.ru) — strengthens entity identity
+        // in the Google/Yandex knowledge graph and for LLM citation.
+        sameAs: ["https://www.wikidata.org/wiki/Q140137856"],
       },
       {
         "@type": "WebSite",
