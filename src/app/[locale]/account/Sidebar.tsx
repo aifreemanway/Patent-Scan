@@ -72,7 +72,7 @@ export function Sidebar({
       </nav>
       <div className="mt-8 border-t border-slate-200 pt-6">
         <Link
-          href="/search"
+          href="/new-search"
           className="block rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
         >
           {t("newSearch")}

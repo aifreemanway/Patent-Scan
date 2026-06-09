@@ -39,7 +39,10 @@ export default async function LiteratureReviewIntakePage({
       <main className="flex-1 px-6 py-12">
         <div className="mx-auto max-w-2xl">
           <header className="mb-8">
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+              {t("typeBadge")}
+            </span>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
               {t("h1")}
             </h1>
             <p className="mt-3 text-slate-600">{t("lead")}</p>

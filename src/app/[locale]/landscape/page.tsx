@@ -194,7 +194,10 @@ export default function LandscapePage() {
         <div className="mx-auto w-full max-w-3xl px-6 py-12 sm:py-16">
           {step === "input" && (
             <section>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                {t("typeBadge")}
+              </span>
+              <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 {t("title")}
               </h1>
               <p className="mt-3 text-slate-600">{t("subtitle")}</p>
