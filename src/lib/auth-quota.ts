@@ -13,7 +13,7 @@ import { checkAndChargeQuota, type QuotaOperation } from "./quota";
 import type { User } from "@supabase/supabase-js";
 
 export type AuthGuardResult =
-  | { ok: true; user: User }
+  | { ok: true; user: User; tier?: string }
   | { ok: false; response: NextResponse };
 
 // Shared error → HTTP-response mapping for the verified-user guards.
@@ -90,7 +90,9 @@ export async function requireAuthAndQuota(
   if (!auth.ok) return auth;
 
   const quota = await checkAndChargeQuota(auth.user.id, operation);
-  if (quota.ok) return auth;
+  // Carry the resolved tier on success so callers can tailor the response
+  // (e.g. the report's Verdict/Field default) without a second profile lookup.
+  if (quota.ok) return { ...auth, tier: quota.tier };
 
   if (quota.reason === "quota_exceeded") {
     return {

@@ -258,7 +258,13 @@ export async function POST(req: Request): Promise<NextResponse> {
       undefined,
       calibrationOutput
     );
-    return NextResponse.json({ ...responsePayload, requestId: sr?.id ?? null });
+    return NextResponse.json({
+      ...responsePayload,
+      requestId: sr?.id ?? null,
+      // Account tier — lets the report pick a smart Verdict/Field default
+      // (institute/team+/enterprise → Field). Not sensitive; the user owns it.
+      tier: guard.tier ?? null,
+    });
   } catch (e) {
     const message =
       e instanceof Error ? e.message : "Analysis service unavailable";

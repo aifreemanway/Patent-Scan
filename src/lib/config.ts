@@ -2,6 +2,22 @@
 // Override via env vars where indicated; other values are tuning knobs that
 // require a redeploy on change.
 
+// --- Feature flags (compile-time, BILLING_LIVE pattern) ---
+
+/** Expert Field-View / retrieval-v2 master switch.
+ *  When ON, the search flow uses the v2 retrieval (novelty-retrieval-v2) and the
+ *  report stores the full classified pool (`_field`) so the report page can offer
+ *  the two-mode Verdict/Field expert view. When OFF, the flow stays on v1 and the
+ *  report is verdict-only (current prod behaviour). Kept FALSE on prod until the
+ *  recall-v2 hold is lifted; flip to true on the recall-v2-hold branch for QA.
+ *  Read from the client bundle (the retrieval call runs in the browser), so the
+ *  override MUST be a NEXT_PUBLIC_ var — it's inlined at build/dev start. Default
+ *  OFF: prod (main) never sets it. QA enables WITHOUT touching code via
+ *    $env:NEXT_PUBLIC_RETRIEVAL_V2_ENABLED=1; npm run dev   (PowerShell)
+ *  See [[project_recall_pivot_expert_field_view]]. */
+export const RETRIEVAL_V2_ENABLED =
+  process.env.NEXT_PUBLIC_RETRIEVAL_V2_ENABLED === "1";
+
 // --- Gemini (routed via the Timeweb gateway — see lib/gemini.ts) ---
 
 /** Gemini model id on the Timeweb gateway. Override via env `GEMINI_MODEL`
