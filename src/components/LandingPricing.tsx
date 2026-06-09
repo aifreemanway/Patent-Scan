@@ -52,6 +52,28 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
+// Value-anchor блок (ba v3.1) — ориентировочная экономия времени специалиста на
+// тарифе. Hard-слова (ДО / ориентировочная / рутинного / специалиста) — verbatim
+// из i18n, НЕ упрощать. ₽ не показываем (клиент сам считает по своей ставке).
+function ValueAnchor({ head, units }: { head: string; units: string }) {
+  return (
+    <div
+      style={{
+        borderLeft: "3px solid var(--accent, #2563eb)",
+        background: "rgba(37,99,235,0.06)",
+        padding: "10px 12px",
+        borderRadius: 8,
+        margin: "2px 0 14px",
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong, #0f172a)", lineHeight: 1.45 }}>
+        {head}
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--slate, #64748b)", marginTop: 4 }}>{units}</div>
+    </div>
+  );
+}
+
 export function LandingPricing() {
   const t = useTranslations("Landing.subs");
   const locale = useLocale();
@@ -97,6 +119,10 @@ export function LandingPricing() {
               <span className="sub-amount">{formatRub(PRICE_FREE, locale)}</span>
             </div>
             <div className="sub-for">{t("plans.free.for")}</div>
+            <ValueAnchor
+              head={t("plans.free.valueAnchor.head")}
+              units={t("plans.free.valueAnchor.units")}
+            />
             <Bullets items={t.raw("plans.free.bullets") as string[]} />
             <TrackedLink href="/login" goal="login_click" className="sub-cta">
               {t("ctaRegister")}
@@ -128,6 +154,11 @@ export function LandingPricing() {
                   {t("economyTpl", { amount: formatRub(economy, locale) })}
                 </div>
                 <div className="sub-for price-month">{t(`plans.${p.id}.for`)}</div>
+
+                <ValueAnchor
+                  head={t(`plans.${p.id}.valueAnchor.head`)}
+                  units={t(`plans.${p.id}.valueAnchor.units`)}
+                />
 
                 <Bullets items={t.raw(`plans.${p.id}.bullets`) as string[]} />
 

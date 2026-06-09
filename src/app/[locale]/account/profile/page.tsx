@@ -10,10 +10,6 @@ import {
   deleteAccount,
 } from "@/lib/server-actions/account";
 
-type Tier = "free" | "starter" | "team" | "enterprise";
-
-const INDUSTRIAL_USAGE_AVAILABLE: ReadonlyArray<Tier> = ["team", "enterprise"];
-
 export default async function ProfilePage({
   params,
 }: {
@@ -33,8 +29,8 @@ export default async function ProfilePage({
     .eq("id", user.id)
     .single();
 
-  const tier = (profile?.tier ?? "free") as Tier;
-  const canUseIndustrial = INDUSTRIAL_USAGE_AVAILABLE.includes(tier);
+  // Industrial Usage доступен на всех тарифах (решение Vsevolod 2026-06-09).
+  const canUseIndustrial = true;
 
   return (
     <div className="mx-auto max-w-2xl space-y-10">

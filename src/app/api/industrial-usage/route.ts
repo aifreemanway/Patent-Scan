@@ -4,10 +4,10 @@
 // section on a patent row. Returns a per-patent commercial map: canonical
 // assignee + company profile + product mentions + competitor list + sources.
 //
-// Gating per spec: free + starter → 403 with upsell info (UI shows lock).
-// Team / Enterprise → full report. No quota charge — cost is ~₽1 per call on
-// Gemini Flash, far below the threshold where per-call billing would be worth
-// the friction. Per-IP rate limit caps abuse.
+// Available on ALL tiers (Vsevolod 2026-06-09 — «IUL на всех тарифах, не Team+»).
+// No quota charge — cost is ~₽1 per call on Gemini Flash, far below the threshold
+// where per-call billing would be worth the friction. Per-IP rate limit caps
+// abuse; the per-user toggle (/account/profile) can still hide the section.
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
@@ -18,8 +18,6 @@ import { RATE_WINDOW_MS } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-const ALLOWED_TIERS = new Set(["team", "enterprise"]);
 
 export async function POST(req: Request): Promise<NextResponse> {
   const rl = await rateLimit(req, {
@@ -32,30 +30,19 @@ export async function POST(req: Request): Promise<NextResponse> {
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
-  // Tier gate — check the user's profile.tier. Free / starter get a 403 with
-  // upsell payload (UI shows a lock + "upgrade to Team" CTA).
+  // Available on all tiers. We still load the per-user toggle so a user who
+  // turned the section off in /account/profile gets the lock instead.
   const admin = createSupabaseAdmin();
   const { data: profile, error: profErr } = await admin
     .from("profiles")
-    .select("tier, industrial_usage_enabled")
+    .select("industrial_usage_enabled")
     .eq("id", guard.user.id)
     .single();
   if (profErr || !profile) {
     return NextResponse.json({ error: "profile_lookup_failed" }, { status: 500 });
   }
-  if (!ALLOWED_TIERS.has(profile.tier)) {
-    return NextResponse.json(
-      {
-        error: "tier_required",
-        tier: profile.tier,
-        required: ["team", "enterprise"],
-        upsell: "Industrial Usage доступен с тарифа «Команда» и выше.",
-      },
-      { status: 403 }
-    );
-  }
-  // User-level toggle (set in /account/profile) lets a team user hide the
-  // section entirely. We still return 403 so the UI knows to render the lock.
+  // User-level toggle (set in /account/profile) lets a user hide the section
+  // entirely. We still return 403 so the UI knows to render the lock.
   if (profile.industrial_usage_enabled === false) {
     return NextResponse.json(
       { error: "toggled_off", upsell: "Включите «Industrial Usage» в /account/profile." },

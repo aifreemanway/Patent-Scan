@@ -168,6 +168,7 @@
             "Мировые игроки и их IP-портфели",
             "Тренды развития и прогнозы",
             "Источники: научные статьи + патенты",
+            "Находит документы вне индекса обычного поиска — научные публикации, отраслевой веб, нишевые техисточники",
             "Промышленное применение по теме",
             "Выводы и рекомендации",
             "Готовый PDF-отчёт"
@@ -200,6 +201,10 @@
         "free": {
           "tag": "Free",
           "for": "Познакомиться с продуктом",
+          "valueAnchor": {
+            "head": "До ~2 рабочих дней — ориентировочная экономия рутинного поиска специалиста на тарифе",
+            "units": "каждый Поиск ≈ 1 рабочий день"
+          },
           "bullets": [
             "<strong>3 Поиска</strong>/мес",
             "Карта промышленного применения",
@@ -211,6 +216,10 @@
         "starter": {
           "tag": "Starter",
           "for": "Изобретатель, регулярная работа",
+          "valueAnchor": {
+            "head": "До ~2 рабочих недель — ориентировочная экономия рутинного поиска специалиста на тарифе",
+            "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня"
+          },
           "bullets": [
             "<strong>10 Поисков</strong> + <strong>1 Глубокий анализ</strong>/мес",
             "Карта промышленного применения",
@@ -223,6 +232,10 @@
         "team": {
           "tag": "Team",
           "for": "Команда, патентная практика",
+          "valueAnchor": {
+            "head": "До ~2 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
+            "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
+          },
           "bullets": [
             "<strong>50 Поисков</strong> + <strong>5 Глубоких</strong> + <strong>2 Ландшафта</strong>/мес",
             "До 3 пользователей",
@@ -234,6 +247,10 @@
         "teamPlus": {
           "tag": "TeamPlus",
           "for": "Полный цикл, R&D-отдел",
+          "valueAnchor": {
+            "head": "До ~5 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
+            "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
+          },
           "bullets": [
             "<strong>100 Поисков</strong> + <strong>15 Глубоких</strong> + <strong>5 Ландшафтов</strong> + <strong>4 Скрининга</strong>/год",
             "3+ пользователей",
@@ -1155,7 +1172,8 @@
             "Карта IP по теме (как в Ландшафте) + синтез поверх неё",
             "Структурированные таблицы (заявители, страны, годы, существенные признаки)",
             "Сравнение технологий и выводы по применимости",
-            "Карта промышленного применения области (IUL)"
+            "Карта промышленного применения области (IUL)",
+            "Находит документы вне индекса обычного поиска — научные публикации, отраслевой веб, нишевые техисточники"
           ],
           "turnaround": "до получаса, в фоновом режиме"
         }
@@ -1289,6 +1307,10 @@
       "free": {
         "name": "Free",
         "desc": "Get acquainted. Check your idea for free.",
+        "valueAnchor": {
+          "head": "До ~2 рабочих дней — ориентировочная экономия рутинного поиска специалиста на тарифе",
+          "units": "каждый Поиск ≈ 1 рабочий день"
+        },
         "quota": {
           "searches": "3 Searches per month"
         },
@@ -1300,6 +1322,10 @@
       "starter": {
         "name": "Starter",
         "desc": "For the inventor. Regularly check your ideas and get a deep analysis.",
+        "valueAnchor": {
+          "head": "До ~2 рабочих недель — ориентировочная экономия рутинного поиска специалиста на тарифе",
+          "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня"
+        },
         "quota": {
           "searches": "10 Searches per month",
           "deep": "1 Deep per month"
@@ -1312,6 +1338,10 @@
       "team": {
         "name": "Team",
         "desc": "For teams and patent practice. A flow of checks, analyses, landscapes.",
+        "valueAnchor": {
+          "head": "До ~2 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
+          "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
+        },
         "quota": {
           "searches": "50 Searches per month",
           "deep": "5 Deep per month",
@@ -1327,6 +1357,10 @@
       "team_plus": {
         "name": "Team Plus",
         "desc": "For R&D departments. Everything in Team plus Screenings and Industrial Usage.",
+        "valueAnchor": {
+          "head": "До ~5 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
+          "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
+        },
         "quota": {
           "searches": "100 Searches per month",
           "deep": "15 Deep per month",
@@ -1354,18 +1388,15 @@
     "products": {
       "deep": {
         "name": "Deep",
-        "desc": "Whether your development can be patented and on what grounds. Feature-by-feature analysis and an honest assessment.",
-        "time": "≈ 2–5 minutes"
+        "desc": "Whether your development can be patented and on what grounds. Feature-by-feature analysis and an honest assessment."
       },
       "landscape": {
         "name": "Landscape",
-        "desc": "A map of patent activity in your field: who, where and what is being patented.",
-        "time": "≈ 2–5 minutes"
+        "desc": "A map of patent activity in your field: who, where and what is being patented."
       },
       "screening": {
         "name": "Screening",
-        "desc": "A map of the field plus synthesis: comparison, Industrial Usage and conclusions. Pre-screening before an institute or attorney.",
-        "time": "≈ 10–15 minutes"
+        "desc": "A map of the field plus synthesis: comparison, Industrial Usage and conclusions. Pre-screening before an institute or attorney."
       }
     },
     "faq": {

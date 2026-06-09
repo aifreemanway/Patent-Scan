@@ -322,9 +322,6 @@ function ProductCard({
       <p className="mt-2 text-sm text-slate-600">
         {t(`products.${product.id}.desc`)}
       </p>
-      <p className="mt-1 text-xs text-slate-400">
-        {t(`products.${product.id}.time`)}
-      </p>
       <p className="mt-4 text-2xl font-bold text-slate-900">
         {formatRub(oneOffPrice(product), locale)}
       </p>
