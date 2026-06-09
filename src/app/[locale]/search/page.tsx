@@ -1,10 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
 import { retrieveNoveltyPriorArt } from "@/lib/novelty-retrieval";
+import { retrieveNoveltyPriorArt as retrieveNoveltyPriorArtV2 } from "@/lib/novelty-retrieval-v2";
+import { RETRIEVAL_V2_ENABLED } from "@/lib/config";
+import type { FieldPatentInput } from "@/lib/field-view";
 import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
 import { useRotatingText } from "@/hooks/useRotatingText";
 
@@ -38,8 +41,19 @@ export default function SearchPage() {
   const rotatingMsg = useRotatingText(activePhrases, 7000);
   const [errorMsg, setErrorMsg] = useState("");
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
+  // Экспертный поиск (opt-in из чузера: ?mode=expert) форсит recall-v2 + поле
+  // независимо от прод-флага RETRIEVAL_V2_ENABLED (он держит /search-дефолт на v1,
+  // Гардрейл A). useEffect, НЕ lazy-useState: на SSR window нет (вернуло бы false
+  // и не обновилось → v1-путь, баг QA #3); эффект читает query после маунта надёжно.
+  const [expert, setExpert] = useState(false);
+  useEffect(() => {
+    setExpert(
+      new URLSearchParams(window.location.search).get("mode") === "expert"
+    );
+  }, []);
+  const useV2 = RETRIEVAL_V2_ENABLED || expert;
 
-  const canContinue = description.trim().length >= 80;
+  const canContinue = description.trim().length >= 60;
 
   async function handleNext() {
     if (!canContinue) return;
@@ -93,10 +107,20 @@ export default function SearchPage() {
     try {
       const cleanAnswers = answers.filter((a) => a.trim().length > 0);
 
-      const { hits, total } = await retrieveNoveltyPriorArt({
-        description: description.trim(),
-        answers: cleanAnswers,
-      });
+      // v2 retrieval (gated by RETRIEVAL_V2_ENABLED) returns the full pool
+      // window-first plus diagnostics.ranked (the LLM-ranked window size). Both
+      // versions share the same result shape; v2 additionally feeds the Expert
+      // Field-View. v1 stays the verdict-only prod path until the recall-v2 hold lifts.
+      const { hits, total, diagnostics } = useV2
+        ? await retrieveNoveltyPriorArtV2({
+            description: description.trim(),
+            answers: cleanAnswers,
+            depth: "full",
+          })
+        : await retrieveNoveltyPriorArt({
+            description: description.trim(),
+            answers: cleanAnswers,
+          });
 
       if (hits.length === 0) {
         sessionStorage.setItem("ps_report", JSON.stringify({ empty: true }));
@@ -114,6 +138,10 @@ export default function SearchPage() {
           description: description.trim(),
           answers: cleanAnswers,
           patents: hits,
+          // Tag the PRODUCT (Экспертный поиск), not the retrieval version — so a
+          // QA flag-driven v2 run on normal /search isn't treated as an expert
+          // run by the 1-free quota gate. Retrieval still follows useV2 above.
+          engine: expert ? "v2" : "v1",
         }),
       });
 
@@ -142,6 +170,29 @@ export default function SearchPage() {
         patents: hits.slice(0, 60),
       };
 
+      // Account tier — drives the report's smart Verdict/Field default.
+      report._tier = report.tier ?? null;
+      // Expert-search runs land on the Field view by default (report reads this).
+      report._expert = expert;
+
+      // Expert Field-View payload: the FULL pool (window-first) trimmed to the
+      // fields the field view needs (abstracts dropped to keep sessionStorage
+      // bounded), plus the ranked-window size that marks "close" patents. Only
+      // attached under v2 (flag OR expert) — without it the report stays verdict-only.
+      if (useV2 && hits.length > 0) {
+        const pool: FieldPatentInput[] = hits.map((h) => ({
+          id: h.id,
+          title: h.title,
+          titleRu: h.titleRu,
+          titleEn: h.titleEn,
+          year: h.year,
+          country: h.country,
+          url: h.url,
+          ipc: h.ipc,
+        }));
+        report._field = { pool, ranked: diagnostics?.ranked ?? 0 };
+      }
+
       sessionStorage.setItem("ps_report", JSON.stringify(report));
       router.push("/report");
     } catch (e) {
@@ -158,7 +209,7 @@ export default function SearchPage() {
           {step === "input" && (
             <section>
               <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {t("typeBadge")}
+                {expert ? t("typeBadgeExpert") : t("typeBadge")}
               </span>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
                 {t("title")}

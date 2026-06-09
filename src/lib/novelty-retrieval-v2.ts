@@ -63,8 +63,27 @@ export type NoveltyRetrievalResult = {
     // actually claimed window slots vs being drowned by the breadth pool.
     prioritySeed: number;
     priorityRanked: number;
+    facetChampions: number;
     ranked: number;
+    // Gate-trace (harness only — populated when opts.traceIds is passed). For each
+    // traced id, where it landed at every pipeline stage so a recall miss is
+    // localised to a stage (retrieve vs sweep-target vs seed vs LLM-rank). idx=-1
+    // (or absent stage) means the id never reached that stage. Zero cost in prod
+    // (traceIds unset → undefined).
+    trace?: Record<string, GateTrace>;
   };
+};
+
+export type GateTrace = {
+  ipc?: string[];
+  semanticIdx: number; // index in semantic pool (aspect+probe+facet), -1 = absent
+  facetIdx: number; // index in facet-only pool
+  sweepUnits: { key: string; idx: number }[]; // which IPC sweep units surfaced it
+  prioritySeedIdx: number; // index in the in-class precision seed
+  poolIdx: number; // index in the combined broad pool fed to the ranker
+  priorityRankedIdx: number; // index after the focused precision-tier LLM rank
+  broadRankedIdx: number; // index after the breadth-tier LLM rank
+  windowIdx: number; // final index in the ranked window (-1 = MISS)
 };
 
 // Full IPC group, e.g. "C21C5/46" (no space).
@@ -113,10 +132,38 @@ const TUNING: Record<
     maxEnumeratedSubgroups: 12,
     depthPages: 3, // limit 50 × 3 = depth 150 in each broad subclass
     sweepLimit: 50,
-    roundRobinCap: 40,
+    // roundRobin breadth net was 40 → an in-class analog at unit-rank 41 fell out
+    // of inClassPool and sank to the semantic tail near poolCap (Samara: RU2799985
+    // at G01R31/34 unit-rank 41 → pool #1079, straddling the 1080 cap → unstable).
+    // 60 keeps the top of each class in the pool with margin.
+    roundRobinCap: 60,
     poolCap: 1080,
   },
 };
+
+// PRIORITY (precision) tier intake — full depth only. The institute's true analogs
+// sit DEEP in their own IPC-class sweep (Samara: G01R31/34 unit-ranks 24–323),
+// because PatSearch orders a class by query-similarity, not examiner relevance.
+// The old top-6/unit seed never reached them. Take a deep per-group slice so the
+// LLM ranker — which DOES recognise them by title+abstract — can read them, then
+// reserve window slots for the result. Group (exact-IPC) units only: subclass
+// nets are too noisy this deep.
+// Precision-seed allocation. Depth-first by group relevance (topGroups order) so
+// the dominant target class' analogs sit in the FIRST rank chunk where they rank
+// strongest (Samara: RU2799985 at G01R31/34 class-rank 41 → priorityRank #1).
+// The most relevant few groups get DEEP slices; every other group still gets a
+// SHALLOW head so a strong analog in a small target class isn't starved (Samara:
+// RU2854805 is #3 in its own G01R19/25 class). A flat cap can't serve both.
+// The single dominant class gets a DEEP slice — its analogs swing across the
+// whole class by within-sweep rank run-to-run (the sweep is ordered by the plan's
+// probe queries, which are not bit-deterministic: Samara RU2799985 floats between
+// class-rank ~41 and ~122 across plan regimes). A depth that spans the class makes
+// capture robust to that volatility rather than betting on a lucky rank.
+const SEED_TOP_GROUP_DEPTH = 300;
+const SEED_DEEP_GROUPS = 3; // next-most-relevant groups still get a solid slice
+const SEED_DEEP_PER_GROUP = 100;
+const SEED_SHALLOW_PER_GROUP = 25;
+const SEED_CAP = 900; // total precision-seed budget fed to the tiered ranker
 
 // Run `fn` over `items` with at most `concurrency` promises in flight.
 async function mapPool<T, R>(
@@ -301,6 +348,7 @@ export async function retrieveNoveltyPriorArt(opts: {
   fetchImpl?: FetchImpl;
   rankLimit?: number;
   depth?: RetrievalDepth; // "lite" = fast free Поиск; "full" = paid deep tier.
+  traceIds?: string[]; // harness only — emit per-stage GateTrace for these ids.
 }): Promise<NoveltyRetrievalResult> {
   const base = opts.base ?? "";
   const fetchImpl = opts.fetchImpl ?? fetch;
@@ -327,6 +375,39 @@ export async function retrieveNoveltyPriorArt(opts: {
   let prioritySeed: PatentHit[] = [];
   let prioritySeedLen = 0;
   let priorityRankedLen = 0;
+  let facetChampions: PatentHit[] = [];
+
+  // ── Gate-trace (harness only) ────────────────────────────────────────────
+  // normTrace folds a REAL hit id (with kind+date, e.g. "RU2799985C1_20230101")
+  // to base form (country+number). It must NOT be applied to the bare trace
+  // targets — those are already base form ("RU2799985"), and the trailing
+  // [A-Z]\d* rule would mis-strip them ("RU2799985" → "R"). So targets are only
+  // whitespace/case-cleaned; hit ids go through the full fold.
+  const normTrace = (s: string) =>
+    s
+      .replace(/\s+/g, "")
+      .toUpperCase()
+      .replace(/_\d{8}$/, "")
+      .replace(/[A-Z]\d*$/, "");
+  const cleanTarget = (s: string) => s.replace(/\s+/g, "").toUpperCase();
+  const traceTargets = new Set((opts.traceIds ?? []).map(cleanTarget));
+  const trace: Record<string, GateTrace> = {};
+  if (traceTargets.size) {
+    for (const t of traceTargets) {
+      trace[t] = {
+        semanticIdx: -1,
+        facetIdx: -1,
+        sweepUnits: [],
+        prioritySeedIdx: -1,
+        poolIdx: -1,
+        priorityRankedIdx: -1,
+        broadRankedIdx: -1,
+        windowIdx: -1,
+      };
+    }
+  }
+  const traceIdxIn = (list: PatentHit[], target: string) =>
+    list.findIndex((h) => h?.id && normTrace(h.id) === target);
 
   const topic = [description, ...cleanAnswers].join("\n");
 
@@ -407,14 +488,15 @@ export async function retrieveNoveltyPriorArt(opts: {
     // bucket on facets — facets are a breadth net and JP is the sparsest office
     // for our RU-centric etalons; the probes still cover JP). Bounds facet cost
     // to ~3 calls/facet.
-    const facetTasks: { qn: string; datasets: string[] }[] = [];
-    for (const f of facets) {
-      if (f.ru) facetTasks.push({ qn: f.ru, datasets: ["ru_since_1994", "ru_till_1994", "cis"] });
+    const facetTasks: { qn: string; datasets: string[]; facetIndex: number }[] = [];
+    facets.forEach((f, fi) => {
+      if (f.ru)
+        facetTasks.push({ qn: f.ru, datasets: ["ru_since_1994", "ru_till_1994", "cis"], facetIndex: fi });
       if (f.en) {
-        facetTasks.push({ qn: f.en, datasets: ["us", "ep"] });
-        facetTasks.push({ qn: f.en, datasets: ["cn"] });
+        facetTasks.push({ qn: f.en, datasets: ["us", "ep"], facetIndex: fi });
+        facetTasks.push({ qn: f.en, datasets: ["cn"], facetIndex: fi });
       }
-    }
+    });
 
     const allStage1 = await mapPool(
       [...aspectTasks, ...probeTasks, ...facetTasks],
@@ -440,6 +522,44 @@ export async function retrieveNoveltyPriorArt(opts: {
     ]);
     poolSemanticLen = poolSemantic.length;
     poolFacetLen = facetHits.length;
+
+    // FACET CHAMPIONS — the single best retrieved analog of EACH atomic facet.
+    // The facet net pulls a single-facet analog into the pool, but the cross-facet
+    // LLM ranker (scoring whole-invention relevance) drowns it: a doc that nails
+    // ONE grain but is tangential overall ranks low and never reaches the window
+    // (Samara: RU2854805 — a current-measurement+wireless device, champion of the
+    // "measure current + wirelessly transmit values" facet — sits in the pool at
+    // ~#90 but the ranker never lifts it). Reserving a window slot per facet
+    // champion makes the facet architecture pay off in the WINDOW, not just the
+    // pool: every distinct technical grain contributes its closest prior-art.
+    const champByFacet = new Map<number, { hits: PatentHit[] }[]>();
+    facetResults.forEach((res, i) => {
+      const fi = facetTasks[i].facetIndex;
+      const arr = champByFacet.get(fi) ?? [];
+      arr.push(res);
+      champByFacet.set(fi, arr);
+    });
+    // Top-2 of each facet: the single best hit of a facet is often a generic
+    // doc; the analog that nails that facet specifically (Samara: RU2854805 for
+    // the current+wireless facet) sits at #2–5 of the facet, not #1.
+    const champSeen = new Set<string>();
+    for (const results of champByFacet.values()) {
+      for (const top of bestRankMerge(results).slice(0, 2)) {
+        if (top?.id && !champSeen.has(top.id)) {
+          champSeen.add(top.id);
+          facetChampions.push(top);
+        }
+      }
+    }
+
+    if (traceTargets.size) {
+      for (const t of traceTargets) {
+        const si = traceIdxIn(poolSemantic, t);
+        trace[t].semanticIdx = si;
+        trace[t].facetIdx = traceIdxIn(facetHits, t);
+        if (si >= 0 && !trace[t].ipc) trace[t].ipc = poolSemantic[si].ipc;
+      }
+    }
 
     // ── Stage 2 — IPC class-sweep ────────────────────────────────────
     // Derive target groups from the IPC of the SIGNAL hits (probes+facets), NOT
@@ -586,32 +706,70 @@ export async function retrieveNoveltyPriorArt(opts: {
       arr.push(res);
       byKey.set(k, arr);
     });
-    const groupMerged = sweepUnits
-      .map((u) => bestRankMerge(byKey.get(u.key) ?? []))
-      .filter((l) => l.length > 0);
+    // unitMerged is aligned 1:1 with sweepUnits (each unit's best-rank-merged
+    // list); groupMerged drops empties for the round-robin breadth net.
+    const unitMerged = sweepUnits.map((u) => bestRankMerge(byKey.get(u.key) ?? []));
+    const groupMerged = unitMerged.filter((l) => l.length > 0);
     inClassPool = roundRobinLists(groupMerged, tune.roundRobinCap);
     poolSweepLen = inClassPool.length;
 
-    // 3.5 PRIORITY SEED — reserve window slots for in-class precision. The broad
-    // pool (~2000 docs at full depth) drowns the LLM ranker: an in-class analog
-    // that PatSearch ranks #1 WITHIN its IPC-class sweep lands at pool ~#299
-    // after the breadth merge and never survives a 140-wide ranking chunk (clean
-    // run: RU2854805 in pool but #299, window MISS). So take the TOP few of EACH
-    // sweep unit's merged list — the strongest in-class analogs, where real
-    // prior-art clusters — into one small focused set ranked on its OWN, then
-    // give it first claim on the window (see the combine step in the rank block).
-    const PRIORITY_PER_UNIT = 6;
-    const seedSeen = new Set<string>();
-    for (const list of groupMerged) {
-      for (const h of list.slice(0, PRIORITY_PER_UNIT)) {
-        if (h.id && !seedSeen.has(h.id)) {
-          seedSeen.add(h.id);
-          prioritySeed.push(h);
+    if (traceTargets.size) {
+      // Per-unit position so we see WHICH IPC sweep surfaced the gate and how deep
+      // (a gate ranked deep in its own class sweep won't reach the top-N seed).
+      sweepUnits.forEach((u, i) => {
+        const list = unitMerged[i];
+        for (const t of traceTargets) {
+          const idx = traceIdxIn(list, t);
+          if (idx >= 0) {
+            trace[t].sweepUnits.push({ key: u.key, idx });
+            if (!trace[t].ipc) trace[t].ipc = list[idx].ipc;
+          }
         }
+      });
+    }
+
+    // 3.5 PRIORITY SEED — reserve window slots for in-class precision. The broad
+    // pool drowns the LLM ranker, and the institute's real analogs sit DEEP in
+    // their own IPC-class sweep (Samara G01R31/34 unit-ranks 24–323) because
+    // PatSearch orders a class by query-similarity, not examiner relevance — so a
+    // shallow top-6/unit seed never reached them. Take a DEEP per-group slice
+    // (exact-IPC units only, ordered by group relevance so the strongest class
+    // leads), then rank the whole seed map-reduce (below) and give it first claim
+    // on the window. The seed is high-precision: every doc is a direct IPC-class
+    // match to a target group, so reading deep adds true analogs, not noise.
+    // BREADTH-then-DEPTH so a strong analog in a SMALLER target class isn't
+    // starved by a depth-first fill of the dominant class. Phase 1 round-robins
+    // the top SEED_BREADTH of every group unit (guarantees each class' head —
+    // Samara: RU2854805 is #3 in its own G01R19/25 class but the dominant
+    // G01R31/34 would eat the whole budget depth-first). Phase 2 then adds DEPTH
+    // from the most relevant groups in order, up to SEED_PER_GROUP, until the cap
+    // (Samara: the institute's true G01R31/34 analogs sit at class-rank 24–177).
+    const groupLists = sweepUnits
+      .map((u, i) => (u.key.startsWith("g:") ? unitMerged[i] : []))
+      .filter((l) => l.length > 0);
+    const seedSeen = new Set<string>();
+    const pushSeed = (h: PatentHit | undefined) => {
+      if (h?.id && !seedSeen.has(h.id) && prioritySeed.length < SEED_CAP) {
+        seedSeen.add(h.id);
+        prioritySeed.push(h);
+      }
+    };
+    groupLists.forEach((list, gi) => {
+      const take =
+        gi === 0
+          ? SEED_TOP_GROUP_DEPTH
+          : gi < SEED_DEEP_GROUPS
+            ? SEED_DEEP_PER_GROUP
+            : SEED_SHALLOW_PER_GROUP;
+      for (const h of list.slice(0, take)) pushSeed(h);
+    });
+    prioritySeedLen = prioritySeed.length;
+
+    if (traceTargets.size) {
+      for (const t of traceTargets) {
+        trace[t].prioritySeedIdx = traceIdxIn(prioritySeed, t);
       }
     }
-    prioritySeed = prioritySeed.slice(0, 140); // one rank chunk, no map-reduce
-    prioritySeedLen = prioritySeed.length;
 
     // Broad pool = in-class analogs first (precision), then the semantic pool
     // (breadth). The ranker reads a bounded prefix small enough that a clear
@@ -622,6 +780,10 @@ export async function retrieveNoveltyPriorArt(opts: {
         seen.add(h.id);
         hits.push(h);
       }
+    }
+
+    if (traceTargets.size) {
+      for (const t of traceTargets) trace[t].poolIdx = traceIdxIn(hits, t);
     }
   }
 
@@ -641,38 +803,29 @@ export async function retrieveNoveltyPriorArt(opts: {
     const RANK_CONCURRENCY = 4;
     const pool = hits.slice(0, POOL_CAP);
 
-    // ── Tier A (precision): focused rank of the in-class priority seed ──
-    // Ranked on its own (one chunk, ~≤140) so the strongest in-class analogs
-    // aren't diluted by the ~2000-doc breadth pool. Run concurrently with the
-    // broad-tier chunks below.
-    const priorityPromise: Promise<PatentHit[]> =
-      prioritySeed.length > 0
-        ? rankCall(base, fetchImpl, description, prioritySeed, rankLimit).then(
-            (ids) => mapIds(ids, prioritySeed)
-          )
-        : Promise.resolve([]);
-
-    // ── Tier B (breadth): two-pass map-reduce over the whole pool ──
-    // The judge reliably picks a clear analog from ~140 candidates but loses it
-    // among 400+ (attention dilution). Read the WHOLE pool in chunks (map), keep
-    // each chunk's top survivors, then rank the survivors (reduce).
-    async function rankBroad(): Promise<PatentHit[]> {
-      if (pool.length <= CHUNK) {
+    // Two-pass map-reduce ranker over an arbitrary candidate list. The judge
+    // reliably picks a clear analog from ~140 candidates but loses it among 400+
+    // (attention dilution), so read the list in chunks (map), keep each chunk's
+    // top survivors, then rank the survivors (reduce). A single short list (≤CHUNK)
+    // is ranked in one pass. Used for BOTH tiers below.
+    async function rankPool(candidates: PatentHit[]): Promise<PatentHit[]> {
+      if (candidates.length === 0) return [];
+      if (candidates.length <= CHUNK) {
         return mapIds(
-          await rankCall(base, fetchImpl, description, pool, rankLimit),
-          pool
+          await rankCall(base, fetchImpl, description, candidates, rankLimit),
+          candidates
         );
       }
       const chunks: PatentHit[][] = [];
-      for (let i = 0; i < pool.length; i += CHUNK) {
-        chunks.push(pool.slice(i, i + CHUNK));
+      for (let i = 0; i < candidates.length; i += CHUNK) {
+        chunks.push(candidates.slice(i, i + CHUNK));
       }
       const chunkIdLists = await mapPool(chunks, RANK_CONCURRENCY, (c) =>
         rankCall(base, fetchImpl, description, c, PER_CHUNK)
       );
       const survivorSeen = new Set<string>();
       const survivors: PatentHit[] = [];
-      const byId = new Map(pool.map((h) => [h.id, h]));
+      const byId = new Map(candidates.map((h) => [h.id, h]));
       chunkIdLists.forEach((ids, ci) => {
         const picked = ids.length
           ? mapIds(ids, chunks[ci])
@@ -684,28 +837,42 @@ export async function retrieveNoveltyPriorArt(opts: {
           }
         }
       });
-      let broad =
+      let out =
         survivors.length > rankLimit
           ? mapIds(
               await rankCall(base, fetchImpl, description, survivors, rankLimit),
               survivors
             )
           : survivors;
-      if (broad.length === 0) broad = survivors.slice(0, rankLimit);
-      return broad;
+      if (out.length === 0) out = survivors.slice(0, rankLimit);
+      return out;
     }
 
+    // ── Tier A (precision): map-reduce rank of the DEEP in-class priority seed ──
+    // Ranked on its own so the strongest in-class analogs aren't diluted by the
+    // breadth pool. The seed is now deep (~hundreds), so it needs the same
+    // map-reduce, not a single chunk — a true analog at seed-rank 300 was
+    // invisible to a single 140-wide rank.
+    // ── Tier B (breadth): map-reduce over the whole bounded pool ──
     const [priorityRanked, rankedHits] = await Promise.all([
-      priorityPromise,
-      rankBroad(),
+      rankPool(prioritySeed),
+      rankPool(pool),
     ]);
     priorityRankedLen = priorityRanked.length;
 
-    // ── Combine (tiered): reserve the front half of the window for the precision
-    // tier, fill the rest from breadth, then any leftover precision. Dedup + cap.
-    // When prioritySeed is empty (lite depth / no sweep) this degrades to the
-    // pure broad ranking — identical to the prior behaviour.
-    const PRIORITY_RESERVE = Math.floor(rankLimit / 2);
+    if (traceTargets.size) {
+      for (const t of traceTargets) {
+        trace[t].priorityRankedIdx = traceIdxIn(priorityRanked, t);
+        trace[t].broadRankedIdx = traceIdxIn(rankedHits, t);
+      }
+    }
+
+    // ── Combine (tiered): precision tier leads (closest in-class analogs first),
+    // then breadth — but hold back FACET_RESERVE slots so each facet champion is
+    // guaranteed a place, then fill any remainder. Dedup + cap. When prioritySeed
+    // and facets are empty (lite depth) this degrades to pure broad ranking.
+    const FACET_RESERVE = Math.min(facetChampions.length, 16);
+    const PRIORITY_RESERVE = Math.min(28, rankLimit);
     const windowHits: PatentHit[] = [];
     const wSeen = new Set<string>();
     const pushUnique = (h: PatentHit | undefined) => {
@@ -714,9 +881,22 @@ export async function retrieveNoveltyPriorArt(opts: {
         windowHits.push(h);
       }
     };
+    // 1. precision tier first
     for (const h of priorityRanked.slice(0, PRIORITY_RESERVE)) pushUnique(h);
+    // 2. breadth, leaving room for facet champions
+    for (const h of rankedHits) {
+      if (windowHits.length >= rankLimit - FACET_RESERVE) break;
+      pushUnique(h);
+    }
+    // 3. guarantee each facet's best analog a window slot
+    for (const h of facetChampions) pushUnique(h);
+    // 4. fill any remaining slots
     for (const h of rankedHits) pushUnique(h);
     for (const h of priorityRanked) pushUnique(h);
+
+    if (traceTargets.size) {
+      for (const t of traceTargets) trace[t].windowIdx = traceIdxIn(windowHits, t);
+    }
 
     if (windowHits.length > 0) {
       const rankedIds = new Set(windowHits.map((h) => h.id));
@@ -743,7 +923,9 @@ export async function retrieveNoveltyPriorArt(opts: {
       enumeratedSubgroups: enumeratedSubgroupsDiag,
       prioritySeed: prioritySeedLen,
       priorityRanked: priorityRankedLen,
+      facetChampions: facetChampions.length,
       ranked,
+      ...(traceTargets.size ? { trace } : {}),
     },
   };
 }

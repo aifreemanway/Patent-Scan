@@ -8,6 +8,7 @@ import { useSessionJSON } from "@/lib/use-session-json";
 import { useReopenRow } from "@/hooks/useReopenRow";
 import { useRotatingText } from "@/hooks/useRotatingText";
 import { IndustrialUsageRow } from "./IndustrialUsageRow";
+import { FieldView } from "./FieldView";
 import {
   LegalStatusBadge,
   LegalStatusPending,
@@ -15,6 +16,16 @@ import {
   formatExtractedDate,
 } from "@/components/LegalStatusBadge";
 import type { LegalStatus } from "@/lib/patent-legal-status";
+import type { FieldPatentInput } from "@/lib/field-view";
+
+// Tiers that default to the expert Field view (ТЗ §3 — institute / Team+).
+// Everyone else (free / starter / anon / unknown) defaults to the Verdict view.
+const FIELD_DEFAULT_TIERS = new Set([
+  "team",
+  "team_plus",
+  "enterprise",
+  "institute",
+]);
 
 type ReportPatent = {
   id: string;
@@ -57,7 +68,20 @@ type ReportData = {
     answers: string[];
     patents: unknown[];
   };
+  // Expert Field-View payload (only present under RETRIEVAL_V2_ENABLED): the full
+  // classified pool window-first + the ranked-window size that marks "close".
+  _field?: {
+    pool: FieldPatentInput[];
+    ranked: number;
+  };
+  // Account tier — drives the smart Verdict/Field default.
+  _tier?: string | null;
+  // Set when the run came from the «Экспертный поиск» entry (?mode=expert) —
+  // the report opens on the Field view by default for this intent.
+  _expert?: boolean;
 };
+
+type ReportMode = "verdict" | "field";
 
 type DeepStatus = "idle" | "loading" | "done" | "used" | "error";
 
@@ -380,17 +404,28 @@ function ReportPageInner() {
   const [legalStatuses, setLegalStatuses] = useState<Record<string, LegalStatus>>({});
   const [legalLoading, setLegalLoading] = useState(false);
 
-  const patentsForStatus = data?.patents ?? null;
+  // RU numbers to resolve legal status for: the verdict patents PLUS the field
+  // view's "close" (in-window) candidates, so field cards carry a real status
+  // too. Bounded by the ranked-window size — anti-fab: patents beyond it show
+  // "не определён", never a guessed status.
+  const legalNumbers = useMemo(() => {
+    if (!data) return [] as string[];
+    const out = new Set<string>();
+    for (const p of data.patents ?? []) {
+      const n = ruNumberOf(p);
+      if (n) out.add(n);
+    }
+    const fpool = data._field?.pool ?? [];
+    const ranked = data._field?.ranked ?? 0;
+    for (const p of fpool.slice(0, ranked)) {
+      const n = ruNumberOf(p);
+      if (n) out.add(n);
+    }
+    return Array.from(out);
+  }, [data]);
+
   useEffect(() => {
-    if (!patentsForStatus || patentsForStatus.length === 0) return;
-    const numbers = Array.from(
-      new Set(
-        patentsForStatus
-          .map((p) => ruNumberOf(p))
-          .filter((n): n is string => n != null)
-      )
-    );
-    if (numbers.length === 0) return;
+    if (legalNumbers.length === 0) return;
     let cancelled = false;
     setLegalLoading(true);
     void (async () => {
@@ -398,7 +433,7 @@ function ReportPageInner() {
         const resp = await fetch("/api/legal-status", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ numbers }),
+          body: JSON.stringify({ numbers: legalNumbers }),
         });
         if (!resp.ok) return; // anti-fab: leave rows unresolved rather than guess
         const json = (await resp.json()) as {
@@ -414,7 +449,44 @@ function ReportPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [patentsForStatus]);
+  }, [legalNumbers]);
+
+  // Verdict / Field mode (ТЗ §3). The field payload is only present under the
+  // v2 flag; without it the report stays verdict-only and the toggle is hidden.
+  // Default by account tier (institute/Team+ → Field), then remembered per user
+  // in localStorage. `null` until resolved client-side to avoid a hydration flash.
+  const hasField = Boolean(data?._field && data._field.pool.length > 0);
+  const [mode, setMode] = useState<ReportMode | null>(null);
+  useEffect(() => {
+    if (!hasField) return;
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem("ps_report_mode");
+    } catch {
+      saved = null;
+    }
+    // Expert-search entry → Field view is the intent; it wins over the global
+    // saved toggle and tier default (the user can still switch within the report).
+    if (data?._expert) {
+      setMode("field");
+      return;
+    }
+    if (saved === "field" || saved === "verdict") {
+      setMode(saved);
+      return;
+    }
+    const tier = (data?._tier ?? "").toLowerCase();
+    setMode(FIELD_DEFAULT_TIERS.has(tier) ? "field" : "verdict");
+  }, [hasField, data?._tier, data?._expert]);
+
+  const setModePersist = (m: ReportMode) => {
+    setMode(m);
+    try {
+      localStorage.setItem("ps_report_mode", m);
+    } catch {
+      /* localStorage unavailable — mode still works for this session */
+    }
+  };
 
   // A re-opened deep_analysis row already holds the finished verdict — surface
   // it as a completed deep section (the result payload is the DeepResult shape).
@@ -590,6 +662,9 @@ function ReportPageInner() {
             </div>
             <h1 className="mt-6 text-2xl font-bold text-slate-900">{t("emptyTitle")}</h1>
             <p className="mt-3 text-slate-600">{t("emptyBody")}</p>
+            {/* Anti-fab (ТЗ §4.5): "не найдено" is NOT "уникально" — offer the
+                attorney route instead of implying the idea is clear. */}
+            <p className="mt-2 text-sm text-slate-500">{t("emptyEscapeAttorney")}</p>
             <Link
               href="/search"
               className="mt-6 inline-flex items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800"
@@ -603,6 +678,7 @@ function ReportPageInner() {
   }
 
   const patents = data.patents ?? [];
+  const effectiveMode: ReportMode = hasField ? mode ?? "verdict" : "verdict";
   const uniqueness = data.uniqueness ?? "Medium";
   const uniquenessLabel = t(`uniqueness${uniqueness}` as "uniquenessHigh" | "uniquenessMedium" | "uniquenessLow");
   const headers = t.raw("patentsHeaders") as Record<string, string>;
@@ -711,6 +787,28 @@ function ReportPageInner() {
               {verdictCaption}
             </p>
 
+            {/* Hedge + escape (ТЗ §5, AC#6): verdict is "по найденному в открытых
+                базах", never a guarantee — always offer a route onward (the expert
+                field when available, and a patent attorney). */}
+            <p className="mt-3 text-sm leading-6 text-slate-500">
+              {t("verdictBasis")}{" "}
+              {hasField && effectiveMode !== "field" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setModePersist("field")}
+                    className="font-medium text-slate-700 underline hover:text-slate-900"
+                  >
+                    {t("verdictEscapeField")}
+                  </button>{" "}
+                  ·{" "}
+                </>
+              )}
+              {/* «обсудить с поверенным» — plain text, НЕ выделяем и не делаем
+                  ссылкой пока destination не решён (#6, реш. Vsevolod 09.06). */}
+              <span>{t("verdictEscapeAttorney")}</span>
+            </p>
+
             <div className="mt-5 rounded-xl bg-slate-50 p-4">
               <div className="text-sm font-semibold text-slate-800">
                 {t("notCheckedTitle")}
@@ -727,6 +825,44 @@ function ReportPageInner() {
               </ul>
             </div>
           </section>
+
+          {/* Verdict / Field mode toggle (ТЗ §3, AC#4) — visible, remembered. */}
+          {hasField && (
+            <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {t("modeToggle.label")}
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {effectiveMode === "field"
+                    ? t("modeToggle.fieldHint")
+                    : t("modeToggle.verdictHint")}
+                </p>
+              </div>
+              <div
+                className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-1"
+                role="tablist"
+                aria-label={t("modeToggle.label")}
+              >
+                {(["verdict", "field"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    role="tab"
+                    aria-selected={effectiveMode === m}
+                    onClick={() => setModePersist(m)}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+                      effectiveMode === m
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {m === "verdict" ? t("modeToggle.verdict") : t("modeToggle.field")}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Disclaimer — prominent card (not petit subtitle), accent but not
               panic-red. Honesty of limits is part of the verdict. */}
@@ -769,8 +905,9 @@ function ReportPageInner() {
             </section>
           )}
 
-          {/* Patents table */}
-          {patents.length > 0 && (
+          {/* Patents table — verdict mode shows the flat "ближайшие" list; field
+              mode replaces it with the by-class expert field below. */}
+          {effectiveMode === "verdict" && patents.length > 0 && (
             <section className="mt-8 rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="px-6 py-5">
                 <h2 className="text-xl font-semibold text-slate-900">
@@ -881,6 +1018,18 @@ function ReportPageInner() {
                 {t("legalStatus.caveat")}
               </p>
             </section>
+          )}
+
+          {/* Expert Field-View — by-class navigable field (replaces the flat
+              table in field mode). Hedged verdict above stays; this is the
+              "поле ниже" of the single expert report (ТЗ §3). */}
+          {effectiveMode === "field" && data._field && (
+            <FieldView
+              pool={data._field.pool}
+              ranked={data._field.ranked}
+              legalStatuses={legalStatuses}
+              legalLoading={legalLoading}
+            />
           )}
 
           {/* Coverage — make the breadth of bases searched visible (the

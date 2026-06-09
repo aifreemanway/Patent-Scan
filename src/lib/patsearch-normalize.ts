@@ -43,8 +43,14 @@ export function countryFromId(id: string): string {
 export function buildUrl(id: string, country: string): string {
   if (!id) return "";
   if (country === "RU") {
-    const num = /^RU(\d+)/.exec(id)?.[1] ?? id.replace(/\D/g, "");
-    return `https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=${num}&TypeFile=html`;
+    // Kind code picks the ФИПС register: U1/U8 = полезная модель (RUPM), all else
+    // (C1/C2/A…) = изобретение (RUPAT). Wrong DB opens a DIFFERENT document with
+    // the same number (QA #1: RU88863U1 → invention #88863, not the utility model).
+    // The PatSearch id carries the kind: "RU88863U1_20091120".
+    const m = /^RU0*(\d+)([A-Z]\d?)?/.exec(id);
+    const num = m?.[1] ?? id.replace(/\D/g, "");
+    const db = /^U/i.test(m?.[2] ?? "") ? "RUPM" : "RUPAT";
+    return `https://new.fips.ru/registers-doc-view/fips_servlet?DB=${db}&DocNumber=${num}&TypeFile=html`;
   }
   // Foreign patents → Google Patents (human-readable), NOT the PatSearch /docs
   // endpoint (it returns raw JSON — the bug we're fixing). PatSearch ids are

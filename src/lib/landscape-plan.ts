@@ -1,5 +1,6 @@
 import { GEMINI_TIMEOUT_MS } from "./config";
 import { callGeminiJson } from "./gemini";
+import { cacheKey, memo } from "./llm-cache";
 
 const SYSTEM_PROMPT = `Ты — аналитик патентных ландшафтов. На вход: свободное описание технологической темы (на любом языке).
 
@@ -118,6 +119,17 @@ export async function planLandscape(
   topic: string,
   apiKey: string,
   timeoutMs: number = GEMINI_TIMEOUT_MS.plan
+): Promise<LandscapePlan> {
+  // Memoise by topic — the gateway is not bit-deterministic at temp 0, so the
+  // same search must map to one plan (see llm-cache.ts). Version tag "plan-v1"
+  // invalidates if the prompt changes.
+  return memo(cacheKey("plan-v1", topic), () => planLandscapeUncached(topic, apiKey, timeoutMs));
+}
+
+async function planLandscapeUncached(
+  topic: string,
+  apiKey: string,
+  timeoutMs: number
 ): Promise<LandscapePlan> {
   const { data } = await callGeminiJson<{
     queries?: unknown;

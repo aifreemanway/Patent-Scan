@@ -9,10 +9,16 @@ import { Header } from "@/components/Header";
 import { Link } from "@/i18n/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
-type ProductKey = "search" | "landscape" | "screening";
+type ProductKey = "search" | "expert" | "landscape" | "screening";
 
-const PRODUCTS: { key: ProductKey; href: string }[] = [
+type ChooserHref = string | { pathname: string; query?: Record<string, string> };
+
+const PRODUCTS: { key: ProductKey; href: ChooserHref }[] = [
   { key: "search", href: "/search" },
+  // Object form, NOT the "/search?mode=expert" string — next-intl <Link> dropped
+  // the query on the string form, so /search ran the consumer v1 path (no field,
+  // no toggle). QA #3 fix. The object form reliably carries ?mode=expert.
+  { key: "expert", href: { pathname: "/search", query: { mode: "expert" } } },
   { key: "landscape", href: "/landscape" },
   { key: "screening", href: "/literature-review" },
 ];
@@ -21,6 +27,9 @@ const PRODUCTS: { key: ProductKey; href: string }[] = [
 // monthly quota counter (paid/ordered separately), so it shows no badge.
 const QUOTA_KEY: Record<ProductKey, "search" | "landscape" | null> = {
   search: "search",
+  // Экспертный поиск: 1 бесплатный прогон на аккаунт, затем тратит Поиск-квоту —
+  // отдельная механика, поэтому без статичного бейджа квоты в чузере.
+  expert: null,
   landscape: "landscape",
   screening: null,
 };
@@ -38,6 +47,13 @@ const ICONS: Record<ProductKey, React.ReactNode> = {
       strokeLinecap="round"
       strokeLinejoin="round"
       d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+    />
+  ),
+  expert: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6Zm0 9.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25Zm9.75-9.75A2.25 2.25 0 0 1 15.75 3.75H18A2.25 2.25 0 0 1 20.25 6v2.25a2.25 2.25 0 0 1-2.25 2.25h-2.25a2.25 2.25 0 0 1-2.25-2.25V6Zm0 9.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"
     />
   ),
   landscape: (

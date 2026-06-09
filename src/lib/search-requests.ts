@@ -101,6 +101,33 @@ export async function createSearchRequest(
   return { id: data.id };
 }
 
+/**
+ * Count an account's prior «Экспертный поиск» runs (novelty rows tagged
+ * params.engine='v2'). Backs the 1-free-per-account entitlement (Guardrail B):
+ * the first expert run is free, separate from the monthly Поиск quota. On a DB
+ * error returns 1 — i.e. «free already used» so the caller charges; anti-abuse
+ * beats trial-friction, and with no paid users yet the cost of a wrong charge is
+ * a single quota decrement, not money.
+ */
+export async function countExpertRuns(userId: string): Promise<number> {
+  const admin = createSupabaseAdmin();
+  const { count, error } = await admin
+    .from("search_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("type", "novelty")
+    .eq("params->>engine", "v2")
+    .is("deleted_at", null);
+  if (error) {
+    console.error("[search-requests] countExpertRuns failed", {
+      userId,
+      message: error.message,
+    });
+    return 1;
+  }
+  return count ?? 0;
+}
+
 type CompleteOpts = {
   cogsActual?: number;
   /** For literature-review: final PDF signed URL. */
