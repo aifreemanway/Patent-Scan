@@ -124,14 +124,22 @@ export const SUBSCRIPTION_TIERS: readonly SubscriptionTier[] = [
     priceMonthly: PRICE_FREE,
     cta: "free",
     quotaKeys: ["tiers.free.quota.searches"],
-    featureKeys: ["tiers.free.feat.worldwide", "tiers.free.feat.history"],
+    featureKeys: [
+      "tiers.free.feat.iul",
+      "tiers.free.feat.worldwide",
+      "tiers.free.feat.history",
+    ],
   },
   {
     id: "starter",
     priceMonthly: PRICE_STARTER,
     cta: "request",
     quotaKeys: ["tiers.starter.quota.searches", "tiers.starter.quota.deep"],
-    featureKeys: ["tiers.starter.feat.export", "tiers.starter.feat.priority"],
+    featureKeys: [
+      "tiers.starter.feat.iul",
+      "tiers.starter.feat.export",
+      "tiers.starter.feat.priority",
+    ],
   },
   {
     id: "team",

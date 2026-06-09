@@ -45,7 +45,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   // entirely. We still return 403 so the UI knows to render the lock.
   if (profile.industrial_usage_enabled === false) {
     return NextResponse.json(
-      { error: "toggled_off", upsell: "Включите «Industrial Usage» в /account/profile." },
+      { error: "toggled_off", upsell: "Включите «Промышленное применение» в настройках профиля." },
       { status: 403 }
     );
   }
