@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { Header } from "@/components/Header";
@@ -43,12 +43,14 @@ export default function SearchPage() {
   const [quotaInfo, setQuotaInfo] = useState<QuotaInfo | null>(null);
   // Экспертный поиск (opt-in из чузера: ?mode=expert) форсит recall-v2 + поле
   // независимо от прод-флага RETRIEVAL_V2_ENABLED (он держит /search-дефолт на v1,
-  // Гардрейл A). Читаем из URL один раз на маунте — без useSearchParams (Suspense).
-  const [expert] = useState(
-    () =>
-      typeof window !== "undefined" &&
+  // Гардрейл A). useEffect, НЕ lazy-useState: на SSR window нет (вернуло бы false
+  // и не обновилось → v1-путь, баг QA #3); эффект читает query после маунта надёжно.
+  const [expert, setExpert] = useState(false);
+  useEffect(() => {
+    setExpert(
       new URLSearchParams(window.location.search).get("mode") === "expert"
-  );
+    );
+  }, []);
   const useV2 = RETRIEVAL_V2_ENABLED || expert;
 
   const canContinue = description.trim().length >= 60;

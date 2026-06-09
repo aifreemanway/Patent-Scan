@@ -11,9 +11,14 @@ import { createSupabaseServer } from "@/lib/supabase-server";
 
 type ProductKey = "search" | "expert" | "landscape" | "screening";
 
-const PRODUCTS: { key: ProductKey; href: string }[] = [
+type ChooserHref = string | { pathname: string; query?: Record<string, string> };
+
+const PRODUCTS: { key: ProductKey; href: ChooserHref }[] = [
   { key: "search", href: "/search" },
-  { key: "expert", href: "/search?mode=expert" },
+  // Object form, NOT the "/search?mode=expert" string — next-intl <Link> dropped
+  // the query on the string form, so /search ran the consumer v1 path (no field,
+  // no toggle). QA #3 fix. The object form reliably carries ?mode=expert.
+  { key: "expert", href: { pathname: "/search", query: { mode: "expert" } } },
   { key: "landscape", href: "/landscape" },
   { key: "screening", href: "/literature-review" },
 ];
