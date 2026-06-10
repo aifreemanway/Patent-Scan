@@ -385,8 +385,10 @@ function LandscapeReportInner() {
         new Set(
           hits
             .filter((h) => h.country === "RU" || h.country === "SU")
-            .map((h) => h.id.replace(/\D/g, ""))
-            .filter(Boolean)
+            // Full id (with kind) so the resolver picks RUPM vs RUPAT; also the
+            // statuses-map lookup key below (QA#2).
+            .map((h) => h.id.trim())
+            .filter((id) => Boolean(id) && /\d/.test(id))
         )
       ),
     [hits]
