@@ -302,6 +302,75 @@ footer{padding:36px 0 36px;border-top:1px solid var(--line);background:var(--bg)
   @media(max-width:600px){.subs-grid-4{grid-template-columns:1fr}}
 }
 
+/* ── v9 LANDING ADDITIONS — tile meta-rows + harvest extra, PROTO DEMO,
+   ROI vs агентство. Источник: макет patent-scan-v9-final (proto-demo /
+   roi-section). Адаптировано под .lp-конвенцию. ──────────────────────── */
+.lp {
+  /* TILE — двухстрочная meta (Кому подходит / Когда нужен) + harvest extra */
+  .tile-meta{margin-top:auto;min-height:0;padding-top:18px;border-top:1px solid var(--line)}
+  .tile-meta-row{display:flex;flex-direction:column;gap:1px;padding:7px 0}
+  .tile-meta-row + .tile-meta-row{border-top:1px dashed var(--line-soft)}
+  .tile-meta-row .tile-meta-label{font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--slate);margin-bottom:0}
+  .tile-meta-row strong{font-size:13px;color:var(--text-strong);font-weight:600;line-height:1.35}
+  .tile-extra{margin-top:14px;padding:12px 14px;background:var(--surf);border-left:3px solid var(--accent);border-radius:6px;font-size:13px;line-height:1.5;color:var(--text)}
+  .tile-extra strong{color:var(--text-strong);font-weight:700}
+
+  /* PROTO DEMO */
+  .proto-demo .section-sub{max-width:720px}
+  .proto-idea{padding:14px 18px;background:var(--accent-soft);border-radius:10px;margin-bottom:18px}
+  .proto-idea-label{font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent-hover);display:block;margin-bottom:5px}
+  .proto-idea p{font-size:13.5px;line-height:1.5;color:var(--text-strong);margin:0}
+  .proto-card{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:24px clamp(18px,3vw,28px);box-shadow:var(--sh-md);max-width:840px;margin:32px auto 0}
+  .proto-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line-soft)}
+  .proto-label{font-size:13px;font-weight:600;color:var(--text-mute)}
+  .proto-tag{padding:3px 10px;background:var(--accent-soft);color:var(--accent-hover);border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase}
+  .proto-item{padding:18px 20px;background:var(--surf);border:1px solid var(--line-soft);border-radius:12px;margin-bottom:14px}
+  .proto-item:last-of-type{margin-bottom:0}
+  .proto-item-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+  .proto-num{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--text-strong);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .proto-item-head > div{flex:1;min-width:0}
+  .proto-title{font-size:14.5px;font-weight:600;color:var(--accent-hover);line-height:1.35;margin-bottom:3px}
+  .proto-meta{font-size:11.5px;color:var(--slate);font-family:var(--font-mono);letter-spacing:-0.02em}
+  .proto-verdict{flex-shrink:0;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;align-self:flex-start}
+  .proto-verdict-direct{background:#fef2f2;color:#b91c1c}
+  .proto-verdict-partial{background:#fffbeb;color:#b45309}
+  .proto-row{font-size:13.5px;line-height:1.55;color:var(--text);margin-bottom:8px}
+  .proto-row:last-child{margin-bottom:0}
+  .proto-row strong{color:var(--text-strong);font-weight:700}
+  .proto-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--text-mute);font-style:italic;text-align:center}
+  @media (max-width:640px){
+    .proto-item-head{flex-wrap:wrap}
+    .proto-verdict{order:3;margin-top:4px}
+  }
+
+  /* ROI vs агентство */
+  .roi-section .section-sub{font-size:15px;color:var(--text-mute);max-width:680px;margin-top:6px;line-height:1.55}
+  .roi-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:32px 0 24px}
+  .roi-card{padding:26px 28px;border-radius:14px;border:1px solid var(--line);background:var(--bg)}
+  .roi-card.roi-ours{border-color:var(--accent);background:linear-gradient(135deg,var(--accent-soft) 0%,var(--bg) 60%);box-shadow:var(--sh-sm)}
+  .roi-card h3{font-size:18px;font-weight:700;color:var(--text-strong);margin-bottom:16px;letter-spacing:-0.01em;line-height:1.2}
+  .roi-card.roi-ours h3{color:var(--accent-hover)}
+  .roi-list{list-style:none;padding:0;margin-bottom:14px}
+  .roi-list li{padding:9px 0;font-size:14px;color:var(--text);border-bottom:1px solid var(--line-soft);display:flex;justify-content:space-between;gap:14px;align-items:baseline}
+  .roi-list li:last-child{border:none}
+  .roi-li-l{color:var(--text-mute);flex:1}
+  .roi-list li strong{color:var(--text-strong);white-space:nowrap;font-weight:700;font-size:14px}
+  .roi-card.roi-ours .roi-list li strong{color:var(--accent-hover)}
+  .roi-anchor{padding:22px 28px;background:var(--surf);border-left:4px solid var(--accent);border-radius:0 10px 10px 0;margin:0 0 24px;font-size:16px;line-height:1.55;color:var(--text)}
+  .roi-anchor p{margin:0}
+  .roi-anchor strong{color:var(--text-strong)}
+  .roi-anchor .em{color:var(--accent-hover);font-weight:700}
+  .roi-note{margin-top:18px;font-size:12.5px;color:var(--slate);line-height:1.5;padding-top:14px;border-top:1px solid var(--line-soft)}
+  @media (max-width:780px){
+    .roi-grid{grid-template-columns:1fr}
+    .roi-card{padding:22px 22px}
+    .roi-list li{font-size:13.5px}
+  }
+
+  /* MATRIX — групповой саб-хедер (Источники данных) */
+  table.matrix tr.matrix-section td{background:var(--surf2);color:var(--text-mute);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;padding-top:14px;padding-bottom:10px}
+}
+
 /* ── PRICING PAGE v7 — классы специфичные для /pricing (не дублируем уже
    существующие .sub-card/.sub-cta/.pt-opt и т.д. из блоков выше). ─────── */
 .lp {

@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+import type { Metadata } from "next";
 import { setRequestLocale, getTranslations } from "next-intl/server";
 import { TrackedLink } from "@/components/TrackedLink";
 import { SiteNav } from "@/components/SiteNav";
@@ -11,12 +13,13 @@ import "./landing.css";
 // Footer рендерит layout (общий) — здесь не дублируем.
 
 type Step = { n: string; title: string; body: string };
-type Tile = { tag: string; h3: string; tagline: string; desc: string; bullets: string[]; who: string; cta: string };
+type Tile = { tag?: string; h3: string; tagline: string; desc: string; extra?: string; bullets: string[]; who: string; when: string; cta: string };
 type Cell = { num: string; h4: string; p: string };
-type MatrixRow = { task: string; cells: { t: string; k: "yes" | "no" | "partial" }[] };
-type SourceItem = { name: string; sub: string };
+type MatrixRow = { section?: string; task: string; cells: { t: string; k: "yes" | "no" | "partial" }[] };
 type Faq = { q: string; a: string };
 type HeroRow = { label: string; value: string };
+type ProtoItem = { num: string; title: string; meta: string; verdict: string; verdictKind: "direct" | "partial"; common: string; diff: string };
+type RoiRow = { label: string; value: string; note?: string };
 
 const ARROW = (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -29,6 +32,34 @@ const TILES: { key: "search" | "landscape" | "screening"; free?: boolean; href: 
   { key: "landscape", href: "/login?intent=landscape", goal: "tile_landscape_click" },
   { key: "screening", href: "/login?intent=screening", goal: "tile_screening_click" },
 ];
+
+// SEO-head v9 (§8) — page-specific meta + OG, override layout's generic Meta.
+// Контент из ap-mediabuyer seo-head-v9-brief (v2-final). 94,9 млн = verified
+// (прод 94 917 078, округление вниз). UTM на мета НЕ ставим.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
+  return {
+    title: "ПатентСкан — проверка изобретения по 94,9 млн патентов",
+    description:
+      "Проверьте уникальность изобретения по 94,9 млн патентов в 6 юрисдикциях. ИИ-анализ со ссылкой на каждый источник — за минуты, до похода к поверенному.",
+    alternates: { canonical: `${site}/${locale}` },
+    openGraph: {
+      type: "website",
+      title: "ПатентСкан — патентный поиск по 94,9 млн патентов",
+      description:
+        "ИИ находит ближайшие аналоги вашей идеи и объясняет отличия — каждый вывод со ссылкой на источник.",
+      url: `${site}/`,
+      locale: "ru_RU",
+      images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    },
+    twitter: { card: "summary_large_image" },
+  };
+}
 
 export default async function LandingPage({
   params,
@@ -43,10 +74,12 @@ export default async function LandingPage({
   const tiles = t.raw("tiles.items") as Record<string, Tile>;
   const cells = t.raw("trust.cells") as Cell[];
   const rows = t.raw("matrix.rows") as MatrixRow[];
-  const sources = t.raw("sources.items") as SourceItem[];
   const faqs = t.raw("faq.items") as Faq[];
   const heroRows = t.raw("hero.card.rows") as HeroRow[];
   const pills = t.raw("hero.pills") as string[];
+  const protoItems = t.raw("proto.items") as ProtoItem[];
+  const roiAgencyRows = t.raw("roi.agencyRows") as RoiRow[];
+  const roiOursRows = t.raw("roi.oursRows") as RoiRow[];
 
   // FAQPage JSON-LD — built from the SAME `faqs` rendered below, so the
   // structured data always matches the visible accordion (Google/Yandex require
@@ -66,12 +99,31 @@ export default async function LandingPage({
       acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) },
     })),
   };
+  // SoftwareApplication JSON-LD (§8, per SEO brief). Organization/WebSite/Service
+  // уже в layout.tsx — здесь НЕ дублируем (только page-specific schema поверх).
+  const swJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": `${siteUrl}/#app`,
+    name: "ПатентСкан",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web",
+    url: `${siteUrl}/`,
+    description:
+      "ИИ-сервис патентного поиска и анализа патентной чистоты по 94,9 млн патентам России, СНГ, США, Европы, Китая и Японии.",
+    offers: { "@type": "Offer", price: "0", priceCurrency: "RUB", name: "Free" },
+    provider: { "@id": `${siteUrl}/#org` },
+  };
 
   return (
     <div className="lp">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(swJsonLd) }}
       />
       {/* NAV */}
       <SiteNav />
@@ -177,18 +229,29 @@ export default async function LandingPage({
               const tile = tiles[key];
               return (
                 <div className="tile" key={key}>
-                  <span className={`tile-tag${free ? " free" : ""}`}>{tile.tag}</span>
+                  {tile.tag ? (
+                    <span className={`tile-tag${free ? " free" : ""}`}>{tile.tag}</span>
+                  ) : null}
                   <div className="tile-h3">{tile.h3}</div>
                   <div className="tile-tagline">{tile.tagline}</div>
                   <p className="tile-desc">{tile.desc}</p>
+                  {tile.extra ? (
+                    <p className="tile-extra" dangerouslySetInnerHTML={{ __html: tile.extra }} />
+                  ) : null}
                   <ul className="tile-bullets">
                     {tile.bullets.map((b, i) => (
                       <li key={i} dangerouslySetInnerHTML={{ __html: b }} />
                     ))}
                   </ul>
                   <div className="tile-meta">
-                    <span className="tile-meta-label">{t("tiles.whoLabel")}</span>
-                    <strong>{tile.who}</strong>
+                    <div className="tile-meta-row">
+                      <span className="tile-meta-label">{t("tiles.whoLabel")}</span>
+                      <strong>{tile.who}</strong>
+                    </div>
+                    <div className="tile-meta-row">
+                      <span className="tile-meta-label">{t("tiles.whenLabel")}</span>
+                      <strong>{tile.when}</strong>
+                    </div>
                   </div>
                   <TrackedLink href={href} goal={goal} className={`tile-cta${free ? " free" : ""}`}>
                     {tile.cta}
@@ -198,6 +261,100 @@ export default async function LandingPage({
               );
             })}
           </div>
+        </div>
+      </section>
+
+      {/* PROTO DEMO — что отличает Глубокий анализ */}
+      <section className="proto-demo">
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("proto.eyebrow")}</span>
+            <h2 className="section-h2">
+              {t("proto.titleA")} <span className="em">{t("proto.titleEm")}</span>
+            </h2>
+            <p className="section-sub">{t("proto.sub")}</p>
+          </div>
+
+          <div className="proto-card">
+            <div className="proto-card-head">
+              <span className="proto-label">{t("proto.cardLabel")}</span>
+              <span className="proto-tag">{t("proto.cardTag")}</span>
+            </div>
+
+            <div className="proto-idea">
+              <span className="proto-idea-label">{t("proto.ideaLabel")}</span>
+              <p>{t("proto.idea")}</p>
+            </div>
+
+            {protoItems.map((it, i) => (
+              <div className="proto-item" key={i}>
+                <div className="proto-item-head">
+                  <span className="proto-num">{it.num}</span>
+                  <div>
+                    <div className="proto-title">{it.title}</div>
+                    <div className="proto-meta">{it.meta}</div>
+                  </div>
+                  <span className={`proto-verdict proto-verdict-${it.verdictKind}`}>{it.verdict}</span>
+                </div>
+                <p className="proto-row">
+                  <strong>{t("proto.commonLabel")}</strong> {it.common}
+                </p>
+                <p className="proto-row">
+                  <strong>{t("proto.diffLabel")}</strong> {it.diff}
+                </p>
+              </div>
+            ))}
+
+            <div className="proto-foot">{t("proto.foot")}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ROI — патентное агентство vs ПатентСкан */}
+      <section className="roi-section">
+        <div className="container">
+          <div className="section-head">
+            <span className="section-eyebrow">{t("roi.eyebrow")}</span>
+            <h2 className="section-h2">
+              {t("roi.titleA")} <span className="em">{t("roi.titleEm")}</span>
+            </h2>
+            <p className="section-sub">{t("roi.sub")}</p>
+          </div>
+
+          <div className="roi-grid">
+            <div className="roi-card roi-poverenny">
+              <h3>{t("roi.agencyTitle")}</h3>
+              <ul className="roi-list">
+                {roiAgencyRows.map((r, i) => (
+                  <li key={i}>
+                    <span className="roi-li-l">{r.label}</span> <strong>{r.value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="roi-card roi-ours">
+              <h3>{t("roi.oursTitle")}</h3>
+              <ul className="roi-list">
+                {roiOursRows.map((r, i) => (
+                  <li key={i}>
+                    <span className="roi-li-l">{r.label}</span> <strong>{r.value}</strong>
+                    {r.note ?? ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="roi-anchor">
+            <p>
+              <span dangerouslySetInnerHTML={{ __html: t.raw("roi.anchorA") as string }} />
+              <span className="em">{t("roi.anchorEm")}</span>
+              {t("roi.anchorB")}
+            </p>
+          </div>
+
+          <p className="roi-note">{t("roi.note")}</p>
         </div>
       </section>
 
@@ -244,35 +401,27 @@ export default async function LandingPage({
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r.task}</td>
-                    {r.cells.map((c, j) => (
-                      <td key={j} className={c.k}>
-                        {c.t}
-                      </td>
-                    ))}
-                  </tr>
+                  <Fragment key={i}>
+                    {r.section ? (
+                      <tr className="matrix-section">
+                        <td colSpan={4}>{r.section}</td>
+                      </tr>
+                    ) : null}
+                    <tr>
+                      <td>{r.task}</td>
+                      {r.cells.map((c, j) => (
+                        <td key={j} className={c.k}>
+                          {c.t}
+                        </td>
+                      ))}
+                    </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
       </section>
-
-      {/* SOURCES STRIP */}
-      <div className="sources">
-        <div className="container">
-          <div className="sources-head">{t("sources.head")}</div>
-          <div className="sources-row">
-            {sources.map((s) => (
-              <div className="src" key={s.name}>
-                {s.name}
-                <span className="sub">{s.sub}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
 
       {/* FAQ */}
       <section>
