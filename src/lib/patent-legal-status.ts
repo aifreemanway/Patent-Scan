@@ -61,15 +61,28 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Strip the trailing region/kind chars off an id and keep only digits. */
-function digitsOnly(ruNumber: string): string {
-  return String(ruNumber ?? "").replace(/\D/g, "");
+// kind→register: U1/U8 = полезная модель (RUPM), прочее (C1/C2/A…) = изобретение
+// (RUPAT). Без kind / нераспознанный id → RUPAT (прежнее поведение). Зеркалит
+// patsearch-normalize.buildUrl; держим локально, чтобы не связывать legal-status
+// с URL-билдером. QA#2: U1 раньше всегда бил в RUPAT → неверный статус полезных
+// моделей («не определён» / чужой документ того же номера).
+export function ruFipsTarget(idOrNumber: string): {
+  db: "RUPAT" | "RUPM";
+  number: string;
+} {
+  const m = /^(?:RU|SU)0*(\d+)([A-Z]\d?)?/i.exec((idOrNumber ?? "").trim());
+  const number = m?.[1] ?? String(idOrNumber ?? "").replace(/\D/g, "");
+  const db = /^U/i.test(m?.[2] ?? "") ? "RUPM" : "RUPAT";
+  return { db, number };
 }
 
-export function fipsUrl(numericNumber: string): string {
+export function fipsUrl(idOrNumber: string): string {
+  const { db, number } = ruFipsTarget(idOrNumber);
   return (
-    "https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=" +
-    numericNumber +
+    "https://new.fips.ru/registers-doc-view/fips_servlet?DB=" +
+    db +
+    "&DocNumber=" +
+    number +
     "&TypeFile=html"
   );
 }
@@ -172,14 +185,14 @@ export function mapStatusToState(phrase: string): LegalStatusState {
   return "не определён";
 }
 
-function notDetermined(numericNumber: string): LegalStatus {
+function notDetermined(idOrNumber: string): LegalStatus {
   return {
     state: "не определён",
     statusText: null,
     lastChangeDate: null,
     feeInfo: null,
     extractedAt: todayIso(),
-    sourceUrl: fipsUrl(numericNumber),
+    sourceUrl: fipsUrl(idOrNumber),
   };
 }
 
@@ -188,14 +201,18 @@ function notDetermined(numericNumber: string): LegalStatus {
  * Pure (no shared mutation beyond the cache); never logs secrets.
  * ANY failure mode → state "не определён" (still carries sourceUrl + extractedAt).
  */
-export async function fetchRuLegalStatus(ruNumber: string): Promise<LegalStatus> {
-  const num = digitsOnly(ruNumber);
-  if (!num) return notDetermined(num);
+export async function fetchRuLegalStatus(idOrNumber: string): Promise<LegalStatus> {
+  const { db, number } = ruFipsTarget(idOrNumber);
+  if (!number) return notDetermined(idOrNumber);
 
-  const cached = cache.get(num);
+  // Cache by document identity (register+number): "RU88863U1" and
+  // "RU88863U1_20091120" are the same doc, and a U1 (RUPM) must NOT collide with
+  // an invention of the same number (RUPAT) — that collision was the QA#2 bug.
+  const cacheKey = `${db}${number}`;
+  const cached = cache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.value;
 
-  const url = fipsUrl(num);
+  const url = fipsUrl(idOrNumber);
   let result: LegalStatus;
 
   const controller = new AbortController();
@@ -206,7 +223,7 @@ export async function fetchRuLegalStatus(ruNumber: string): Promise<LegalStatus>
       signal: controller.signal,
     });
     if (!resp.ok) {
-      result = notDetermined(num);
+      result = notDetermined(idOrNumber);
     } else {
       // ФИПС serves windows-1251 — decode explicitly or "Статус" is mojibake.
       const buf = await resp.arrayBuffer();
@@ -214,7 +231,7 @@ export async function fetchRuLegalStatus(ruNumber: string): Promise<LegalStatus>
       const clean = deTag(html);
       const parsed = parseStatusBlock(clean);
       if (!parsed) {
-        result = notDetermined(num);
+        result = notDetermined(idOrNumber);
       } else {
         const state = mapStatusToState(parsed.statusText);
         result = {
@@ -229,34 +246,37 @@ export async function fetchRuLegalStatus(ruNumber: string): Promise<LegalStatus>
     }
   } catch {
     // Timeout / network / decode error — anti-fab fallback, no secret logging.
-    result = notDetermined(num);
+    result = notDetermined(idOrNumber);
   } finally {
     clearTimeout(timer);
   }
 
-  cache.set(num, { value: result, expires: Date.now() + ttlFor(result.state) });
+  cache.set(cacheKey, { value: result, expires: Date.now() + ttlFor(result.state) });
   return result;
 }
 
 /**
  * Concurrency-limited batch over fetchRuLegalStatus (max ~8 in flight), for the
- * landscape (up to ~400 patents). Reuses the module cache. Keyed by the numeric
- * RU number string. Non-RU / blank inputs are skipped by the caller.
+ * landscape (up to ~400 patents). Reuses the module cache. Accepts full RU/SU
+ * ids (with kind, e.g. "RU88863U1" → RUPM register) and returns a map keyed by
+ * the EXACT input id, so callers look up by the same id they sent. Non-RU /
+ * blank inputs are skipped by the caller.
  */
 export async function fetchRuLegalStatuses(
-  ruNumbers: string[]
+  ids: string[]
 ): Promise<Record<string, LegalStatus>> {
-  // De-dupe by numeric key while keeping a map back to the requested keys.
   const out: Record<string, LegalStatus> = {};
+  // De-dupe by the exact input id (each patent has a unique id); the per-doc
+  // cache inside fetchRuLegalStatus collapses ids resolving to the same register+number.
   const unique = Array.from(
-    new Set(ruNumbers.map((n) => digitsOnly(n)).filter(Boolean))
+    new Set(ids.map((s) => (s ?? "").trim()).filter(Boolean))
   );
 
   let cursor = 0;
   async function worker(): Promise<void> {
     while (cursor < unique.length) {
-      const num = unique[cursor++];
-      out[num] = await fetchRuLegalStatus(num);
+      const id = unique[cursor++];
+      out[id] = await fetchRuLegalStatus(id);
     }
   }
 

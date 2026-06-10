@@ -33,12 +33,14 @@ type FieldViewProps = {
   legalLoading: boolean;
 };
 
-// RU/SU numeric ФИПС DocNumber, or null for non-RU (matches report/page.tsx).
+// Full RU/SU id (with kind, e.g. "RU88863U1"), or null for non-RU. Carries the
+// kind so the legal-status resolver picks RUPM vs RUPAT; doubles as the lookup
+// key into the statuses map (matches report/page.tsx).
 function ruNumberOf(p: { id: string; country?: string }): string | null {
   const cc = (p.country ?? "").toUpperCase() || /^([A-Z]{2})/.exec(p.id ?? "")?.[1] || "";
   if (cc !== "RU" && cc !== "SU") return null;
-  const digits = (p.id ?? "").replace(/\D/g, "");
-  return digits.length ? digits : null;
+  const id = (p.id ?? "").trim();
+  return id && /\d/.test(id) ? id : null;
 }
 
 export function FieldView({ pool, ranked, legalStatuses, legalLoading }: FieldViewProps) {

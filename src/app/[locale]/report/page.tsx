@@ -127,13 +127,15 @@ function safeHref(url: string | undefined | null): string | null {
 }
 
 // RU patents are the only ones with a legal-status badge in Этап 1. A patent is
-// RU when its country is RU/SU OR its id starts with RU/SU. Returns the numeric
-// ФИПС DocNumber (digits only) for the /api/legal-status batch, or null.
+// RU when its country is RU/SU OR its id starts with RU/SU. Returns the FULL id
+// (with kind, e.g. "RU88863U1") for the /api/legal-status batch — the resolver
+// needs the kind to pick RUPM vs RUPAT — and it doubles as the lookup key into
+// the returned statuses map. Null for non-RU / numberless ids.
 function ruNumberOf(p: { id: string; country?: string }): string | null {
   const cc = (p.country ?? "").toUpperCase() || /^([A-Z]{2})/.exec(p.id ?? "")?.[1] || "";
   if (cc !== "RU" && cc !== "SU") return null;
-  const digits = (p.id ?? "").replace(/\D/g, "");
-  return digits.length ? digits : null;
+  const id = (p.id ?? "").trim();
+  return id && /\d/.test(id) ? id : null;
 }
 
 // Trim a long invention description to a header-friendly length (keeps the

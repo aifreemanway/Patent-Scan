@@ -24,8 +24,9 @@ function toRuNumber(raw: unknown): string | null {
   // Reject anything that names a non-RU office prefix (US…, EP…, CN… etc).
   const cc = /^([A-Z]{2})/.exec(s.toUpperCase());
   if (cc && cc[1] !== "RU" && cc[1] !== "SU") return null;
-  const digits = s.replace(/\D/g, "");
-  return digits.length ? digits : null;
+  // Keep the FULL id (with kind, e.g. "RU88863U1") — the resolver needs the kind
+  // to pick RUPM (полезная модель) vs RUPAT (изобретение). Must carry a number.
+  return /\d/.test(s) ? s : null;
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
