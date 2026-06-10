@@ -908,8 +908,8 @@
   },
   "Auth": {
     "login": {
-      "title": "Sign in to Patent-Scan",
-      "subtitle": "Enter your email — we'll send a sign-in link. No password needed.",
+      "title": "Sign in to <em>Patent-Scan</em>",
+      "subtitle": "Enter your email — we'll send a sign-in link. No password needed. First time here — your account is created automatically.",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
@@ -1479,7 +1479,8 @@
     "cta": {
       "free": "Start free",
       "request": "Request access",
-      "contact": "Contact us"
+      "contact": "Contact us",
+      "order": "Order"
     },
     "subscription": {
       "title": "Subscription",
@@ -1488,14 +1489,17 @@
     "searchFree": "A quick idea check (Search) is free on every plan. If you need an analysis of why an idea is unique or not — that's Deep.",
     "oneOff": {
       "title": "One-off reports",
-      "subtitle": "For those who need a single report without a subscription.",
+      "head": "One-off reports —",
+      "headEm": "no subscription",
+      "subtitle": "Need a single report for a specific task — order it once, with no monthly fee. Patent Search is not sold one-off: it is free and included in every subscription.",
+      "note": "Prices shown are for one-off reports without a subscription. With an active subscription, the same reports beyond your quota come at −50%.",
       "packs": "Buying in volume? Credit packs: 10 Screenings — {screening10}, 20 Deep — {deep20}.",
       "packsCta": "Contact us"
     },
     "tiers": {
       "free": {
         "name": "Free",
-        "desc": "Get acquainted. Check your idea for free.",
+        "desc": "Get to know the product",
         "valueAnchor": {
           "head": "До ~2 рабочих дней — ориентировочная экономия рутинного поиска специалиста на тарифе",
           "units": "каждый Поиск ≈ 1 рабочий день"
@@ -1511,7 +1515,12 @@
       },
       "starter": {
         "name": "Starter",
-        "desc": "For the inventor. Regularly check your ideas and get a deep analysis.",
+        "desc": "Inventor, regular work",
+        "economyAnchor": {
+          "head": "Saves up to ~2 working weeks",
+          "body": "of routine search"
+        },
+        "addon": "+ 1 pack of 10 Searches above the plan — <span class=\"nowrap\">1&nbsp;990&nbsp;₽/pack</span>",
         "valueAnchor": {
           "head": "До ~2 рабочих недель — ориентировочная экономия рутинного поиска специалиста на тарифе",
           "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня"
@@ -1528,7 +1537,12 @@
       },
       "team": {
         "name": "Team",
-        "desc": "For teams and patent practice. A flow of checks, analyses, landscapes.",
+        "desc": "Team, patent practice",
+        "economyAnchor": {
+          "head": "Saves up to ~2.5 working months",
+          "body": "of routine search"
+        },
+        "addon": "+ up to 2 packs of 10 Searches above the plan — <span class=\"nowrap\">1&nbsp;990&nbsp;₽/pack</span>",
         "valueAnchor": {
           "head": "До ~2 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
           "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
@@ -1546,8 +1560,13 @@
         }
       },
       "team_plus": {
-        "name": "Team Plus",
-        "desc": "For R&D departments. Everything in Team plus Screenings and Industrial Usage.",
+        "name": "TeamPlus",
+        "desc": "Full cycle, R&D department",
+        "economyAnchor": {
+          "head": "Saves up to ~5 working months",
+          "body": "of routine search"
+        },
+        "addon": "+ up to 3 packs of 10 Searches above the plan — <span class=\"nowrap\">1&nbsp;990&nbsp;₽/pack</span>",
         "valueAnchor": {
           "head": "До ~5 рабочих месяцев — ориентировочная экономия рутинного поиска специалиста на тарифе",
           "units": "каждый Поиск ≈ 1 рабочий день · Глубокий анализ ≈ 2 дня · Ландшафт ≈ 2 дня"
@@ -1685,7 +1704,7 @@
       "items": [
         {
           "q": "What is included in each plan?",
-          "a": "<p><strong>Free</strong> — 3 Searches/month, industrial use map, report with watermark. No credit card required.</p><p style=\"margin-top:10px\"><strong>Starter</strong> — 10 Searches + 1 Deep Analysis/month, export without watermark, basic support, extra reports at −50%.</p><p style=\"margin-top:10px\"><strong>Team</strong> — 50 Searches + 5 Deep + 2 Landscapes/month, up to 3 users, priority support.</p><p style=\"margin-top:10px\"><strong>TeamPlus</strong> — 100 Searches + 15 Deep + 5 Landscapes/month + 4 Screenings per year, 3+ users.</p>"
+          "a": "<p><strong>Free</strong> — 3 Searches/month, industrial use map, report with watermark.</p><p style=\"margin-top:10px\"><strong>Starter</strong> — 10 Searches + 1 Deep Analysis/month, export without watermark, basic support, extra reports at −50%.</p><p style=\"margin-top:10px\"><strong>Team</strong> — 50 Searches + 5 Deep + 2 Landscapes/month, up to 3 users, priority support.</p><p style=\"margin-top:10px\"><strong>TeamPlus</strong> — 100 Searches + 15 Deep + 5 Landscapes/month + 4 Screenings per year, 3+ users.</p>"
         },
         {
           "q": "Can I change my plan?",
@@ -1711,7 +1730,8 @@
     "ctaInvoice": "Request invoice",
     "ctaRegister": "Register",
     "quotasNoteStrong": "Monthly quotas on all plans",
-    "quotasNoteBody": "even with annual billing the pool does not accumulate over 12 months. Each new subscription month quotas reset. Unused quotas do not roll over."
+    "quotasNoteBody": "even with annual billing the pool does not accumulate over 12 months. Each new subscription month quotas reset. Unused quotas do not roll over.",
+    "econDisclaimer": "Savings estimates are approximate, based on a typical volume of manual search."
   },
   "Requisites": {
     "eyebrow": "Юридическая информация",

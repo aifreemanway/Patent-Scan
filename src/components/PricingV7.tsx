@@ -18,7 +18,6 @@ import {
   SUBSCRIPTION_TIERS,
   ONE_OFF_PRODUCTS,
   VISIBLE_ADDONS,
-  CREDIT_PACKS,
   BILLING_LIVE,
   PRICE_FREE,
   PRICE_STARTER,
@@ -70,24 +69,14 @@ function SubBullets({ items }: { items: string[] }) {
   );
 }
 
-// Value-anchor блок (ba v3.1) — ориентировочная экономия времени специалиста на
-// тарифе. Hard-слова (ДО / ориентировочная / рутинного / специалиста) — verbatim
-// из i18n. ₽ не показываем (клиент считает по своей ставке). Период-независим.
-function ValueAnchor({ head, units }: { head: string; units: string }) {
+// Green economy-anchor блок (v9 mockup .sub-economy-anchor) — ориентировочная
+// экономия времени специалиста на тарифе. Hard-слова (Экономит до ~ / рутинного)
+// — verbatim из i18n. ₽ не показываем (клиент считает по своей ставке). Дисклеймер
+// «оценки ориентировочные» — в инфо-блоке «Квоты помесячные» (ТЗ §3). Период-незав.
+function EconomyAnchor({ head, body }: { head: string; body: string }) {
   return (
-    <div
-      style={{
-        borderLeft: "3px solid var(--accent, #2563eb)",
-        background: "rgba(37,99,235,0.06)",
-        padding: "10px 12px",
-        borderRadius: 8,
-        margin: "2px 0 14px",
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-strong, #0f172a)", lineHeight: 1.45 }}>
-        {head}
-      </div>
-      <div style={{ fontSize: 11.5, color: "var(--slate, #64748b)", marginTop: 4 }}>{units}</div>
+    <div className="sub-economy-anchor">
+      <strong>{head}</strong> {body}
     </div>
   );
 }
@@ -128,7 +117,7 @@ export function PricingV7() {
             {" или "}
             <span className="em">{t("heroV7.titleEm2")}</span>
           </h1>
-          <p className="hero-sub">{t("heroV7.sub")}</p>
+          {/* hero-sub про способ оплаты УБРАН (v9, ТЗ §3) */}
         </div>
       </div>
 
@@ -169,10 +158,6 @@ export function PricingV7() {
               <span className="sub-amount">{formatRub(PRICE_FREE, locale)}</span>
             </div>
             <div className="sub-for">{t("tiers.free.desc")}</div>
-            <ValueAnchor
-              head={t("tiers.free.valueAnchor.head")}
-              units={t("tiers.free.valueAnchor.units")}
-            />
             <SubBullets
               items={[
                 ...SUBSCRIPTION_TIERS.find((x) => x.id === "free")!.quotaKeys.map((k) => t(k)),
@@ -187,7 +172,7 @@ export function PricingV7() {
               {t("ctaRegister")}
               <Arrow />
             </TrackedLink>
-            <p className="sub-free-note">{t("freeNote")}</p>
+            {/* «Банковская карта не нужна» УБРАНА (v9, ТЗ §3) */}
           </div>
 
           {/* PAID */}
@@ -225,24 +210,30 @@ export function PricingV7() {
                   {t("economyTpl", { amount: formatRub(economy, locale) })}
                 </div>
 
+                <EconomyAnchor
+                  head={t(`tiers.${tierKey}.economyAnchor.head`)}
+                  body={t(`tiers.${tierKey}.economyAnchor.body`)}
+                />
+
                 <div className="sub-for month-only">{t(`tiers.${tierKey}.desc`)}</div>
                 <div className="sub-for year-only">{t("forYearNote")}</div>
 
-                <ValueAnchor
-                  head={t(`tiers.${tierKey}.valueAnchor.head`)}
-                  units={t(`tiers.${tierKey}.valueAnchor.units`)}
-                />
-
                 <SubBullets items={bullets} />
 
-                {/* Month CTA */}
+                {/* Search-pack line (CANON §4a) — markup-копи из i18n (nowrap-span) */}
+                <div
+                  className="sub-addon"
+                  dangerouslySetInnerHTML={{ __html: t.raw(`tiers.${tierKey}.addon`) as string }}
+                />
+
+                {/* Month CTA — «Оформить подписку» */}
                 <TrackedLink
                   href={`/login?plan=${p.planParam}&next=/account/billing`}
                   className="sub-cta sub-cta-primary cta-month"
                 >
                   {t("ctaConnect")}
                 </TrackedLink>
-                {/* Year CTA */}
+                {/* Year CTA — «Запросить счёт» */}
                 <TrackedLink
                   href={`/enterprise?plan=${p.planParam}&period=year#form`}
                   className="sub-cta sub-cta-primary cta-year"
@@ -254,13 +245,14 @@ export function PricingV7() {
           })}
         </div>
 
-        {/* ── Quotas note ─────────────────────────────────────────── */}
+        {/* ── Quotas note (с дисклеймером экономии внутри, ТЗ §3) ──── */}
         <div className="quotas-note">
           <div className="qn-icon">i</div>
           <div>
             <strong>{t("quotasNoteStrong")}</strong>
             {" — "}
             {t("quotasNoteBody")}
+            <span className="econ-disclaimer-inline">{t("econDisclaimer")}</span>
           </div>
         </div>
 
@@ -287,75 +279,39 @@ export function PricingV7() {
         </div>
       </div>
 
-      {/* ── Search-is-free explainer (ТЗ §3.5) ─────────────────────── */}
-      <div className="container">
-        <p className="search-free-note">{t("searchFree")}</p>
-      </div>
-
-      {/* ── One-off reports ────────────────────────────────────────── */}
-      {/* Only render if at least one product exists (anti-fab) */}
+      {/* ── One-off reports (v9: блок «без подписки», CTA «Заказать») ── */}
+      {/* Рендерим только если есть хотя бы один продукт (anti-fab). Поиск
+          разово НЕ продаётся (нет карточки) — он бесплатный, входит в подписку.
+          Цены — из lib/pricing через oneOffPrice(). CTA → /login?intent=<id>. */}
       {ONE_OFF_PRODUCTS.length > 0 && (
         <div className="container">
-          <div className="pricing-section-head">
-            <h2 className="pricing-h2">{t("oneOff.title")}</h2>
-            <p className="pricing-section-sub">{t("oneOff.subtitle")}</p>
-          </div>
-          <div className="oneoff-grid">
-            {ONE_OFF_PRODUCTS.map((product) => (
-              <div
-                key={product.id}
-                className={`sub-card${product.featured ? " sub-card-highlight" : ""}`}
-              >
-                <div className="sub-tag">
-                  {t(`products.${product.id}.name`)}
-                  {product.featured && (
-                    <span
-                      style={{
-                        marginLeft: 8,
-                        background: "var(--accent-soft)",
-                        color: "var(--accent-hover)",
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        letterSpacing: "0.04em",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {t("flagship")}
-                    </span>
-                  )}
-                </div>
-                <div className="sub-price">
-                  <span className="sub-amount">
+          <div className="oneoff-section">
+            <div className="oneoff-head">
+              <h2>
+                {t("oneOff.head")} <span className="em">{t("oneOff.headEm")}</span>
+              </h2>
+              <p>{t("oneOff.subtitle")}</p>
+            </div>
+            <div className="oneoff-grid">
+              {ONE_OFF_PRODUCTS.map((product) => (
+                <div key={product.id} className="oneoff-card">
+                  <div className="oneoff-name">{t(`products.${product.id}.name`)}</div>
+                  <div className="oneoff-desc">{t(`products.${product.id}.desc`)}</div>
+                  <div className="oneoff-price">
                     {formatRub(oneOffPrice(product), locale)}
-                  </span>
+                  </div>
+                  <TrackedLink
+                    href={`/login?intent=${product.id}`}
+                    goal="pricing_oneoff_click"
+                    className="sub-cta sub-cta-primary"
+                  >
+                    {t("cta.order")}
+                  </TrackedLink>
                 </div>
-                <div className="sub-for" style={{ marginBottom: 20 }}>
-                  {t(`products.${product.id}.desc`)}
-                </div>
-                <TrackedLink
-                  href={ctaHref(product.cta)}
-                  goal="pricing_oneoff_click"
-                  className={`sub-cta${product.featured ? " sub-cta-primary" : ""}`}
-                >
-                  {t("cta.request")}
-                  <Arrow />
-                </TrackedLink>
-              </div>
-            ))}
+              ))}
+            </div>
+            <p className="oneoff-note">{t("oneOff.note")}</p>
           </div>
-
-          {/* Credit packs line */}
-          <p className="packs-line">
-            {t("oneOff.packs", {
-              screening10: formatRub(CREDIT_PACKS.screening10, locale),
-              deep20: formatRub(CREDIT_PACKS.deep20, locale),
-            })}{" "}
-            <TrackedLink href="/enterprise#form" goal="pricing_enterprise_click">
-              {t("oneOff.packsCta")} →
-            </TrackedLink>
-          </p>
         </div>
       )}
 

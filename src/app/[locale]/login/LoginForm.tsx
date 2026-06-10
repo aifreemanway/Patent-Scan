@@ -195,7 +195,9 @@ export function LoginForm({
         onReady={renderWidget}
       />
       <form onSubmit={onSubmit} className="auth-card">
-        <h1 className="auth-h1">{t("title")}</h1>
+        <h1 className="auth-h1">
+          {t.rich("title", { em: (chunks) => <span className="em">{chunks}</span> })}
+        </h1>
         <p className="auth-sub">{t("subtitle")}</p>
 
         <div className="field">
