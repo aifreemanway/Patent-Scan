@@ -46,7 +46,14 @@ a:hover{color:var(--accent-hover)}
 .nav-links a:hover{color:var(--text-strong)}
 .btn-nav{padding:9px 18px;border:1px solid var(--line);border-radius:8px;color:var(--text-strong);background:var(--bg);font-size:13px;font-weight:600;transition:border-color 150ms,color 150ms}
 .btn-nav:hover{border-color:var(--accent);color:var(--accent)}
-@media (max-width:780px){.nav-links{gap:14px;font-size:13px}.nav-links a:not(.btn-nav){display:none}}
+/* Ручной переключатель языка (LocaleSwitcher). Спецификность .nav-links .lang-switch
+   намеренно выше правила-пряталки .nav-links a:not(.btn-nav) — чтобы тумблер
+   оставался виден и на мобиле (язык важен на любом экране). */
+.nav-links .lang-switch{display:inline-flex;align-items:center;gap:1px;margin-left:4px}
+.nav-links .lang-switch a{padding:3px 6px;font-size:13px;font-weight:600;color:var(--text-mute);border-radius:6px;letter-spacing:.02em}
+.nav-links .lang-switch a:hover{color:var(--text-strong);background:var(--accent-soft)}
+.nav-links .lang-switch a[aria-current="true"]{color:var(--accent)}
+@media (max-width:780px){.nav-links{gap:14px;font-size:13px}.nav-links a:not(.btn-nav){display:none}.nav-links .lang-switch a{display:inline-flex}}
 
 /* HERO — compact, must fit viewport above the fold */
 .hero{padding:24px 0 24px;position:relative;overflow:hidden;min-height:calc(100vh - 71px);display:flex;align-items:center}
