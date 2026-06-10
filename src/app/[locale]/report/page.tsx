@@ -45,12 +45,24 @@ type DeepFeature = {
   note?: string;
 };
 
+type DeepPrototype = {
+  id: string;
+  title?: string;
+  year?: string;
+  country?: string;
+  url?: string;
+  common?: string;
+  distinction?: string;
+  verdict?: string;
+};
+
 type DeepResult = {
   uniqueness?: "High" | "Medium" | "Low";
   uniquenessDetail?: string;
   overview?: string;
   features?: DeepFeature[];
   patents?: ReportPatent[];
+  prototypes?: DeepPrototype[];
   recommendation?: string;
   deep?: boolean;
 };
@@ -339,9 +351,25 @@ function buildSearchReportHtml(args: {
           })
           .join("")}`
       : "";
+    const prototypesHtml = (deep.prototypes ?? []).length
+      ? `<h3>${esc(t("deepPrototypesTitle"))}</h3>${(deep.prototypes ?? [])
+          .map(
+            (p, i) =>
+              `<div style="margin:10px 0"><strong>${i + 1}. ${esc(p.title || p.id)}</strong> <span class="sub">${idLink(p.id, p.url)}${p.year ? " · " + esc(p.year) : ""}</span>${
+                p.common
+                  ? `<div class="sub"><strong>${esc(t("deepPrototypeCommon"))}:</strong> ${esc(p.common)}</div>`
+                  : ""
+              }${
+                p.distinction
+                  ? `<div class="sub"><strong>${esc(t("deepPrototypeDistinction"))}:</strong> ${esc(p.distinction)}</div>`
+                  : ""
+              }${p.verdict ? `<div class="sub"><em>${esc(p.verdict)}</em></div>` : ""}</div>`,
+          )
+          .join("")}`
+      : "";
     return `${crossHtml}<section class="card"><h2>${esc(t("deepResultTitle"))}</h2>${
       deep.overview ? `<p>${esc(deep.overview)}</p>` : ""
-    }${deep.uniquenessDetail ? `<p>${esc(deep.uniquenessDetail)}</p>` : ""}${featuresHtml}${
+    }${deep.uniquenessDetail ? `<p>${esc(deep.uniquenessDetail)}</p>` : ""}${prototypesHtml}${featuresHtml}${
       deep.recommendation
         ? `<p style="margin-top:12px"><strong>${esc(
             t("recommendationTitle"),
@@ -1211,6 +1239,71 @@ function ReportPageInner() {
                   </p>
                 );
               })()}
+
+              {deepResult.prototypes && deepResult.prototypes.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {t("deepPrototypesTitle")}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {t("deepPrototypesSub")}
+                  </p>
+                  <ol className="mt-3 space-y-4">
+                    {deepResult.prototypes.map((p, i) => (
+                      <li
+                        key={p.id}
+                        className="rounded-xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                            {i + 1}
+                          </span>
+                          {p.url && /^https?:\/\//i.test(p.url) ? (
+                            <a
+                              href={p.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-700 underline decoration-blue-200 hover:decoration-blue-700"
+                            >
+                              {p.title || p.id}
+                            </a>
+                          ) : (
+                            <span className="font-medium text-slate-900">
+                              {p.title || p.id}
+                            </span>
+                          )}
+                          <span className="font-mono text-xs text-slate-400">
+                            {p.id}
+                            {p.year ? ` · ${p.year}` : ""}
+                            {p.country ? ` · ${p.country}` : ""}
+                          </span>
+                        </div>
+                        {p.common && (
+                          <p className="mt-2 text-sm leading-6 text-slate-700">
+                            <span className="font-medium text-slate-500">
+                              {t("deepPrototypeCommon")}:{" "}
+                            </span>
+                            {p.common}
+                          </p>
+                        )}
+                        {p.distinction && (
+                          <p className="mt-1.5 text-sm leading-6 text-slate-900">
+                            <span className="font-medium text-slate-500">
+                              {t("deepPrototypeDistinction")}:{" "}
+                            </span>
+                            {p.distinction}
+                          </p>
+                        )}
+                        {p.verdict && (
+                          <p className="mt-1.5 text-xs italic text-slate-500">
+                            {p.verdict}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
               {deepResult.features && deepResult.features.length > 0 && (
                 <div className="mt-6">

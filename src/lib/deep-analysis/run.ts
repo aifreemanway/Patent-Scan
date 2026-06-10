@@ -42,12 +42,21 @@ export const DEEP_ANALYSIS_SYSTEM_PROMPT = `Ты — патентный эксп
       "diff": "какие существенные признаки отсутствуют/решены иначе"
     }
   ],
+  "prototypes": [
+    {
+      "id": "<id ближайшего аналога из входа>",
+      "common": "1–2 предложения: что общего у изобретения с этим аналогом",
+      "distinction": "2–3 предложения ПРОЗОЙ: ключевое существенное отличие ВАШЕГО решения от этого аналога — что именно иначе/добавлено и почему это значимо для патентоспособности",
+      "verdict": "1 короткое предложение: прямой прототип / частичный аналог / смежное решение"
+    }
+  ],
   "recommendation": "3–5 предложений: перспективы патентования, какие признаки усилить в формуле, конкретный следующий шаг"
 }
 
 Правила:
 - features: 3–8 существенных признаков. status='known' если признак прямо раскрыт хотя бы одним аналогом; 'partially_known' если раскрыт частично/смежно; 'novel' если в аналогах не найден.
 - analogIds: ТОЛЬКО id из входа, дословно. Если признак нов — пустой массив. НИЧЕГО не выдумывай.
+- prototypes: 3–5 САМЫХ БЛИЗКИХ аналогов из входа, по убыванию близости (первый = ближайший, «прототип»). По каждому — аналитическое заключение ПРОЗОЙ, как у патентного поверенного: что общего и чем именно ваше решение отличается от этого аналога. id ТОЛЬКО из входа, дословно. Близких меньше — включи сколько есть. НИЧЕГО не выдумывай.
 - ЗАПРЕЩЕНО выдумывать патенты/номера. Используй только id и title из входа.
 - uniqueness: 'High' только если большинство существенных признаков 'novel'; 'Low' если ключевые признаки 'known'.
 - Будь консервативен: это предварительный скрининг, а не гарантия патента. Язык ответа — язык описания изобретения.`;
@@ -69,12 +78,19 @@ type DeepPatent = {
   match?: string;
   diff?: string;
 };
+type DeepPrototype = {
+  id?: string;
+  common?: string;
+  distinction?: string;
+  verdict?: string;
+};
 type DeepVerdict = {
   uniqueness?: "High" | "Medium" | "Low";
   uniquenessDetail?: string;
   overview?: string;
   features?: DeepFeature[];
   patents?: DeepPatent[];
+  prototypes?: DeepPrototype[];
   recommendation?: string;
 };
 
@@ -96,6 +112,18 @@ export type DeepResponsePayload = DeepVerdict & {
     status: FeatureStatus;
     analogIds: string[];
     note: string;
+  }>;
+  // Closest analogs (прототипы) with prose conclusions — the attorney-style
+  // "here are the nearest, here's why you differ", ranked closest-first.
+  prototypes: Array<{
+    id: string;
+    title: string;
+    year: string;
+    country: string;
+    url: string;
+    common: string;
+    distinction: string;
+    verdict: string;
   }>;
   deep: true;
 };
@@ -181,10 +209,33 @@ export async function runDeepAnalysisVerdict(opts: {
     };
   });
 
+  // Prototypes: same anti-fab net as patents — keep only real input ids and
+  // stamp the authoritative id/title/year/country/url from the retrieved hit.
+  const prototypes = (Array.isArray(data.prototypes) ? data.prototypes : [])
+    .flatMap((p) => {
+      const src =
+        p && typeof p.id === "string" ? byId.get(normKey(p.id)) : undefined;
+      if (!src) return [];
+      return [
+        {
+          id: src.id,
+          title: src.title ?? "",
+          year: src.year ?? "",
+          country: src.country ?? "",
+          url: src.url ?? "",
+          common: typeof p.common === "string" ? p.common : "",
+          distinction: typeof p.distinction === "string" ? p.distinction : "",
+          verdict: typeof p.verdict === "string" ? p.verdict : "",
+        },
+      ];
+    })
+    .slice(0, 5);
+
   return {
     ...data,
     patents: verified,
     features,
+    prototypes,
     deep: true,
   };
 }
