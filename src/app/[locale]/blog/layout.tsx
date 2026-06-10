@@ -17,10 +17,16 @@ export default async function BlogLayout({
 }) {
   const { locale } = await params;
   setRequestLocale(locale);
+  // ONLY SiteNav goes inside .lp (its v7 styles are scoped under .lp in
+  // landing.css). The article content stays OUTSIDE .lp — otherwise landing.css
+  // bleeds into the Tailwind article (breaks mx-auto centering + the CTA button
+  // colour). Footer is rendered by the [locale] root layout and self-wraps in .lp.
   return (
-    <div className="lp">
-      <SiteNav />
+    <>
+      <div className="lp">
+        <SiteNav />
+      </div>
       {children}
-    </div>
+    </>
   );
 }
