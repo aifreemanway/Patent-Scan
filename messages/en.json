@@ -680,9 +680,9 @@
   },
   "Report": {
     "title": "Uniqueness check report",
-    "subtitle": "⚠ Not a substitute for an official GOST R 15.011-96 patent-research report or a patent attorney's opinion — this is an express preliminary assessment.",
+    "subtitle": "⚠ Not a substitute for an official GOST R 15.011-2024 patent-research report or a patent attorney's opinion — this is an express preliminary assessment.",
     "caveatTitle": "⚠ Important note",
-    "caveatBody": "This report is an express preliminary assessment based on open patent databases of Russia and other countries. It does not replace an official GOST R 15.011-96 patent-research report or a patent attorney's opinion. Before filing with Rospatent, performing an FTO analysis, or making any other legally significant decision — consult an accredited organization or a patent attorney.",
+    "caveatBody": "This report is an express preliminary assessment based on open patent databases of Russia and other countries. It does not replace an official GOST R 15.011-2024 patent-research report or a patent attorney's opinion. Before filing with Rospatent, performing an FTO analysis, or making any other legally significant decision — consult an accredited organization or a patent attorney.",
     "queryLabel": "What was checked",
     "uniquenessLabel": "Uniqueness score",
     "uniquenessHigh": "High",
@@ -862,9 +862,9 @@
   },
   "LandscapeReport": {
     "title": "Patent landscape",
-    "caveatNotice": "⚠ Not a substitute for an official GOST R 15.011-96 patent-research report or a patent attorney's opinion — this is an analytical map of IP activity across open patent databases.",
+    "caveatNotice": "⚠ Not a substitute for an official GOST R 15.011-2024 patent-research report or a patent attorney's opinion — this is an analytical map of IP activity across open patent databases.",
     "caveatTitle": "⚠ Important note",
-    "caveatBody": "This landscape is an analytical map of patent activity on the topic, built from open databases of Russia and other countries. It does not replace an official GOST R 15.011-96 patent-research report or a patent attorney's opinion. For R&D strategy decisions and FTO analysis — combine this landscape with advice from an accredited organization or a patent attorney.",
+    "caveatBody": "This landscape is an analytical map of patent activity on the topic, built from open databases of Russia and other countries. It does not replace an official GOST R 15.011-2024 patent-research report or a patent attorney's opinion. For R&D strategy decisions and FTO analysis — combine this landscape with advice from an accredited organization or a patent attorney.",
     "topicLabel": "Topic",
     "counterTotal": "Total patents",
     "counterRu": "Russia (RU + SU)",

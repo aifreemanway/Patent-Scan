@@ -1390,7 +1390,7 @@ function ReportPageInner() {
             </section>
           )}
 
-          {/* Trust caveat — ГОСТ Р 15.011-96 disclaimer (mandatory before any demo) */}
+          {/* Trust caveat — ГОСТ Р 15.011-2024 disclaimer (mandatory before any demo) */}
           <section className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-5">
             <strong className="text-amber-900">{t("caveatTitle")}</strong>
             <p className="mt-1 text-sm leading-6 text-amber-900">{t("caveatBody")}</p>
