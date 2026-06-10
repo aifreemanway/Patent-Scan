@@ -51,7 +51,7 @@ export async function generateMetadata({
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru"),
     alternates: {
       canonical: `/${locale}`,
-      languages: { ru: "/ru", en: "/en" },
+      languages: { ru: "/ru", en: "/en", "x-default": "/ru" },
     },
     openGraph: {
       title,
@@ -71,7 +71,9 @@ export async function generateMetadata({
       images: ["/og-image.png"],
     },
     robots: {
-      index: true,
+      // EN-гигиена (cofounder 10.06): непереведённый /en НЕ индексируем (SEO-дилюция).
+      // RU индексируем. Наследуется всеми en-страницами (вкл. home/pricing/enterprise).
+      index: locale !== "en",
       follow: true,
     },
   };

@@ -7,9 +7,10 @@
 // single source of truth (the РКН number previously drifted across two hardcoded
 // spots; never again). Home address intentionally NOT published.
 //
-// Links point only to routes that exist — О нас / Партнёрам / Контакты /
-// Безопасность from the mockup are dropped (no pages → would 404); contact is
-// the support email in the bottom bar.
+// Links point only to routes that exist (v9 mockup footer — 4 columns: brand /
+// Продукт / Для бизнеса / Документы). О нас / Партнёрам / Контакты / Безопасность
+// have no pages → not linked (would 404); contact is the support email in the
+// bottom bar.
 
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
@@ -23,7 +24,7 @@ export function Footer() {
     <div className="lp">
       <footer>
         <div className="container">
-          <div className="foot-grid foot-grid-3">
+          <div className="foot-grid">
             <div className="foot-col foot-brand">
               <Link href="/" className="logo">
                 <span className="logo-mark">◄</span>
@@ -31,7 +32,7 @@ export function Footer() {
                   Патент<span className="dot">·</span>Скан
                 </span>
               </Link>
-              <p>{t("tagline")}</p>
+              <p>{t("brandText")}</p>
               <p className="foot-legal">
                 {t("operatorTitle")}: {OPERATOR.name} · {t("inn")}{" "}
                 {OPERATOR.inn} · {t("ogrnip")} {OPERATOR.ogrnip} · {t("rkn")}:
@@ -46,6 +47,19 @@ export function Footer() {
               <Link href="/login?intent=screening">{t("screening")}</Link>
               <TrackedLink href="/pricing" goal="pricing_view">
                 {t("pricing")}
+              </TrackedLink>
+            </div>
+
+            <div className="foot-col">
+              <h5>{t("business")}</h5>
+              <TrackedLink href="/enterprise" goal="b2b_click">
+                {t("enterprise")}
+              </TrackedLink>
+              <TrackedLink href="/enterprise#form" goal="b2b_click">
+                {t("demo")}
+              </TrackedLink>
+              <TrackedLink href="/login" goal="login_click">
+                {t("account")}
               </TrackedLink>
             </div>
 

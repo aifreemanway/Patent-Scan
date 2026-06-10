@@ -500,6 +500,34 @@ footer{padding:36px 0 36px;border-top:1px solid var(--line);background:var(--bg)
   .ent-form-wrap-sub{font-size:15px;color:rgba(255,255,255,0.78);margin-bottom:28px;max-width:560px}
   .ent-form-card{background:var(--bg);border-radius:14px;padding:32px clamp(20px,3vw,36px);max-width:680px;box-shadow:var(--sh-lg)}
 
+  /* Enterprise demo form (v9 — 2-col mockup layout). Backend (POST
+     /api/enterprise/request, Turnstile, 152-ФЗ consent) lives in EnterpriseForm;
+     these are visual-only classes mirrored 1:1 from v7-enterprise.html. */
+  .ent-form-card .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.ent-form-card .form-grid{grid-template-columns:1fr}}
+  .ent-form-card .form-row{margin-bottom:16px}
+  .ent-form-card .form-row label{display:block;font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:6px}
+  .ent-form-card .form-row label .req{color:var(--error);margin-left:2px}
+  .ent-form-card .form-row input,.ent-form-card .form-row textarea{width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;color:var(--text-strong);transition:all 150ms;letter-spacing:-0.01em}
+  .ent-form-card .form-row input:focus,.ent-form-card .form-row textarea:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  .ent-form-card .form-row input::placeholder,.ent-form-card .form-row textarea::placeholder{color:var(--slate-soft)}
+  .ent-form-card .form-row textarea{resize:vertical;min-height:96px;line-height:1.55}
+  .ent-form-card .form-hint{margin-top:6px;font-size:12px;color:var(--slate)}
+  .ent-form-card .form-consent{display:flex;align-items:flex-start;gap:10px;margin:18px 0 22px;font-size:12.5px;color:var(--text-mute);line-height:1.5}
+  .ent-form-card .form-consent input{margin-top:3px;flex-shrink:0;width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+  .ent-form-card .form-consent a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+  .ent-form-card .form-consent a:hover{color:var(--accent-hover)}
+  .ent-form-card .form-consent-error{font-size:12px;color:var(--error);margin:-12px 0 16px}
+  .ent-form-card .form-turnstile{margin:0 0 18px;min-height:70px}
+  .ent-form-card .form-turnstile-warn{font-size:12px;color:#d97706;margin:0 0 14px}
+  .ent-form-card .form-error{font-size:13px;color:var(--error);line-height:1.45;margin:0 0 14px}
+  .ent-form-card .form-submit{width:100%;padding:14px 24px;background:var(--accent);color:var(--bg);border:none;border-radius:10px;font-weight:600;font-size:15px;font-family:inherit;cursor:pointer;transition:all 150ms;letter-spacing:-0.01em}
+  .ent-form-card .form-submit:hover:not(:disabled){background:var(--accent-hover);transform:translateY(-1px);box-shadow:var(--sh-md)}
+  .ent-form-card .form-submit:disabled{background:var(--slate-soft);cursor:not-allowed;transform:none;box-shadow:none}
+  .ent-form-card .form-note{margin-top:14px;font-size:12px;color:var(--slate);text-align:center;line-height:1.5}
+  .ent-form-card .form-success-h{font-size:20px;font-weight:800;color:var(--text-strong);letter-spacing:-0.02em;margin-bottom:10px}
+  .ent-form-card .form-success-p{font-size:14.5px;color:var(--text-mute);line-height:1.55}
+
   /* Enterprise hero section layout */
   .ent-hero{padding:64px 0 56px;position:relative;overflow:hidden}
   .ent-hero::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse 50% 35% at 70% 0%,rgba(37,99,235,0.05) 0%,transparent 60%);pointer-events:none;z-index:0}

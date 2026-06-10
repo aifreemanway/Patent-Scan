@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { TrackedLink } from "@/components/TrackedLink";
-import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 
 // Общая v7-навигация для публичных страниц (лендинг, тарифы, enterprise, login).
 // Должна рендериться ВНУТРИ обёртки .lp (стили .nav/.logo/... скоуплены под .lp в
@@ -29,7 +28,6 @@ export async function SiteNav() {
           <TrackedLink href="/login" goal="login_click" className="btn-nav">
             {t("account")}
           </TrackedLink>
-          <LocaleSwitcher />
         </div>
       </div>
     </nav>

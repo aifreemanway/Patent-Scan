@@ -48,8 +48,8 @@
     "nav": {
       "home": "Главная",
       "search": "Патентный поиск",
-      "landscape": "Ландшафт",
-      "screening": "Скрининг",
+      "landscape": "Патентный ландшафт",
+      "screening": "Патентный скрининг",
       "pricing": "Тарифы",
       "account": "Личный кабинет"
     },
@@ -1199,13 +1199,16 @@
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
     "enterprise": "For institutes & R&D",
+    "demo": "Request a demo",
+    "account": "Sign in",
     "pricing": "Pricing",
-    "tagline": "Честный вердикт о патентной картине вашей идеи.",
-    "products": "Продукты",
-    "documents": "Документы",
-    "search": "Поиск",
-    "landscape": "Ландшафт",
-    "screening": "Скрининг",
+    "brandText": "94,9 млн патентов в 6 юрисдикциях. ИИ находит ближайшие аналоги и объясняет, чем отличается ваша идея — каждый вывод со ссылкой на источник.",
+    "products": "Product",
+    "business": "For business",
+    "documents": "Documents",
+    "search": "Патентный поиск",
+    "landscape": "Патентный ландшафт",
+    "screening": "Патентный скрининг",
     "requisites": "Реквизиты"
   },
   "Enterprise": {
@@ -1278,25 +1281,27 @@
     },
     "form": {
       "title": "Demo review request",
-      "subtitle": "Required fields are marked with an asterisk. We respond within 24 hours.",
+      "subtitle": "Required fields are marked with an asterisk. We respond within one business day.",
       "fullNameLabel": "Full name",
+      "fullNamePlaceholder": "Ivan Ivanov",
       "positionLabel": "Position",
-      "organizationLabel": "Organisation (institute, R&D centre, design bureau)",
+      "positionPlaceholder": "Head of Lab / R&D Lead / …",
+      "organizationLabel": "Organisation",
+      "organizationPlaceholder": "Institute / company name",
       "innLabel": "Organisation INN",
-      "innHint": "Optional — needed for 44-FZ / 223-FZ procurement alignment",
-      "emailLabel": "Contact email",
-      "phoneLabel": "Phone",
-      "phoneHint": "Optional — if you'd rather discuss by voice",
-      "topicLabel": "Review topic",
-      "topicPlaceholder": "For example: antimony concentrate processing technologies in Russia and China, patent landscape over the past 10 years, key producers and their approaches.",
-      "topicHint": "Describe the topic as concretely as possible: domain, geographic focus, time range, anything we should pay particular attention to.",
-      "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
+      "innHint": "Optional — for 44-FZ / 223-FZ procurement",
+      "emailLabel": "Work email",
+      "emailPlaceholder": "name@institute.ru",
+      "topicLabel": "Briefly about the task",
+      "topicPlaceholder": "For example: review of the patent landscape for lithium iron phosphate batteries, need a landscape + 5-10 closest analogues for an R&D report.",
+      "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of personal data in accordance with 152-FZ.",
       "consentRequired": "Confirm consent to submit the request.",
-      "marketingConsent": "I'd like to receive informational messages from Patent-Scan: product news, case studies. Consent can be withdrawn at any time.",
+      "turnstileMissing": "The bot check failed to load — submission is temporarily unavailable. Please refresh the page.",
       "submit": "Submit request",
       "submitting": "Submitting…",
+      "note": "We respond within one business day. We'll sign an NDA if required.",
       "successTitle": "Request received",
-      "successBody": "Thanks. We've sent a confirmation to your email and will get back to you within 24 hours.",
+      "successBody": "Thanks. We've sent a confirmation to your email and will get back to you within one business day.",
       "errors": {
         "generic": "Couldn't submit the request. Please try again or email support@patent-scan.com.",
         "invalid_format": "Please make sure all required fields are filled correctly (email, INN — digits only).",
@@ -1313,7 +1318,7 @@
       "sub": "Под разные задачи — от быстрой проверки идеи до полного НИОКР-обзора. Все на одних и тех же 6 юрисдикциях, со ссылками на каждый источник. Отчёты — в PDF и HTML на всех тарифах. Хранятся в Личном кабинете.",
       "items": [
         {
-          "title": "Поиск",
+          "title": "Патентный поиск",
           "badge": "Базовый",
           "tag": "Быстрая проверка уникальности идеи",
           "bullets": [
@@ -1331,7 +1336,7 @@
           "bullets": [
             "Углублённый разбор сходств и отличий по существенным признакам",
             "Правовой статус по реестру РФ (зарубежные — в работе)",
-            "Расширенная выборка патентов vs базовый Поиск",
+            "Расширенная выборка патентов vs базовый Патентный поиск",
             "Конкретные МПК-индексы для последующего углубления"
           ],
           "turnaround": "несколько минут"
@@ -1353,7 +1358,7 @@
           "badge": null,
           "tag": "Патентный ландшафт с синтезом — для оценки картины ДО института",
           "bullets": [
-            "Карта IP по теме (как в Ландшафте) + синтез поверх неё",
+            "Карта IP по теме (как в Патентном ландшафте) + синтез поверх неё",
             "Структурированные таблицы (заявители, страны, годы, существенные признаки)",
             "Сравнение технологий и выводы по применимости",
             "Карта промышленного применения области (IUL)",
@@ -1393,7 +1398,7 @@
           "num": "6",
           "numAccent": true,
           "numSuffix": " юрисдикций",
-          "body": "РФ, СНГ, США, Европа, Япония, Китай — прямые запросы к Роспатенту"
+          "body": "94,9 млн патентов · РФ, СНГ, США, Европа, Япония, Китай"
         },
         {
           "num": "100%",
@@ -1433,7 +1438,7 @@
         },
         {
           "q": "В какие сроки выполняется обзор?",
-          "a": "Поиск, Глубокий анализ и Патентный ландшафт — несколько минут на отчёт. Патентный скрининг (расширенный синтез) — до получаса, работает в фоновом режиме. Точный срок зависит от глубины выборки и сложности темы."
+          "a": "Патентный поиск, Глубокий анализ и Патентный ландшафт — несколько минут на отчёт. Патентный скрининг (расширенный синтез) — до получаса, работает в фоновом режиме. Точный срок зависит от глубины выборки и сложности темы."
         },
         {
           "q": "Подписываете соглашение о неразглашении?",

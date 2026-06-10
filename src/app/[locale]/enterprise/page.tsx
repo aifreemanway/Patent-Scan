@@ -12,16 +12,31 @@ import { TrackedLink } from "@/components/TrackedLink";
 import { EnterpriseForm } from "./EnterpriseForm";
 import "../landing.css";
 
+// SEO-head v9 (§8) — page-specific meta + OG, override layout's generic Meta.
+// Контент из ap-mediabuyer seo-head-v9-brief (v2-final) §3. 94,9 млн = verified.
+// UTM на мета НЕ ставим. Canonical — /enterprise (без локали) по брифу.
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
-  const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "Enterprise" });
+  await params;
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
   return {
-    title: `${t("meta.title")} — Patent-Scan`,
-    description: t("meta.description"),
+    title: "ПатентСкан для институтов и НИИ — патентная аналитика",
+    description:
+      "Патентный поиск и аналитика для промышленных холдингов, R&D-центров, НИИ и проектных институтов. 94,9 млн патентов в 6 юрисдикциях, договор и счёт.",
+    alternates: { canonical: `${site}/enterprise` },
+    openGraph: {
+      type: "website",
+      title: "ПатентСкан для институтов и НИИ",
+      description:
+        "Патентная аналитика под институциональные задачи: договор, счёт, индивидуальные условия.",
+      url: `${site}/enterprise`,
+      locale: "ru_RU",
+      images: [{ url: "/og-image.png", width: 1200, height: 630 }],
+    },
+    twitter: { card: "summary_large_image" },
   };
 }
 
@@ -58,8 +73,48 @@ export default async function EnterprisePage({
   const trustItems = t.raw("trust.items") as TrustItem[];
   const faqItems = t.raw("faq.items") as FaqItemData[];
 
+  // JSON-LD (§8, SEO brief §3). Organization/WebSite/Service(generic) уже в
+  // layout.tsx — здесь добавляем ТОЛЬКО page-specific: Service(enterprise) +
+  // FAQPage. FAQPage строится из ТЕХ ЖЕ faqItems, что рендерятся ниже (parity).
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
+  const stripHtml = (s: string) =>
+    s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  const serviceJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "@id": `${site}/enterprise#service`,
+    name: "Патентный поиск для НИИ и проектных институтов",
+    serviceType: "Патентный поиск",
+    description:
+      "Патентный скрининг, ландшафт и глубокий анализ по 94,9 млн патентам для НИИ, R&D-команд и проектных институтов. Каждый вывод со ссылкой на источник. NDA по запросу.",
+    provider: { "@id": `${site}/#org` },
+    areaServed: ["RU", "US", "EP", "CN", "JP"],
+    audience: {
+      "@type": "Audience",
+      audienceType: "НИОКР-команды, НИИ, проектные институты",
+    },
+  };
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "@id": `${site}/enterprise#faq`,
+    mainEntity: faqItems.map((f) => ({
+      "@type": "Question",
+      name: f.q,
+      acceptedAnswer: { "@type": "Answer", text: stripHtml(f.a) },
+    })),
+  };
+
   return (
     <div className="lp">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <SiteNav />
 
       {/* ── HERO ─────────────────────────────────────────────────────── */}

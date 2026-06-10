@@ -5,6 +5,17 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 
+// v9 demo-request form. VISUAL layout mirrors v7-enterprise.html (2-col
+// .form-grid, RU labels, single 152-ФЗ consent). BACKEND IS PRESERVED:
+// POST /api/enterprise/request → server Turnstile verify → rate-limit →
+// support@ notification + lead confirmation. The route validates
+// fullName/position/organization/email/topic as required; inn is optional.
+//
+// Removed from the visible form per v9 spec (Vsevolod): Phone field and the
+// marketing-consent checkbox. The API route still reads `phone`/`marketingConsent`
+// but both are OPTIONAL there (phone → "", marketingConsent → false), so omitting
+// them from the payload does NOT break submit or validation.
+
 type Status = "idle" | "submitting" | "success" | "error";
 
 type TurnstileApi = {
@@ -56,10 +67,8 @@ export function EnterpriseForm({
   const [organization, setOrganization] = useState("");
   const [inn, setInn] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [topic, setTopic] = useState("");
   const [consent, setConsent] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [errorCode, setErrorCode] = useState<ErrorCode | "generic" | null>(null);
@@ -110,9 +119,7 @@ export function EnterpriseForm({
           organization,
           inn: inn || undefined,
           email,
-          phone: phone || undefined,
           topic,
-          marketingConsent,
           turnstileToken: token,
           locale,
         }),
@@ -145,12 +152,10 @@ export function EnterpriseForm({
 
   if (status === "success") {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <h3 className="text-xl font-bold tracking-tight text-slate-900">
-          {t("successTitle")}
-        </h3>
-        <p className="mt-3 text-slate-600">{t("successBody")}</p>
-      </div>
+      <>
+        <h3 className="form-success-h">{t("successTitle")}</h3>
+        <p className="form-success-p">{t("successBody")}</p>
+      </>
     );
   }
 
@@ -161,87 +166,80 @@ export function EnterpriseForm({
         strategy="afterInteractive"
         onReady={renderWidget}
       />
-      <form
-        onSubmit={onSubmit}
-        className="space-y-5 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
-      >
-        <Field
-          id="fullName"
-          label={t("fullNameLabel")}
-          value={fullName}
-          onChange={setFullName}
-          required
-          autoComplete="name"
-        />
-        <Field
-          id="position"
-          label={t("positionLabel")}
-          value={position}
-          onChange={setPosition}
-          required
-          autoComplete="organization-title"
-        />
-        <Field
-          id="organization"
-          label={t("organizationLabel")}
-          value={organization}
-          onChange={setOrganization}
-          required
-          autoComplete="organization"
-        />
-        <Field
-          id="inn"
-          label={t("innLabel")}
-          value={inn}
-          onChange={setInn}
-          inputMode="numeric"
-          pattern="[0-9]{10,12}"
-          hint={t("innHint")}
-        />
-        <Field
-          id="email"
-          label={t("emailLabel")}
-          value={email}
-          onChange={setEmail}
-          required
-          type="email"
-          autoComplete="email"
-        />
-        <Field
-          id="phone"
-          label={t("phoneLabel")}
-          value={phone}
-          onChange={setPhone}
-          type="tel"
-          autoComplete="tel"
-          // E.164 acceptance: 7-15 digits, optional leading +.
-          // Native HTML pattern catches single-digit / junk inputs before
-          // submit (BUG-ENT-PHONE 2026-05-31: user could submit "1").
-          pattern="\+?[0-9\s()\-]{7,20}"
-          hint={t("phoneHint")}
-        />
+      <form onSubmit={onSubmit} autoComplete="on">
+        <div className="form-grid">
+          <Field
+            id="fullName"
+            label={t("fullNameLabel")}
+            value={fullName}
+            onChange={setFullName}
+            required
+            autoComplete="name"
+            placeholder={t("fullNamePlaceholder")}
+          />
+          <Field
+            id="organization"
+            label={t("organizationLabel")}
+            value={organization}
+            onChange={setOrganization}
+            required
+            autoComplete="organization"
+            placeholder={t("organizationPlaceholder")}
+          />
+        </div>
 
-        <div>
-          <label
-            htmlFor="topic"
-            className="block text-sm font-medium text-slate-900"
-          >
-            {t("topicLabel")}{" "}
-            <span className="text-rose-600">*</span>
+        <div className="form-grid">
+          <Field
+            id="position"
+            label={t("positionLabel")}
+            value={position}
+            onChange={setPosition}
+            required
+            autoComplete="organization-title"
+            placeholder={t("positionPlaceholder")}
+          />
+          <Field
+            id="email"
+            label={t("emailLabel")}
+            value={email}
+            onChange={setEmail}
+            required
+            type="email"
+            autoComplete="email"
+            placeholder={t("emailPlaceholder")}
+          />
+        </div>
+
+        <div className="form-row">
+          <label htmlFor="topic">
+            {t("topicLabel")}
+            <span className="req">*</span>
           </label>
           <textarea
             id="topic"
             required
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            rows={5}
             placeholder={t("topicPlaceholder")}
-            className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
           />
-          <p className="mt-1 text-xs text-slate-500">{t("topicHint")}</p>
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-slate-700">
+        {/* ИНН — опционально (для 44-ФЗ / 223-ФЗ). Решение Vsevolod: оставить,
+            но не required. Бэкенд валидирует только если поле заполнено. */}
+        <div className="form-row">
+          <Field
+            id="inn"
+            label={t("innLabel")}
+            value={inn}
+            onChange={setInn}
+            inputMode="numeric"
+            pattern="[0-9]{10,12}"
+            hint={t("innHint")}
+            bare
+          />
+        </div>
+
+        <label className="form-consent">
           <input
             type="checkbox"
             checked={consent}
@@ -249,25 +247,16 @@ export function EnterpriseForm({
               setConsent(e.target.checked);
               if (e.target.checked) setConsentError(false);
             }}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
           />
           <span>
             {t.rich("consent", {
               terms: (chunks) => (
-                <Link
-                  href="/terms"
-                  target="_blank"
-                  className="underline hover:text-slate-900"
-                >
+                <Link href="/terms" target="_blank">
                   {chunks}
                 </Link>
               ),
               privacy: (chunks) => (
-                <Link
-                  href="/privacy"
-                  target="_blank"
-                  className="underline hover:text-slate-900"
-                >
+                <Link href="/privacy" target="_blank">
                   {chunks}
                 </Link>
               ),
@@ -275,28 +264,16 @@ export function EnterpriseForm({
           </span>
         </label>
         {consentError && (
-          <p className="text-xs text-rose-600">{t("consentRequired")}</p>
+          <p className="form-consent-error">{t("consentRequired")}</p>
         )}
 
-        <label className="flex items-start gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(e) => setMarketingConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-          />
-          <span>{t("marketingConsent")}</span>
-        </label>
-
-        <div className="min-h-[70px]" ref={widgetRef} />
+        <div className="form-turnstile" ref={widgetRef} />
         {!siteKey && (
-          <p className="text-xs text-amber-600">
-            Turnstile site key is missing — submission is disabled.
-          </p>
+          <p className="form-turnstile-warn">{t("turnstileMissing")}</p>
         )}
 
         {errorCode && (
-          <p className="text-sm text-rose-600">
+          <p className="form-error">
             {t(`errors.${errorCode}` as Parameters<typeof t>[0])}
           </p>
         )}
@@ -304,10 +281,11 @@ export function EnterpriseForm({
         <button
           type="submit"
           disabled={status === "submitting" || !token}
-          className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="form-submit"
         >
           {status === "submitting" ? t("submitting") : t("submit")}
         </button>
+        <p className="form-note">{t("note")}</p>
       </form>
     </>
   );
@@ -324,6 +302,8 @@ function Field({
   inputMode,
   pattern,
   hint,
+  placeholder,
+  bare,
 }: {
   id: string;
   label: string;
@@ -335,12 +315,16 @@ function Field({
   inputMode?: "text" | "numeric" | "tel" | "email";
   pattern?: string;
   hint?: string;
+  placeholder?: string;
+  // When inside a parent .form-row (e.g. the optional ИНН), render without the
+  // wrapping <div className="form-row"> to avoid double margin.
+  bare?: boolean;
 }) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-slate-900">
+  const inner = (
+    <>
+      <label htmlFor={id}>
         {label}
-        {required && <span className="text-rose-600"> *</span>}
+        {required && <span className="req">*</span>}
       </label>
       <input
         id={id}
@@ -351,9 +335,11 @@ function Field({
         autoComplete={autoComplete}
         inputMode={inputMode}
         pattern={pattern}
-        className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+        placeholder={placeholder}
       />
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
-    </div>
+      {hint && <p className="form-hint">{hint}</p>}
+    </>
   );
+  if (bare) return inner;
+  return <div className="form-row">{inner}</div>;
 }
