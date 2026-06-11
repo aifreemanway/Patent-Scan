@@ -26,7 +26,8 @@ export type MetrikaGoal =
   | "scroll_90" // 90% глубины страницы
   | "pricing_enterprise_click" // /pricing Enterprise «Связаться» CTA
   | "pricing_free_click" // /pricing Free «Зарегистрироваться»
-  | "pricing_oneoff_click"; // /pricing разовый отчёт CTA
+  | "pricing_oneoff_click" // /pricing разовый отчёт CTA
+  | "blog_to_search"; // CTA статьи блога → /search (конверсия «статья→поиск», mediabuyer)
 
 declare global {
   interface Window {

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { TrackedLink } from "@/components/TrackedLink";
 import { BLOG_POSTS, getBlogPost } from "@/lib/blog-posts";
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://patent-scan.ru";
@@ -84,12 +85,13 @@ export default async function BlogPostPage({
           ))}
         </div>
         <div className="mt-12 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
-          <Link
+          <TrackedLink
             href="/search"
+            goal="blog_to_search"
             className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
             {post.ctaText} →
-          </Link>
+          </TrackedLink>
         </div>
       </article>
     </main>
