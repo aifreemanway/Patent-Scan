@@ -216,13 +216,15 @@ a{color:#2563eb}
 .free-watermark{display:flex;align-items:center;justify-content:center;gap:6px;margin:32px auto 0;padding:10px 16px;max-width:900px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0}
 .free-watermark .wm-mark{color:#2563eb;font-weight:700}
 .free-watermark .wm-text{letter-spacing:.01em}
+.free-watermark-top{display:none}
 @media print{
   body{padding:0}
   .card,.reco{break-inside:avoid}
   a{text-decoration:underline}
-  /* Reserve room so the fixed footer never overlaps report content. */
-  .wrap{padding-bottom:48px}
+  /* Reserve room so the fixed header + footer never overlap report content. */
+  .wrap{padding-top:48px;padding-bottom:48px}
   .free-watermark{position:fixed;left:0;right:0;bottom:0;margin:0;max-width:none;padding:8px 16px;background:#fff;border-top:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .free-watermark-top{display:flex;position:fixed;top:0;bottom:auto;left:0;right:0;margin:0;max-width:none;padding:8px 16px;background:#fff;border-top:none;border-bottom:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 `;
 
@@ -433,6 +435,14 @@ function buildSearchReportHtml(args: {
         WATERMARK_TEXT,
       )}</span></div>`
     : "";
+  // Same brand line pinned to the TOP of every printed page (header). Carries the
+  // `free-watermark` class too (reuses the wm-mark/wm-text styles); print-only —
+  // hidden on screen to avoid a duplicate of the footer line. Paired with it.
+  const watermarkTopHtml = args.watermark
+    ? `<div class="free-watermark free-watermark-top"><span class="wm-mark" aria-hidden="true">${WATERMARK_MARK}</span><span class="wm-text">${esc(
+        WATERMARK_TEXT,
+      )}</span></div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html lang="${esc(locale)}">
@@ -443,6 +453,7 @@ function buildSearchReportHtml(args: {
 <style>${REPORT_CSS}</style>
 </head>
 <body>
+${watermarkTopHtml}
 <div class="wrap">
 <h1>${esc(t("title"))}</h1>
 <p class="subtitle">${esc(t("subtitle"))}</p>
