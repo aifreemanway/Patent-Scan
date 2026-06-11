@@ -27,6 +27,32 @@ const FIELD_DEFAULT_TIERS = new Set([
   "institute",
 ]);
 
+// Paid plans (any active subscription). The exported report carries the
+// free-tier watermark for EVERYONE NOT in this set — i.e. free / null / unknown
+// / anon all watermark. This is the conservative anti-fab default: we never
+// strip the watermark unless the account tier is a verified paid plan. The tier
+// comes from the real account (data._tier ← /api/analyze ← checkAndChargeQuota),
+// never a hardcoded "Free".
+const PAID_TIERS = new Set([
+  "starter",
+  "team",
+  "team_plus",
+  "enterprise",
+  "institute",
+]);
+
+function isPaidTier(tier: string | null | undefined): boolean {
+  return PAID_TIERS.has((tier ?? "").toLowerCase());
+}
+
+// Free-tier export watermark (cofounder ТЗ 2026-06-03, final). Text is VERBATIM
+// — do not reword or localize (it is the brand line, identical in ru/en). The
+// ◄ logo mark matches the site Footer/SiteNav. Rendered into the standalone
+// export document only (HTML + print/PDF go through one print mechanism), and
+// shown to free accounts only.
+const WATERMARK_TEXT = "Patent Scan · patent-scan.ru — бесплатная версия";
+const WATERMARK_MARK = "◄";
+
 type ReportPatent = {
   id: string;
   title: string;
@@ -183,7 +209,21 @@ a{color:#2563eb}
 .diffline{color:#059669;font-weight:600}
 .reco{background:#0f172a;color:#fff;border-radius:12px;padding:20px;margin:16px 0}
 .reco h2{color:#fff}
-@media print{body{padding:0}.card,.reco{break-inside:avoid}a{text-decoration:underline}}
+/* Free-tier export watermark. On screen: an unobtrusive footer line under the
+   report. In print: a fixed footer that the browser repeats on every printed
+   page (the standard position:fixed print behaviour) — readability of the
+   report itself is untouched (only the bottom margin is reserved). */
+.free-watermark{display:flex;align-items:center;justify-content:center;gap:6px;margin:32px auto 0;padding:10px 16px;max-width:900px;font-size:12px;color:#64748b;border-top:1px solid #e2e8f0}
+.free-watermark .wm-mark{color:#2563eb;font-weight:700}
+.free-watermark .wm-text{letter-spacing:.01em}
+@media print{
+  body{padding:0}
+  .card,.reco{break-inside:avoid}
+  a{text-decoration:underline}
+  /* Reserve room so the fixed footer never overlaps report content. */
+  .wrap{padding-bottom:48px}
+  .free-watermark{position:fixed;left:0;right:0;bottom:0;margin:0;max-width:none;padding:8px 16px;background:#fff;border-top:1px solid #e2e8f0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 `;
 
 type ReportT = (key: string, values?: Record<string, string | number>) => string;
@@ -213,6 +253,8 @@ function buildSearchReportHtml(args: {
   autoPrint: boolean;
   deep?: DeepResult | null;
   legalStatuses?: Record<string, LegalStatus>;
+  // Free accounts get the export watermark; paid plans do not (ТЗ 2026-06-03).
+  watermark?: boolean;
 }): string {
   const { data, t, headers, uniquenessLabel, locale, autoPrint, deep } = args;
   const legalStatuses = args.legalStatuses ?? {};
@@ -384,6 +426,14 @@ function buildSearchReportHtml(args: {
     ? `<script>window.addEventListener('load',function(){setTimeout(function(){window.print();},300);});</script>`
     : "";
 
+  // Free-tier watermark — verbatim brand line + ◄ mark. Sibling of .wrap so the
+  // print rule can pin it as a fixed per-page footer. Omitted for paid plans.
+  const watermarkHtml = args.watermark
+    ? `<div class="free-watermark"><span class="wm-mark" aria-hidden="true">${WATERMARK_MARK}</span><span class="wm-text">${esc(
+        WATERMARK_TEXT,
+      )}</span></div>`
+    : "";
+
   return `<!DOCTYPE html>
 <html lang="${esc(locale)}">
 <head>
@@ -405,6 +455,7 @@ ${recoHtml}
 ${deepHtml}
 <section class="card" style="border-color:#fcd34d;background:#fffbeb;margin-top:24px"><strong style="color:#92400e">${esc(t("caveatTitle"))}</strong><p style="color:#92400e;margin:4px 0 0">${esc(t("caveatBody"))}</p></section>
 </div>
+${watermarkHtml}
 ${printScript}
 </body>
 </html>`;
@@ -733,6 +784,11 @@ function ReportPageInner() {
     ? `patent-${slug}-${dateStr}`
     : `patent-uniqueness-${dateStr}`;
 
+  // Watermark every export for non-paid accounts. `_tier` is the real account
+  // tier from /api/analyze; null/unknown/free → watermark (anti-fab default),
+  // any paid plan → clean export. Never hardcoded.
+  const isFree = !isPaidTier(data._tier);
+
   const handleExportHtml = () => {
     const html = buildSearchReportHtml({
       data,
@@ -743,6 +799,7 @@ function ReportPageInner() {
       autoPrint: false,
       deep: deepResult,
       legalStatuses,
+      watermark: isFree,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const a = document.createElement("a");
@@ -764,6 +821,7 @@ function ReportPageInner() {
       autoPrint: true,
       deep: deepResult,
       legalStatuses,
+      watermark: isFree,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     window.open(url, "_blank");
