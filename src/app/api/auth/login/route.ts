@@ -9,7 +9,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { validateEmail } from "@/lib/email-validator";
 import { SIGNUP_IP_LIMIT } from "@/lib/config";
@@ -30,14 +30,6 @@ type LoginBody = {
    *  Протаскивается в emailRedirectTo → читается серверным /auth/callback. */
   next?: unknown;
 };
-
-function clientIp(req: NextRequest): string | null {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    null
-  );
-}
 
 function fail(error: string, status = 400, extra?: Record<string, unknown>) {
   return NextResponse.json({ error, ...extra }, { status });

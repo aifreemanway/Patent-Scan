@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuthCached } from "@/lib/auth-quota";
 import { decomposeFacets } from "@/lib/facet-decompose";
 import { MAX_DESCRIPTION_LEN, RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
@@ -11,6 +12,8 @@ export const maxDuration = 60;
 // invention into atomic technical facets so each becomes a separate semantic
 // probe. Same auth/rate shape as /api/landscape/plan; one Gemini call.
 export async function POST(req: Request) {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.facetDecompose,

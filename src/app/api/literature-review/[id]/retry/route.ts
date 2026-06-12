@@ -8,6 +8,7 @@ import {
   requireAuth,
 } from "@/lib/auth-quota";
 import { checkAndChargeQuota } from "@/lib/quota";
+import { spendGuard } from "@/lib/spend-guard";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -17,6 +18,8 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
 

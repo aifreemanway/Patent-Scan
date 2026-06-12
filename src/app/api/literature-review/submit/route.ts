@@ -10,6 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuthAndQuota } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -64,6 +65,8 @@ function fail(error: string, status = 400, extra?: Record<string, unknown>) {
 }
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: 3, // 3 submits/min/IP — lit-review is expensive

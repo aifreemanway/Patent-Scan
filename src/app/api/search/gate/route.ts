@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { assessDescription } from "@/lib/assess-description";
 import { RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
@@ -10,6 +11,8 @@ export const maxDuration = 60;
 const MIN_LEN_FOR_GEMINI = 150;
 
 export async function POST(req: Request) {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const limited = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.gate,

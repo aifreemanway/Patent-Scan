@@ -11,6 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import { buildIndustrialUsage } from "@/lib/industrial-usage/pipeline";
@@ -20,6 +21,8 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: 20,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { extractSearchTerms } from "@/lib/extract-search-terms";
 import {
@@ -103,6 +104,8 @@ async function searchPatSearch(
 }
 
 export async function POST(req: Request) {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.searchRospatent,
