@@ -107,7 +107,9 @@ export default async function LocaleLayout({
         "@id": `${siteUrl}/#org`,
         name: "ПатентСкан",
         url: `${siteUrl}/`,
-        email: "support@patent-scan.ru",
+        // support@ живёт на .com: у patent-scan.ru НЕТ MX-записей (почта на .ru
+        // не доставляется), у .com — Cloudflare Email Routing (проверено 12.06).
+        email: "support@patent-scan.com",
         description:
           "ИИ-сервис патентного поиска и анализа патентной чистоты по мировым базам через государственный API Роспатент PatSearch.",
         logo: `${siteUrl}/og-image.png`,
