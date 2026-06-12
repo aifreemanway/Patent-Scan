@@ -54,19 +54,32 @@ function getRatelimiter(windowMs: number, max: number): Ratelimit | null {
   return rl;
 }
 
-function clientIp(req: Request): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    "unknown"
-  );
+/**
+ * Real client IP, trusting only proxy-set headers (sec-fix 2026-06-12).
+ *
+ * Our nginx sets `X-Real-IP $remote_addr` and APPENDS the real peer to
+ * `X-Forwarded-For` ($proxy_add_x_forwarded_for) — so the LAST XFF hop is the
+ * one nginx saw, while the FIRST element is client-supplied and spoofable.
+ * Reading XFF[0] (the old behaviour) let anyone rotate a fake header to bypass
+ * every per-IP limit and the signup throttle. Single shared implementation —
+ * login and enterprise/request import this same helper.
+ */
+export function clientIp(req: { headers: { get(name: string): string | null } }): string | null {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) {
+    const hops = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    if (hops.length > 0) return hops[hops.length - 1];
+  }
+  return null;
 }
 
 export async function rateLimit(
   req: Request,
   opts: { windowMs: number; max: number; keyPrefix?: string }
 ): Promise<NextResponse | null> {
-  const key = `${opts.keyPrefix ?? "rl"}:${clientIp(req)}`;
+  const key = `${opts.keyPrefix ?? "rl"}:${clientIp(req) ?? "unknown"}`;
 
   const limiter = getRatelimiter(opts.windowMs, opts.max);
   if (limiter) {

@@ -8,7 +8,7 @@
 // Per ap-marketing B5-outreach-templates: SLA 24ч после получения брифа.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { sendTransactionalEmail } from "@/lib/resend";
 import { RATE_WINDOW_MS } from "@/lib/config";
@@ -33,14 +33,6 @@ type Body = {
 
 function asString(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
-}
-
-function clientIp(req: NextRequest): string | null {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    req.headers.get("x-real-ip") ??
-    null
-  );
 }
 
 function esc(s: string): string {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuthCached } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
@@ -47,6 +48,8 @@ type Candidate = {
 };
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.priorArtRank,

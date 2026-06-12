@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuthAndQuota } from "@/lib/auth-quota";
 import {
   synthesizeLandscape,
@@ -50,6 +51,8 @@ function normalize(p: IncomingPatent): SynthesisPatent | null {
 }
 
 export async function POST(req: Request) {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.landscapeSynthesize,

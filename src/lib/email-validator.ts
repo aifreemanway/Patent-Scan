@@ -11,18 +11,19 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Canonical form used for dedup (profiles.email_normalized).
- * Lowercase everything; for gmail/googlemail strip dots in local part and drop +aliases.
- * Other providers keep their local part intact — many treat `a.b` and `ab` as different.
+ * Lowercase everything and drop `+alias` for EVERY domain (sec-fix 2026-06-12:
+ * yandex/mail.ru/outlook/proton all treat user+tag as user — keeping the tag
+ * let one mailbox mint unlimited free accounts). Dots are stripped for
+ * gmail/googlemail only — other providers treat `a.b` and `ab` as different.
  */
 export function normalizeEmail(email: string): string {
   const lowered = email.trim().toLowerCase();
   const at = lowered.indexOf("@");
   if (at < 0) return lowered;
-  const local = lowered.slice(0, at);
+  const local = lowered.slice(0, at).split("+")[0];
   const domain = lowered.slice(at + 1);
   if (domain === "gmail.com" || domain === "googlemail.com") {
-    const cleanLocal = local.split("+")[0].replace(/\./g, "");
-    return `${cleanLocal}@gmail.com`;
+    return `${local.replace(/\./g, "")}@gmail.com`;
   }
   return `${local}@${domain}`;
 }

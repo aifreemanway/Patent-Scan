@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { spendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
@@ -35,6 +36,8 @@ const SYSTEM_PROMPT = `Ты — ассистент патентного поис
 { "questions": ["вопрос 1", "вопрос 2", "вопрос 3"] }`;
 
 export async function POST(req: Request): Promise<NextResponse> {
+  const paused = await spendGuard();
+  if (paused) return paused;
   const rl = await rateLimit(req, {
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX.questions,
