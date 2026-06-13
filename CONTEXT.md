@@ -6,7 +6,7 @@
 
 > **Источники истины (при конфликте — они главнее этого файла):**
 > - Продукты / IA / нейминг / цены → `Antepatent/calibration-reference/CANON-products-IA-pricing-2026-06-02.md` (КАНОН, sign-off Vsevolod)
-> - План Phase 1 / приоритеты → `Antepatent/phase1-todo-2026-06-02.md`
+> - Порядок исполнения / приоритеты → `Antepatent/00 - ROADMAP + Feature Status` (единый живой roadmap; `phase1-todo-2026-06-02.md` — legacy)
 > - Фактическое состояние кода → `git log --oneline -30`
 
 ---
@@ -155,7 +155,9 @@
 
 **В qa-гейте (НЕ смержено):** ветка recall T1-fix (`landscape-plan` отдаёт полные `ipcGroups` + класс основной измеряемой величины; `novelty-retrieval` seed'ит class-sweep plan-группами + каждым plan-subclass безусловно). Корень Самарского 0/2: class-sweep выводил IPC-группы только из probe-хитов. Компонентно верифицировано против PatSearch (RU2854805 #1, RU2799985 #4). Мерж после qa red-line на EMM.
 
-## 8. Что осталось (Phase 1 — `Antepatent/phase1-todo-2026-06-02.md`)
+## 8. Что осталось (актуальный порядок — `Antepatent/00 - ROADMAP + Feature Status`; `phase1-todo-2026-06-02.md` — legacy)
+
+> ⚠ Канонический порядок исполнения + статус фич живёт в Obsidian `Antepatent/00 - ROADMAP + Feature Status` (revised 11.06). Список ниже — исторический снимок Phase 1, сверяйся с роадмапом.
 
 **A. ДЕМО-ПУТЬ (P0):** recall IPC-фикс + qa red-line ✅почти · CAVEAT ✅ (#83) · правовой статус патентов RU Этап-1 (бейджи 🟢⚫🟡, anti-fab MAX) · silent-capture лог пар вход→выход (без consent-UI).
 **B. ЦЕНА:** sign-off получен (CANON §SIGN-OFF) → разблокирован pricing-UI.
@@ -175,7 +177,7 @@
 - Корневой `Antepatent/CLAUDE.md` — продуктовая инструкция (3 страницы, PatSearch-детали, критические запреты anti-fab).
 - **Obsidian vault `Antepatent/`** (источники истины):
   - `calibration-reference/CANON-products-IA-pricing-2026-06-02.md` — КАНОН продуктов/цен
-  - `phase1-todo-2026-06-02.md` — план Phase 1
+  - `00 - ROADMAP + Feature Status` — единый живой roadmap (актуальный порядок); `phase1-todo-2026-06-02.md` — legacy-план Phase 1
   - `calibration-reference/` — Самарское ревю (2/5), recall-диагностика, замеры costs, legal-status PRD
   - `quality-control/` — баг-репорты, ТЗ source-augmentation
 - `Antepatent/docs/` — PRD.md, roadmap.md, MONETIZATION.md, NEXT_SESSION.md, rospatent_api_research.md.
