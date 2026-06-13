@@ -15,7 +15,8 @@
     "poc:literature-review-glp1": "tsx scripts/poc-gates/literature-review-glp1-agonists.ts",
     "poc:literature-review-mab": "tsx scripts/poc-gates/literature-review-mab-biosimilars.ts",
     "poc:industrial-usage-nord": "tsx scripts/poc-gates/industrial-usage-nord.ts",
-    "render:sample-pdf": "tsx scripts/render-sample-pdf.tsx"
+    "render:sample-pdf": "tsx scripts/render-sample-pdf.tsx",
+    "test:source-tier": "tsx scripts/test-source-tier.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans": "^5.2.10",

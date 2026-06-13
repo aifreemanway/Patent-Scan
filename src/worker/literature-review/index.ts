@@ -196,6 +196,7 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     id: row.id,
     kept: initial.sources.length,
     blacklisted: initial.blacklistedCount,
+    tierDropped: initial.tierDroppedCount,
   });
   if (initial.sources.length === 0) {
     throw new Error("no_sources_harvested");
@@ -237,6 +238,16 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
   );
   // Apply Stage 1's working title if Sonnet didn't override (rare)
   if (!report.title) report.title = s1.workingTitle;
+
+  // Visible tier-drop disclosure (§6 caveats). No silent caps: if we dropped
+  // low-authority sources, the report says so. Flows to markdown + PDF via
+  // report.caveats.
+  if (initial.tierDroppedCount > 0) {
+    report.caveats = [
+      ...(report.caveats ?? []),
+      `Отсеяно ${initial.tierDroppedCount} источников низкого авторитета (студбазы/форумы/агрегаторы).`,
+    ];
+  }
 
   // Stage 7 — verify sources
   await updateStage(admin, row.id, 7, 80);

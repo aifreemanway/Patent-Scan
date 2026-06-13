@@ -1,6 +1,8 @@
 // Shared types for the literature-review pipeline (worker side) and the
 // intake API route. Kept in one file so both contexts stay in sync.
 
+import type { SourceTier } from "./source-tier";
+
 export type LitReviewIndustry =
   | "metallurgy"
   | "chemistry"
@@ -69,6 +71,12 @@ export type LitReviewSource = {
     | "industry_news"        // whitelist (bloomberg/reuters/argus/iea/irena)
     | "sec_edgar"            // sec.gov filings
     | "hkex";                // hkexnews.hk filings
+  /**
+   * Deterministic authority tier T1–T4 (source-tier.ts). Used for harvest
+   * ordering (authoritative first, before ref numbering) and the visible drop
+   * threshold. Optional: not every code path sets it (older fixtures, tests).
+   */
+  tier?: SourceTier;
 };
 
 export type LitReviewPatentHit = {
