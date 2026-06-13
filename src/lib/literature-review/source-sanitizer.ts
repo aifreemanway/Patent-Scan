@@ -87,28 +87,52 @@ const BLACKLISTED_HOSTS: ReadonlyArray<string> = [
 
 const BLACKLIST_SET = new Set(BLACKLISTED_HOSTS.map((h) => h.toLowerCase()));
 
-/** True if the URL's host (or any parent domain) is in the blacklist. */
-export function isBlacklistedUrl(url: string): boolean {
-  let host: string;
+/**
+ * Parse a URL's lowercased hostname. Returns null on malformed input so
+ * callers can decide the fail-mode (blacklist treats null as "block").
+ * Shared so source-tier.ts uses the exact same host extraction.
+ */
+export function hostFromUrl(url: string): string | null {
   try {
-    host = new URL(url).hostname.toLowerCase();
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    // Malformed URL = treat as blacklisted (can't be a real source).
-    return true;
+    return null;
   }
+}
+
+/**
+ * Suffix / exact / substring domain match — the same mechanism the blacklist
+ * uses, extracted so source-tier.ts (TIER_MAP) reuses one matcher.
+ *
+ * - Exact host match against an entry.
+ * - Subdomain match: any parent-domain suffix in the set (".endsWith"-style),
+ *   so "elibrary.ru" catches "www.elibrary.ru".
+ * - Substring match for dotless partial entries like "studfile", "libgen".
+ *
+ * `host` must already be lowercased (use hostFromUrl).
+ */
+export function hostMatchesSet(host: string, set: Set<string>): boolean {
   // Direct match
-  if (BLACKLIST_SET.has(host)) return true;
+  if (set.has(host)) return true;
   // Subdomain match: check progressively shorter suffixes
   const parts = host.split(".");
   for (let i = 1; i < parts.length - 1; i++) {
     const suffix = parts.slice(i).join(".");
-    if (BLACKLIST_SET.has(suffix)) return true;
+    if (set.has(suffix)) return true;
   }
   // Substring match for partial entries like "phpdecoder", "libgen"
-  for (const banned of BLACKLIST_SET) {
-    if (!banned.includes(".") && host.includes(banned)) return true;
+  for (const entry of set) {
+    if (!entry.includes(".") && host.includes(entry)) return true;
   }
   return false;
+}
+
+/** True if the URL's host (or any parent domain) is in the blacklist. */
+export function isBlacklistedUrl(url: string): boolean {
+  const host = hostFromUrl(url);
+  // Malformed URL = treat as blacklisted (can't be a real source).
+  if (host === null) return true;
+  return hostMatchesSet(host, BLACKLIST_SET);
 }
 
 // ── Pass 2: LLM relevance filter ──────────────────────────────

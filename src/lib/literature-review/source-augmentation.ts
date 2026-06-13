@@ -33,6 +33,9 @@
 import { callGeminiJson } from "@/lib/gemini";
 import { TAVILY_URL } from "@/lib/config";
 import type { LitReviewReport, LitReviewSource } from "./types";
+// NEWS_WHITELIST single source of truth lives in source-tier.ts (used there
+// for T2 scoring); augmentation re-imports it for its Tavily site-restriction.
+import { NEWS_WHITELIST } from "./source-tier";
 
 // Polite UA — same one we use for Wikipedia REST in sources.ts.
 const UA = "Patent-Scan/1.0 (https://patent-scan.com; support@patent-scan.com)";
@@ -616,20 +619,7 @@ async function narrowExtract(opts: {
 // Resolver 3 — Industry news (whitelist via Tavily site-restriction)
 // ─────────────────────────────────────────────────────────────
 
-const NEWS_WHITELIST = [
-  "bloomberg.com",
-  "reuters.com",
-  "electrive.com",
-  "evlithium.com",
-  "argusmedia.com",
-  "asianmetal.com",
-  "iea.org",
-  "irena.org",
-  "mining.com",
-  "benchmarkminerals.com",
-  "fastmarkets.com",
-  "spglobal.com",
-];
+// NEWS_WHITELIST imported from source-tier.ts (single source of truth).
 
 const FIELD_NEWS_QUERY: Record<PlayerField, string> = {
   hq: "headquarters location",
@@ -754,7 +744,7 @@ async function resolveCell(opts: {
     const newsHits = await tavilyHarvest({
       apiKey: opts.tavilyKey,
       query: `"${company}" ${FIELD_NEWS_QUERY[field]}`,
-      includeDomains: NEWS_WHITELIST,
+      includeDomains: [...NEWS_WHITELIST],
       maxResults: 3,
     });
     for (const hit of newsHits) {

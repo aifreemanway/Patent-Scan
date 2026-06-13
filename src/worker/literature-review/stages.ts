@@ -27,6 +27,8 @@ import {
   isBlacklistedUrl,
   filterByRelevance,
 } from "@/lib/literature-review/source-sanitizer";
+import { scoreTier, type SourceTier } from "@/lib/literature-review/source-tier";
+import { hostFromUrl } from "@/lib/literature-review/source-sanitizer";
 import {
   augmentReportTables,
   normalizeTableCellCounts,
@@ -616,32 +618,53 @@ export function harvestToSources(harvest: LitReviewHarvest): {
   sources: LitReviewSource[];
   snippets: Map<string, string>;
   blacklistedCount: number;
+  tierDroppedCount: number;
+  tierDroppedLog: Array<{ url: string; host: string; tier: SourceTier }>;
 } {
-  const sources: LitReviewSource[] = [];
+  // Collect survivors WITHOUT ref first — ref is assigned after the tier sort
+  // so authoritative sources get the low (= cited) ref numbers.
+  type Survivor = Omit<LitReviewSource, "ref"> & { tier: SourceTier };
+  const survivors: Survivor[] = [];
   const snippets = new Map<string, string>();
   const seenUrl = new Set<string>();
   let blacklistedCount = 0;
+  let tierDroppedCount = 0;
+  const tierDroppedLog: Array<{ url: string; host: string; tier: SourceTier }> = [];
+
+  // Default threshold = 4 → drop only explicit T4. env-tunable per genre
+  // (NORD-class order can raise to T1–T2 only). No silent caps: every drop is
+  // logged + surfaced as a caveat line by the worker.
+  const THRESHOLD = Number(process.env.LITREVIEW_TIER_THRESHOLD) || 4;
 
   const push = (
     title: string,
     url: string,
     provenance: LitReviewSource["provenance"],
     snippet?: string,
-    accessLevel: LitReviewAccessLevel = "unknown"
+    accessLevel: LitReviewAccessLevel = "unknown",
+    doi?: string | null
   ) => {
     if (!url || seenUrl.has(url)) return;
+    // Blacklist (T_BLOCK safety net) first — unchanged.
     if (isBlacklistedUrl(url)) {
       blacklistedCount++;
       return;
     }
+    // Tier scoring (authority): deterministic, no network/LLM.
+    const tier = scoreTier(url, provenance, { doi, accessLevel });
+    if (tier >= THRESHOLD) {
+      tierDroppedCount++;
+      tierDroppedLog.push({ url, host: hostFromUrl(url) ?? url, tier });
+      return;
+    }
     seenUrl.add(url);
-    sources.push({
-      ref: sources.length + 1,
+    survivors.push({
       title: title.slice(0, 300),
       url,
       reachedAt: null, // filled by stage 7
       accessLevel,
       provenance,
+      tier,
     });
     if (snippet) snippets.set(url, snippet);
   };
@@ -651,7 +674,7 @@ export function harvestToSources(harvest: LitReviewHarvest): {
   }
   for (const s of harvest.scholar) {
     const authors = s.authors.slice(0, 3).join(", ");
-    push(`${authors ? authors + ". " : ""}${s.title}${s.year ? " (" + s.year + ")" : ""}`, s.url, s.doi ? "crossref" : "openalex", s.abstract, s.accessLevel ?? "unknown");
+    push(`${authors ? authors + ". " : ""}${s.title}${s.year ? " (" + s.year + ")" : ""}`, s.url, s.doi ? "crossref" : "openalex", s.abstract, s.accessLevel ?? "unknown", s.doi ?? null);
   }
   for (const w of harvest.web) {
     push(w.title, w.url, "tavily", w.snippet, w.accessLevel ?? "open");
@@ -660,7 +683,24 @@ export function harvestToSources(harvest: LitReviewHarvest): {
     push(w.title, w.url, "wikipedia", w.snippet, w.accessLevel ?? "open");
   }
 
-  return { sources, snippets, blacklistedCount };
+  // Stable sort by tier (1→4): authoritative first. Array.prototype.sort is
+  // stable in V8, so within a tier the original harvest order is preserved.
+  survivors.sort((a, b) => a.tier - b.tier);
+
+  // Number contiguously after the sort. snippets are keyed by URL (stable).
+  const sources: LitReviewSource[] = survivors.map((s, i) => ({ ...s, ref: i + 1 }));
+
+  const tier1 = survivors.filter((s) => s.tier === 1).length;
+  const tier2 = survivors.filter((s) => s.tier === 2).length;
+  const tier3 = survivors.filter((s) => s.tier === 3).length;
+  console.info("[litreview/source-tier]", {
+    tier1,
+    tier2,
+    tier3,
+    droppedT4: tierDroppedCount,
+  });
+
+  return { sources, snippets, blacklistedCount, tierDroppedCount, tierDroppedLog };
 }
 
 // LLM-based relevance pass over the numbered source list. Drops sources that
