@@ -5,12 +5,23 @@
 // to it — the email template doesn't care about extension.
 
 import type { LitReviewReport } from "@/lib/literature-review/types";
+import { cleanCell, EMPTY_CELL } from "@/lib/literature-review/cell-hygiene";
 
 function refs(refs: number[]): string {
   if (!refs.length) return "";
   return ` [${refs.join(", ")}]`;
 }
 
+/** Header label for the citation column added to every comparative table (§3.2). */
+const SOURCE_COL_HEADER = "Источник";
+
+/** Format a row's source refs as the «Источник» cell value: «[3, 8]» or «—». */
+function refsCell(refs: number[]): string {
+  return refs.length ? `[${refs.join(", ")}]` : EMPTY_CELL;
+}
+
+// escapePipe runs AFTER cleanCell: cleanCell strips HTML + normalises empties to
+// «—», escapePipe then makes the cleaned text safe inside a markdown pipe row.
 function escapePipe(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
@@ -49,15 +60,21 @@ export function renderReportMarkdown(report: LitReviewReport): string {
     // SYNTH_PROMPT example shows that shape). Strip a leading "Таблица <num>."
     // so we don't double-prefix to "Таблица 1. Таблица 1. …".
     const cleanTitle = t.title.replace(/^\s*Таблица\s*\d+\.\s*/i, "").trim();
-    lines.push(`### Таблица ${i + 1}. ${cleanTitle}`);
+    lines.push(`### Таблица ${i + 1}. ${cleanCell(cleanTitle)}`);
     lines.push("");
     if (t.columns.length > 0) {
-      lines.push(`| ${t.columns.map(escapePipe).join(" | ")} |`);
-      lines.push(`| ${t.columns.map(() => "---").join(" | ")} |`);
+      // §3.1 strip HTML + §3.3 empty→«—» on every header via cleanCell; then
+      // escapePipe for markdown safety. §3.2: append the «Источник» column so
+      // every comparative table carries an explicit citation column.
+      const headers = [...t.columns.map(cleanCell), SOURCE_COL_HEADER];
+      lines.push(`| ${headers.map(escapePipe).join(" | ")} |`);
+      lines.push(`| ${headers.map(() => "---").join(" | ")} |`);
       for (const row of t.rows) {
-        const cells = [row.label, ...row.cells].map(escapePipe);
-        const trailing = row.sourceRefs.length ? `${refs(row.sourceRefs)}` : "";
-        lines.push(`| ${cells.join(" | ")} |${trailing}`);
+        // label + data cells: clean (HTML-strip, empty→«—») then pipe-escape.
+        const dataCells = [row.label, ...row.cells].map((c) => escapePipe(cleanCell(c)));
+        // §3.2 citation column value: refs as «[3, 8]» or «—» (never invented).
+        const sourceCell = escapePipe(refsCell(row.sourceRefs));
+        lines.push(`| ${[...dataCells, sourceCell].join(" | ")} |`);
       }
     }
     lines.push("");
