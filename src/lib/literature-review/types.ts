@@ -43,10 +43,17 @@ export type LitReviewParams = {
  * How much of the source we could actually read.
  * - `open`          — full text reachable (patent page, OA paper, web page, wiki).
  * - `abstract_only` — only an abstract/annotation was available (paywalled paper).
+ * - `unreachable`   — the link did not resolve at verify time (404/410/timeout).
+ *                     Anti-fab: unreachable ≠ non-existent — we KEEP the source,
+ *                     mark it, and never fabricate an available copy (design §4).
  * - `unknown`       — no reliable access signal; do NOT claim full text.
  * NORD feedback: closed sources were cited from the abstract — mark it honestly.
  */
-export type LitReviewAccessLevel = "open" | "abstract_only" | "unknown";
+export type LitReviewAccessLevel =
+  | "open"
+  | "abstract_only"
+  | "unreachable"
+  | "unknown";
 
 export type LitReviewSource = {
   /** Numeric reference index in the final report's §5 source list. */
@@ -57,6 +64,12 @@ export type LitReviewSource = {
   reachedAt: string | null;
   /** Access depth we actually had to the source (anti-fab: unknown ≠ full text). */
   accessLevel: LitReviewAccessLevel;
+  /**
+   * Bare DOI (e.g. "10.1016/j.x") when the source came from Crossref/OpenAlex.
+   * Used by Stage 7 (§4) to reroll an `unreachable` link to an OA mirror of the
+   * SAME primary work. Optional: only scholarly hits carry it.
+   */
+  doi?: string | null;
   /** Origin so a reader knows the provenance (PatSearch / Crossref / web / wiki). */
   provenance:
     | "patsearch"

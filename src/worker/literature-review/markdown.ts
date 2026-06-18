@@ -114,11 +114,22 @@ export function renderReportMarkdown(report: LitReviewReport): string {
   lines.push("## 5. Источники");
   lines.push("");
   for (const s of report.sources) {
-    const archived = s.reachedAt === null ? " *(на момент проверки недоступен)*" : "";
-    // Honest access marking (NORD feedback): flag paywalled sources we could
-    // only read in abstract. open/unknown stay unmarked — never claim full text.
-    const access = s.accessLevel === "abstract_only" ? " *(только аннотация)*" : "";
-    lines.push(`${s.ref}. ${s.title} — ${s.url}${archived}${access}`);
+    // Honest access marking (NORD feedback + design §4):
+    //   - abstract_only → «(только аннотация)» (paywalled, read from abstract)
+    //   - unreachable   → «(ссылка не открывается на момент проверки)» — the
+    //     source is KEPT (anti-fab: unreachable ≠ non-existent), just flagged.
+    //   - open/unknown stay unmarked — never claim full text.
+    // `unreachable` already implies reachedAt === null, so it supersedes the
+    // older «недоступен» marker (avoid double-flagging the same line).
+    let access = "";
+    if (s.accessLevel === "abstract_only") {
+      access = " *(только аннотация)*";
+    } else if (s.accessLevel === "unreachable") {
+      access = " *(ссылка не открывается на момент проверки)*";
+    } else if (s.reachedAt === null) {
+      access = " *(на момент проверки недоступен)*";
+    }
+    lines.push(`${s.ref}. ${s.title} — ${s.url}${access}`);
   }
   lines.push("");
 

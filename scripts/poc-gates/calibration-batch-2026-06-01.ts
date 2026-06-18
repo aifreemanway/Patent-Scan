@@ -115,7 +115,7 @@ async function runOne(
   if (!report.title) report.title = s1.workingTitle;
 
   console.log(`[${tag}] Stage 7: verifying sources`);
-  report.sources = await stage7VerifySources(report.sources);
+  report.sources = (await stage7VerifySources(report.sources)).sources;
   const reachable = report.sources.filter((s) => s.reachedAt !== null).length;
   console.log(`  ${reachable}/${report.sources.length} reachable`);
 

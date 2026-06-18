@@ -53,7 +53,7 @@ async function main() {
   const report = await stage3to8(apiKey, PARAMS, sources, snippets);
 
   console.log("[poc-saas] Stage 7: verifying source URLs");
-  report.sources = await stage7VerifySources(report.sources);
+  report.sources = (await stage7VerifySources(report.sources)).sources;
   const reachable = report.sources.filter((s) => s.reachedAt !== null).length;
   console.log(`  ${reachable}/${report.sources.length} sources reachable`);
 
