@@ -19,6 +19,7 @@ import {
   harvestOpenAlex,
   harvestTavily,
   harvestWikipedia,
+  isUrlReachable,
   patsearchDatasetsRuForRegions,
   patsearchDatasetsEnForRegions,
 } from "@/lib/literature-review/sources";
@@ -630,6 +631,14 @@ export async function stage7VerifySources(
   const probe = opts.probe ?? ((url: string) => probeUrl(url));
   const reroll = opts.reroll ?? ((doi: string) => rerollOaUrl(doi));
 
+  // §4 is ENV-GATED: OFF by default → Stage 7 keeps the prior behaviour
+  // (reachability → reachedAt, accessLevel untouched, no reroll). Enable on the
+  // VPS via LITREVIEW_VERIFY_DOI=1 after a real-review smoke (timings + transient
+  // 403/timeout rate on live FIPS/DOI links). Tests inject opts.probe → §4 active
+  // regardless of env, so the unit suite always exercises the §4 path.
+  const verifyDoiEnabled =
+    process.env.LITREVIEW_VERIFY_DOI === "1" || opts.probe != null;
+
   // Cap parallelism — public APIs / DOI resolvers rate-limit on bursts and we
   // must not DDoS them. 10-at-a-time is conservative (was the prior HEAD cap).
   const batchSize = 10;
@@ -643,6 +652,13 @@ export async function stage7VerifySources(
       batch.map(async (s): Promise<LitReviewSource> => {
         // ── FAIL-OPEN boundary: any throw here returns the source UNCHANGED.
         try {
+          // §4 OFF → legacy: reachability only, accessLevel/url untouched.
+          if (!verifyDoiEnabled) {
+            return {
+              ...s,
+              reachedAt: (await isUrlReachable(s.url)) ? new Date().toISOString() : null,
+            };
+          }
           const outcome = await probe(s.url);
           const access = classifyAccess(outcome);
           const reached = outcome.kind === "status" && outcome.status >= 200 && outcome.status < 300;
