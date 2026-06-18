@@ -410,6 +410,9 @@ const SYNTH_TABLES_PROMPT = COMMON_PROMPT_PREFIX + `Твоя задача — с
 - ❌ Утверждения без source: каждая заполненная cell ОБЯЗАНА иметь хотя бы один валидный sourceRef из SOURCES.
 - ✅ Принцип: лучше «—» чем generic prose. Пустую ячейку pipeline дозаполнит из Wikipedia / корп.сайта / SEC после твоей синтез-стадии — твоя задача НЕ замусорить её фразой-наполнителем.
 
+⚠ КОЛОНКА «Источник (ref)»: рендерер ДОБАВИТ в каждую таблицу финальную колонку «Источник» со ссылками на ref из sourceRefs строки. Поэтому КАЖДАЯ строка ОБЯЗАНА иметь непустой sourceRefs (числа из SOURCES) — иначе колонка источника покажет «—» и строка будет выглядеть неподтверждённой. НЕ выдумывай ref ради заполнения; если строку нечем подтвердить из SOURCES — лучше не включай эту строку.
+- ❌ В cells НЕ помещай HTML-разметку («<sub>», «<br>», «&nbsp;» и т.п.) — только plain-текст. Рендерер чистит разметку, но не полагайся на это.
+
 Дополнительные оси (выбирай в зависимости от topic'а):
 - методы / технологии / процессы → колонки = МЕТОДЫ (Параметр × Пирометаллургия × Гидрометаллургия × Электролиз)
 - материалы / продукты → колонки = МАТЕРИАЛЫ
@@ -620,6 +623,8 @@ export function harvestToSources(harvest: LitReviewHarvest): {
   blacklistedCount: number;
   tierDroppedCount: number;
   tierDroppedLog: Array<{ url: string; host: string; tier: SourceTier }>;
+  /** §3.5: scholarly hits dropped for publication-year < LITREVIEW_YEAR_CUTOFF. */
+  yearDroppedCount: number;
 } {
   // Collect survivors WITHOUT ref first — ref is assigned after the tier sort
   // so authoritative sources get the low (= cited) ref numbers.
@@ -629,7 +634,23 @@ export function harvestToSources(harvest: LitReviewHarvest): {
   const seenUrl = new Set<string>();
   let blacklistedCount = 0;
   let tierDroppedCount = 0;
+  let yearDroppedCount = 0;
   const tierDroppedLog: Array<{ url: string; host: string; tier: SourceTier }> = [];
+
+  // §3.5 scope-cutoff (opt-in, env). Deterministic «year >= cutoff» filter
+  // applied ONLY to scholarly hits that carry a reliable numeric year
+  // (Crossref/OpenAlex `year`). Anti-fab guards:
+  //   - patents are NEVER cut (legal-significant, and year is part of the title);
+  //   - web hits are NEVER cut here (only an unreliable `publishedAt` string,
+  //     often absent — we do not guess a year to filter on);
+  //   - a scholarly hit with year === null passes through (no reliable year →
+  //     do NOT invent one to drop it).
+  // Unset / non-numeric env → filter disabled.
+  const yearCutoffRaw = process.env.LITREVIEW_YEAR_CUTOFF;
+  const yearCutoff =
+    yearCutoffRaw && /^\d{4}$/.test(yearCutoffRaw.trim())
+      ? Number(yearCutoffRaw.trim())
+      : null;
 
   // Default threshold = 4 → drop only explicit T4. env-tunable per genre
   // (NORD-class order can raise to T1–T2 only). No silent caps: every drop is
@@ -673,6 +694,12 @@ export function harvestToSources(harvest: LitReviewHarvest): {
     push(`${p.id} — ${p.title || "(без названия)"} (${p.country} ${p.year})`, p.url, "patsearch", p.abstract, p.accessLevel ?? "open");
   }
   for (const s of harvest.scholar) {
+    // §3.5: drop scholarly hits below the year cutoff — only when we have a
+    // reliable numeric year. null year → keep (never invent a year to cut).
+    if (yearCutoff !== null && typeof s.year === "number" && s.year < yearCutoff) {
+      yearDroppedCount++;
+      continue;
+    }
     const authors = s.authors.slice(0, 3).join(", ");
     push(`${authors ? authors + ". " : ""}${s.title}${s.year ? " (" + s.year + ")" : ""}`, s.url, s.doi ? "crossref" : "openalex", s.abstract, s.accessLevel ?? "unknown", s.doi ?? null);
   }
@@ -698,9 +725,11 @@ export function harvestToSources(harvest: LitReviewHarvest): {
     tier2,
     tier3,
     droppedT4: tierDroppedCount,
+    droppedByYear: yearDroppedCount,
+    yearCutoff,
   });
 
-  return { sources, snippets, blacklistedCount, tierDroppedCount, tierDroppedLog };
+  return { sources, snippets, blacklistedCount, tierDroppedCount, tierDroppedLog, yearDroppedCount };
 }
 
 // LLM-based relevance pass over the numbered source list. Drops sources that

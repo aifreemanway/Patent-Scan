@@ -197,6 +197,7 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     kept: initial.sources.length,
     blacklisted: initial.blacklistedCount,
     tierDropped: initial.tierDroppedCount,
+    yearDropped: initial.yearDroppedCount,
   });
   if (initial.sources.length === 0) {
     throw new Error("no_sources_harvested");
@@ -246,6 +247,13 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     report.caveats = [
       ...(report.caveats ?? []),
       `Отсеяно ${initial.tierDroppedCount} источников низкого авторитета (студбазы/форумы/агрегаторы).`,
+    ];
+  }
+  // §3.5 No-silent-caps: if the year cutoff dropped scholarly hits, say so.
+  if (initial.yearDroppedCount > 0) {
+    report.caveats = [
+      ...(report.caveats ?? []),
+      `Отсеяно ${initial.yearDroppedCount} научных публикаций старше порога года издания (фильтр LITREVIEW_YEAR_CUTOFF).`,
     ];
   }
 
