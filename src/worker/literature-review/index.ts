@@ -257,9 +257,23 @@ async function runPipeline(admin: SupabaseClient, row: SearchRequestRow): Promis
     ];
   }
 
-  // Stage 7 — verify sources
+  // Stage 7 — verify sources (§4: classify access, reroll unreachable DOIs).
+  // FAIL-OPEN: sources are never dropped here — at worst marked `unreachable`.
   await updateStage(admin, row.id, 7, 80);
-  report.sources = await stage7VerifySources(report.sources);
+  const verify = await stage7VerifySources(report.sources);
+  report.sources = verify.sources;
+  // No-silent-caps: if links did not resolve at verify time, the report says so
+  // (anti-fab: unreachable ≠ non-existent — the source is kept, just flagged).
+  if (verify.unreachableCount > 0) {
+    const rerolled =
+      verify.rerolledCount > 0
+        ? ` Для ${verify.rerolledCount} из них найдена открытая копия (DOI).`
+        : "";
+    report.caveats = [
+      ...(report.caveats ?? []),
+      `${verify.unreachableCount} ссылок не открывались на момент проверки и помечены в списке источников (они сохранены — недоступность не означает отсутствие работы).${rerolled}`,
+    ];
+  }
 
   // Stage 9 — render + upload. Deliver a real PDF (the headline artefact);
   // also keep the .md alongside for support / re-render / ba head-to-head diff.

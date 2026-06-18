@@ -24,6 +24,12 @@ import {
   patsearchDatasetsEnForRegions,
 } from "@/lib/literature-review/sources";
 import {
+  probeUrl,
+  rerollOaUrl,
+  classifyAccess,
+  type ProbeOutcome,
+} from "@/lib/literature-review/verify-doi";
+import {
   isBlacklistedUrl,
   filterByRelevance,
 } from "@/lib/literature-review/source-sanitizer";
@@ -592,23 +598,125 @@ export async function stage3to8(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Stage 7 — source verification (HEAD checks, in parallel batches)
+// Stage 7 — source verification (§4: classify access + reroll unreachable DOI)
 // ─────────────────────────────────────────────────────────────
-export async function stage7VerifySources(sources: LitReviewSource[]): Promise<LitReviewSource[]> {
-  // Cap parallelism — public APIs can rate-limit on bursts. 10-at-a-time is conservative.
+//
+// NETWORK code, runs for EVERY paid review. HARD FAIL-OPEN invariant: any
+// failure (timeout / network / API / thrown exception) leaves the source IN the
+// list with accessLevel NO WORSE than before. §4 only IMPROVES metadata — it
+// never drops a source and never fabricates an available copy.
+//
+//   1. Probe each URL (GET, hard timeout) → classify by HTTP status:
+//        2xx → open · 401/403/451 → abstract_only · 404/410/timeout → unreachable
+//   2. On `unreachable` + a DOI → reroll to an OA mirror of the SAME DOI
+//      (OpenAlex, then Crossref). Found → swap url, accessLevel→open, KEEP tier.
+//   3. Unreachable + no OA mirror → KEEP the source, marked `unreachable`
+//      (anti-fab: unreachable ≠ non-existent). Never deleted.
+//   4. Visibility: unreachableCount / rerolledCount logged + surfaced as a
+//      caveat by the worker.
+//
+// `probe` / `reroll` are injectable for tests (mock the network). Production
+// uses the real network fns from verify-doi.ts.
+export async function stage7VerifySources(
+  sources: LitReviewSource[],
+  opts: {
+    probe?: (url: string) => Promise<ProbeOutcome>;
+    reroll?: (doi: string) => Promise<string | null>;
+  } = {}
+): Promise<{
+  sources: LitReviewSource[];
+  unreachableCount: number;
+  rerolledCount: number;
+}> {
+  const probe = opts.probe ?? ((url: string) => probeUrl(url));
+  const reroll = opts.reroll ?? ((doi: string) => rerollOaUrl(doi));
+
+  // §4 is ENV-GATED: OFF by default → Stage 7 keeps the prior behaviour
+  // (reachability → reachedAt, accessLevel untouched, no reroll). Enable on the
+  // VPS via LITREVIEW_VERIFY_DOI=1 after a real-review smoke (timings + transient
+  // 403/timeout rate on live FIPS/DOI links). Tests inject opts.probe → §4 active
+  // regardless of env, so the unit suite always exercises the §4 path.
+  const verifyDoiEnabled =
+    process.env.LITREVIEW_VERIFY_DOI === "1" || opts.probe != null;
+
+  // Cap parallelism — public APIs / DOI resolvers rate-limit on bursts and we
+  // must not DDoS them. 10-at-a-time is conservative (was the prior HEAD cap).
   const batchSize = 10;
   const verified: LitReviewSource[] = [];
+  let unreachableCount = 0;
+  let rerolledCount = 0;
+
   for (let i = 0; i < sources.length; i += batchSize) {
     const batch = sources.slice(i, i + batchSize);
     const results = await Promise.all(
-      batch.map(async (s) => ({
-        ...s,
-        reachedAt: (await isUrlReachable(s.url)) ? new Date().toISOString() : null,
-      }))
+      batch.map(async (s): Promise<LitReviewSource> => {
+        // ── FAIL-OPEN boundary: any throw here returns the source UNCHANGED.
+        try {
+          // §4 OFF → legacy: reachability only, accessLevel/url untouched.
+          if (!verifyDoiEnabled) {
+            return {
+              ...s,
+              reachedAt: (await isUrlReachable(s.url)) ? new Date().toISOString() : null,
+            };
+          }
+          const outcome = await probe(s.url);
+          const access = classifyAccess(outcome);
+          const reached = outcome.kind === "status" && outcome.status >= 200 && outcome.status < 300;
+
+          // Step 2 — reroll an unreachable DOI to an OA mirror of the SAME work.
+          if (access === "unreachable" && s.doi) {
+            try {
+              const oaUrl = await reroll(s.doi);
+              if (oaUrl) {
+                rerolledCount++;
+                // Swap url ONLY to a really-found OA copy; tier KEPT (same source).
+                return {
+                  ...s,
+                  url: oaUrl,
+                  accessLevel: "open",
+                  reachedAt: new Date().toISOString(),
+                };
+              }
+            } catch {
+              // reroll failed → fall through, stays unreachable. Never throws.
+            }
+          }
+
+          if (access === "unreachable") {
+            unreachableCount++;
+            // KEEP the source (anti-fab: unreachable ≠ non-existent), mark it.
+            return { ...s, accessLevel: "unreachable", reachedAt: null };
+          }
+
+          // open / abstract_only — apply the verified signal. We do NOT
+          // downgrade an existing better signal: the classifier here only ran
+          // because a real probe returned, so this IS the ground truth at
+          // verify time.
+          return {
+            ...s,
+            accessLevel: access,
+            reachedAt: reached ? new Date().toISOString() : s.reachedAt,
+          };
+        } catch (e) {
+          // HARD FAIL-OPEN: source survives untouched, review never falls over.
+          console.error("[litreview/stage7] verify failed (fail-open, source kept)", {
+            url: s.url,
+            message: e instanceof Error ? e.message : String(e),
+          });
+          return s;
+        }
+      })
     );
     verified.push(...results);
   }
-  return verified;
+
+  console.info("[litreview/stage7-verify]", {
+    total: sources.length,
+    unreachableCount,
+    rerolledCount,
+  });
+
+  return { sources: verified, unreachableCount, rerolledCount };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -686,6 +794,9 @@ export function harvestToSources(harvest: LitReviewHarvest): {
       accessLevel,
       provenance,
       tier,
+      // Keep the bare DOI so Stage 7 (§4) can reroll an unreachable link to an
+      // OA mirror of the same primary work. Normalize away any doi.org prefix.
+      doi: doi ? doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "") : null,
     });
     if (snippet) snippets.set(url, snippet);
   };

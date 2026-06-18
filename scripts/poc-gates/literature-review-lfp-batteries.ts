@@ -58,7 +58,7 @@ async function main() {
   );
 
   console.log(`[poc:${SLUG}] Stage 7: verifying sources`);
-  report.sources = await stage7VerifySources(report.sources);
+  report.sources = (await stage7VerifySources(report.sources)).sources;
   const reachable = report.sources.filter((s) => s.reachedAt !== null).length;
   console.log(`  ${reachable}/${report.sources.length} reachable`);
 
