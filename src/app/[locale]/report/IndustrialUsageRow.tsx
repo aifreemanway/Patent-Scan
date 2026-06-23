@@ -10,26 +10,10 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
-
-type IUSource = { ref: number; title: string; url: string; reachedAt: string | null };
-type IUAssignee = {
-  canonical: string;
-  country: string;
-  description: string;
-  website?: string;
-  sourceRefs: number[];
-};
-type IUProduct = { name: string; description: string; sourceRefs: number[] };
-type IUCompetitor = { name: string; country?: string; technology: string; sourceRefs: number[] };
-type IUReport = {
-  patentId: string;
-  patentTitle: string;
-  assignee: IUAssignee;
-  products: IUProduct[];
-  competitors: IUCompetitor[];
-  caveats: string[];
-  sources: IUSource[];
-};
+// Single source of truth for the IU shape — the page lifts the loaded report up
+// (via onLoaded) so the export can include it, so the type must be shared, not
+// re-declared here (it drifted before).
+import type { IUReport } from "@/lib/industrial-usage/types";
 
 type FetchState =
   | { kind: "idle" }
@@ -43,10 +27,14 @@ export function IndustrialUsageRow({
   patentId,
   patentTitle,
   colSpan,
+  onLoaded,
 }: {
   patentId: string;
   patentTitle: string;
   colSpan: number;
+  // Fired once when IU is successfully loaded — lets the page collect the
+  // report so a subsequent export can include the sections the user expanded.
+  onLoaded?: (patentId: string, data: IUReport) => void;
 }) {
   const t = useTranslations("Report.IndustrialUsage");
   const [open, setOpen] = useState(false);
@@ -76,6 +64,9 @@ export function IndustrialUsageRow({
       }
       const data = (await resp.json()) as IUReport;
       setState({ kind: "ok", data });
+      // Surface the loaded report to the page so export can include it (WYSIWYG:
+      // only patents the user actually expanded land in the exported file).
+      onLoaded?.(patentId, data);
     } catch (e) {
       setState({ kind: "error", message: e instanceof Error ? e.message : t("errorPipeline") });
     }
