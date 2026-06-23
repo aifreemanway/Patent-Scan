@@ -79,11 +79,17 @@ begin
 
   -- Append-only consent proof (spec §3). Only on an active opt-in — no row means
   -- no consent (which is exactly how existing/non-consenting users stay excluded
-  -- from marketing, spec §6.1).
+  -- from marketing, spec §6.1). Wrapped in an exception guard: signup is the
+  -- critical path, and the profiles flag above is the binding consent state — an
+  -- audit-log insert must NEVER roll back account creation.
   if v_marketing then
-    insert into public.marketing_consent_events
-      (user_id, consent_type, granted, consent_version, source)
-    values (new.id, 'marketing', true, v_version, 'registration');
+    begin
+      insert into public.marketing_consent_events
+        (user_id, consent_type, granted, consent_version, source)
+      values (new.id, 'marketing', true, v_version, 'registration');
+    exception when others then
+      raise warning 'handle_new_user: consent-log insert failed: %', sqlerrm;
+    end;
   end if;
 
   return new;
