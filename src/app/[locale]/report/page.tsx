@@ -17,6 +17,7 @@ import {
 } from "@/components/LegalStatusBadge";
 import type { LegalStatus } from "@/lib/patent-legal-status";
 import type { FieldPatentInput } from "@/lib/field-view";
+import type { IUReport } from "@/lib/industrial-usage/types";
 
 // Tiers that default to the expert Field view (ТЗ §3 — institute / Team+).
 // Everyone else (free / starter / anon / unknown) defaults to the Verdict view.
@@ -257,6 +258,10 @@ function buildSearchReportHtml(args: {
   legalStatuses?: Record<string, LegalStatus>;
   // Free accounts get the export watermark; paid plans do not (ТЗ 2026-06-03).
   watermark?: boolean;
+  // Industrial Usage reports keyed by patent id. WYSIWYG: only patents the user
+  // EXPANDED in the report are present here, so only those land in the export
+  // (decision Vsevolod 2026-06-23). Empty by default.
+  iuByPatent?: Record<string, IUReport>;
 }): string {
   const { data, t, headers, uniquenessLabel, locale, autoPrint, deep } = args;
   const legalStatuses = args.legalStatuses ?? {};
@@ -350,6 +355,98 @@ function buildSearchReportHtml(args: {
         })
         .join("")}</tbody></table><p class="muted" style="margin-top:8px">${esc(
         t("legalStatus.caveat"),
+      )}</p></section>`
+    : "";
+
+  // Industrial Usage — WYSIWYG: only patents the user expanded in the report
+  // carry a loaded IU report; those (and only those) are serialised here, in the
+  // patent-table order. An explicit note states the export covers expanded rows
+  // only (decision Vsevolod 2026-06-23). Anti-fab: empty fields render «—» /
+  // honest "not found" copy — never invented.
+  const iuByPatent = args.iuByPatent ?? {};
+  const iuPatents = patents.filter((p) => iuByPatent[p.id]);
+  const refTag = (refs: number[]) =>
+    refs.length ? ` <span class="muted">[${esc(refs.join(", "))}]</span>` : "";
+  const industrialUsageHtml = iuPatents.length
+    ? `<section class="card"><h2>${esc(t("IndustrialUsage.exportTitle"))}</h2>` +
+      `<p class="muted" style="margin:0 0 12px">${esc(t("IndustrialUsage.exportNote"))}</p>` +
+      iuPatents
+        .map((p) => {
+          const iu = iuByPatent[p.id]!;
+          const a = iu.assignee;
+          const assigneeHtml = `<div style="margin:6px 0"><strong>${esc(
+            t("IndustrialUsage.assigneeTitle"),
+          )}:</strong> ${esc(a.canonical || "—")}${
+            a.country ? ` <span class="muted">(${esc(a.country)})</span>` : ""
+          }${a.description ? `<div class="sub">${esc(a.description)}${refTag(a.sourceRefs)}</div>` : ""}${
+            a.website
+              ? `<div class="sub"><a href="${
+                  safeHref(a.website) || "#"
+                }" target="_blank" rel="noopener noreferrer">${esc(a.website)}</a></div>`
+              : ""
+          }</div>`;
+          const productsHtml = `<div style="margin:6px 0"><strong>${esc(
+            t("IndustrialUsage.productsTitle"),
+          )}:</strong>${
+            iu.products.length
+              ? `<ul>${iu.products
+                  .map(
+                    (pr) =>
+                      `<li>${esc(pr.name)}${
+                        pr.description ? ` — ${esc(pr.description)}` : ""
+                      }${refTag(pr.sourceRefs)}</li>`,
+                  )
+                  .join("")}</ul>`
+              : ` <span class="muted">${esc(t("IndustrialUsage.productsEmpty"))}</span>`
+          }</div>`;
+          const competitorsHtml = `<div style="margin:6px 0"><strong>${esc(
+            t("IndustrialUsage.competitorsTitle"),
+          )}:</strong>${
+            iu.competitors.length
+              ? `<ul>${iu.competitors
+                  .map(
+                    (c) =>
+                      `<li>${esc(c.name)}${
+                        c.country ? ` <span class="muted">(${esc(c.country)})</span>` : ""
+                      }${c.technology ? ` — ${esc(c.technology)}` : ""}${refTag(c.sourceRefs)}</li>`,
+                  )
+                  .join("")}</ul>`
+              : ` <span class="muted">${esc(t("IndustrialUsage.competitorsEmpty"))}</span>`
+          }</div>`;
+          const caveatsHtml = iu.caveats.length
+            ? `<div style="margin:6px 0"><strong>${esc(
+                t("IndustrialUsage.caveatsTitle"),
+              )}:</strong><ul>${iu.caveats.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>`
+            : "";
+          const iuSourcesHtml = iu.sources.length
+            ? `<div style="margin:6px 0"><strong>${esc(
+                t("IndustrialUsage.sourcesTitle"),
+              )}:</strong>${iu.sources
+                .map((s) => {
+                  const href = safeHref(s.url);
+                  const label = esc(s.title || s.url);
+                  const arch =
+                    s.reachedAt === null
+                      ? ` <span class="muted">${esc(t("IndustrialUsage.sourceArchived"))}</span>`
+                      : "";
+                  return `<div class="sub"><span class="mono">[${esc(
+                    String(s.ref),
+                  )}]</span> ${
+                    href
+                      ? `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+                      : label
+                  }${arch}</div>`;
+                })
+                .join("")}</div>`
+            : "";
+          return `<div style="margin:14px 0;padding-top:10px;border-top:1px solid #e2e8f0"><h3 style="margin:0 0 6px;font-size:15px">${idLink(
+            p.id,
+            p.url,
+          )} · ${esc(p.title)}</h3>${assigneeHtml}${productsHtml}${competitorsHtml}${caveatsHtml}${iuSourcesHtml}</div>`;
+        })
+        .join("") +
+      `<p class="muted" style="margin-top:12px;font-style:italic">${esc(
+        t("IndustrialUsage.disclaimer"),
       )}</p></section>`
     : "";
 
@@ -461,6 +558,7 @@ ${queryHtml}
 ${uniquenessHtml}
 ${overviewHtml}
 ${patentsHtml}
+${industrialUsageHtml}
 ${sourcesHtml}
 ${recoHtml}
 ${deepHtml}
@@ -495,6 +593,11 @@ function ReportPageInner() {
   // once the report data is available; non-RU patents never enter the batch.
   const [legalStatuses, setLegalStatuses] = useState<Record<string, LegalStatus>>({});
   const [legalLoading, setLegalLoading] = useState(false);
+
+  // IU reports the user has expanded, lifted from IndustrialUsageRow so the
+  // export can include them. WYSIWYG: only expanded patents land in the file
+  // (decision Vsevolod 2026-06-23).
+  const [loadedIU, setLoadedIU] = useState<Record<string, IUReport>>({});
 
   // RU numbers to resolve legal status for: the verdict patents PLUS the field
   // view's "close" (in-window) candidates, so field cards carry a real status
@@ -811,6 +914,7 @@ function ReportPageInner() {
       deep: deepResult,
       legalStatuses,
       watermark: isFree,
+      iuByPatent: loadedIU,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     const a = document.createElement("a");
@@ -833,6 +937,7 @@ function ReportPageInner() {
       deep: deepResult,
       legalStatuses,
       watermark: isFree,
+      iuByPatent: loadedIU,
     });
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
     window.open(url, "_blank");
@@ -1106,6 +1211,9 @@ function ReportPageInner() {
                           patentId={p.id}
                           patentTitle={p.title}
                           colSpan={6}
+                          onLoaded={(id, iu) =>
+                            setLoadedIU((prev) => ({ ...prev, [id]: iu }))
+                          }
                         />
                       </Fragment>
                     ))}
@@ -1465,8 +1573,16 @@ function ReportPageInner() {
             <p className="mt-1 text-sm leading-6 text-amber-900">{t("caveatBody")}</p>
           </section>
 
+          {/* Export hint — IU sections are lazy/per-patent, so the export only
+              carries the ones the user expanded. Tell them up front. */}
+          {(data.patents?.length ?? 0) > 0 && (
+            <p className="mt-10 text-right text-xs text-slate-500">
+              {t("exportIuHint")}
+            </p>
+          )}
+
           {/* Actions */}
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={handleExportHtml}

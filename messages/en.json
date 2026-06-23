@@ -723,6 +723,7 @@
     "ctaPrimary": "New check",
     "exportHtml": "Save as HTML",
     "exportPdf": "Save as PDF",
+    "exportIuHint": "Only the «Industrial usage» sections for patents you expanded will be included in the export — expand the ones you need before saving.",
     "emptyTitle": "No patents found",
     "emptyBody": "None of the sources returned relevant publications for your description. Try rephrasing — add key terms or the application area.",
     "emptyCta": "New search",
@@ -840,7 +841,9 @@
       "caveatsTitle": "Caveats",
       "sourcesTitle": "Sources",
       "sourceArchived": "(unreachable at the time of verification)",
-      "disclaimer": "This map is auto-generated from public sources. It does not replace legal analysis and should be verified by an industry expert."
+      "disclaimer": "This map is auto-generated from public sources. It does not replace legal analysis and should be verified by an industry expert.",
+      "exportTitle": "Industrial usage",
+      "exportNote": "Only the «Industrial usage» sections you expanded in the report are included in the export. To add the rest, expand them in the report before exporting."
     }
   },
   "Landscape": {
