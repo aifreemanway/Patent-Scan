@@ -8,6 +8,7 @@
 import { type NextRequest } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import { verifyUnsubToken } from "@/lib/unsub-jwt";
+import { recordMarketingConsentEvent } from "@/lib/marketing-consent";
 
 export const runtime = "nodejs";
 
@@ -91,6 +92,14 @@ export async function GET(req: NextRequest): Promise<Response> {
         "Не удалось обновить настройки рассылки. Попробуйте позже или напишите на support@patent-scan.com.",
     });
   }
+
+  // Append-only proof of the revoke (spec §3). Best-effort: the flag is already
+  // cleared (the legally-binding state), the log is the audit trail.
+  await recordMarketingConsentEvent({
+    userId: claims.sub,
+    granted: false,
+    source: "unsubscribe_link",
+  });
 
   return htmlPage({
     ok: true,

@@ -8,6 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/supabase-server";
+import { recordMarketingConsentEvent } from "@/lib/marketing-consent";
 
 // ── Profile fields editable from /account/profile ─────────────
 // All optional and treated as "no change" if absent from the form; explicit
@@ -71,6 +72,63 @@ export async function updateProfile(formData: FormData): Promise<void> {
     console.error("[account/updateProfile] db error", { message: error.message });
     return;
   }
+
+  revalidatePath("/account/profile");
+  revalidatePath("/account");
+}
+
+// ── Marketing-consent toggle (/account/profile) ───────────────
+// Separate from updateProfile because flipping it has side effects beyond the
+// profiles flag: it appends to the immutable consent log (spec §3/§4) and stamps
+// the unsubscribe timestamp. Dual-write: profiles flag = fast current state,
+// marketing_consent_events = audit trail. Logs ONLY on an actual state change,
+// so re-saving an unchanged toggle never pollutes the append-only history.
+export async function updateMarketingConsent(formData: FormData): Promise<void> {
+  if (formData.get("marketing_consent_present") !== "1") return;
+
+  let user, supabase;
+  try {
+    ({ user, supabase } = await requireUser());
+  } catch {
+    console.error("[account/updateMarketingConsent] not authenticated");
+    return;
+  }
+
+  const desired = formData.get("marketing_consent") === "on";
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("marketing_consent_at")
+    .eq("id", user.id)
+    .maybeSingle();
+  const current = Boolean(prof?.marketing_consent_at);
+  if (current === desired) {
+    revalidatePath("/account/profile");
+    return; // no change — don't write a spurious consent-log row
+  }
+
+  const nowIso = new Date().toISOString();
+  const patch = desired
+    ? { marketing_consent_at: nowIso, marketing_unsubscribed_at: null }
+    : { marketing_consent_at: null, marketing_unsubscribed_at: nowIso };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(patch)
+    .eq("id", user.id);
+  if (error) {
+    console.error("[account/updateMarketingConsent] db error", {
+      message: error.message,
+    });
+    return;
+  }
+
+  // Append-only proof (spec §3/§4). Immediate revoke/grant; logged.
+  await recordMarketingConsentEvent({
+    userId: user.id,
+    granted: desired,
+    source: "account_settings",
+  });
 
   revalidatePath("/account/profile");
   revalidatePath("/account");
