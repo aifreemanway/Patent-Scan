@@ -917,7 +917,7 @@
       "emailPlaceholder": "you@example.com",
       "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
       "consentRequired": "Please confirm your consent to continue.",
-      "marketingConsent": "I agree to receive informational emails from Patent-Scan: product news, patent-search tips, customer cases. You can unsubscribe via the link in each email.",
+      "marketingConsent": "I agree to receive informational emails from Patent-Scan: product news, patent-search tips, customer cases. Operator: IE Kobzar V.Yu. (see the Privacy Policy for details). You can unsubscribe via the link in each email.",
       "captchaLoading": "Verifying you're human…",
       "submit": "Send sign-in link",
       "submitting": "Sending…",
