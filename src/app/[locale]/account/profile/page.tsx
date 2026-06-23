@@ -7,6 +7,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { requireUser } from "@/lib/supabase-server";
 import {
   updateProfile,
+  updateMarketingConsent,
   deleteAccount,
 } from "@/lib/server-actions/account";
 
@@ -24,7 +25,7 @@ export default async function ProfilePage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "tier, full_name, organization, position, phone, industrial_usage_enabled, email_notifications_ready"
+      "tier, full_name, organization, position, phone, industrial_usage_enabled, email_notifications_ready, marketing_consent_at"
     )
     .eq("id", user.id)
     .single();
@@ -120,6 +121,30 @@ export default async function ProfilePage({
           />
         </section>
 
+        <button
+          type="submit"
+          className="rounded-md bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+        >
+          {t("profile.save")}
+        </button>
+      </form>
+
+      {/* Marketing consent — separate form: toggling it appends to the immutable
+          consent log + stamps unsubscribe (spec §4), distinct from profile edits. */}
+      <form
+        action={updateMarketingConsent}
+        className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6"
+      >
+        <h2 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+          {t("profile.marketingSection")}
+        </h2>
+        <Toggle
+          name="marketing_consent"
+          defaultChecked={Boolean(profile?.marketing_consent_at)}
+          title={t("profile.marketingTitle")}
+          body={t("profile.marketingBody")}
+          availability={t("profile.marketingNote")}
+        />
         <button
           type="submit"
           className="rounded-md bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"

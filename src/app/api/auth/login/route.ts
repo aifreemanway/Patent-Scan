@@ -13,6 +13,7 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { validateEmail } from "@/lib/email-validator";
 import { SIGNUP_IP_LIMIT } from "@/lib/config";
+import { MARKETING_CONSENT_VERSION } from "@/lib/marketing-consent";
 import { routing } from "@/i18n/routing";
 
 export const runtime = "nodejs";
@@ -108,7 +109,12 @@ export async function POST(req: NextRequest) {
       // profile row creation. For existing users (login, not signup) the
       // trigger doesn't fire, so this value is ignored on re-logins —
       // existing consent state is preserved exactly as it was.
-      data: { marketing_consent: marketingConsent },
+      // marketing_consent_version lets the handle_new_user trigger (0014) stamp
+      // the append-only consent log with the exact text version (spec §5).
+      data: {
+        marketing_consent: marketingConsent,
+        marketing_consent_version: MARKETING_CONSENT_VERSION,
+      },
     },
   });
 
