@@ -75,6 +75,25 @@ export function buildUrl(id: string, country: string): string {
     return `https://patents.google.com/?q=${encodeURIComponent(id.replace(/_\d+$/, ""))}`;
   }
   const [, cc, numCore, kind] = m;
+  // KZ — Kazakhstan NATIONAL patents. Google Patents does NOT index them
+  // (confirmed live 404 on KZ20030B by cofounder). They reach us via the
+  // PatSearch `cis` dataset, but PatSearch has no public human-readable doc
+  // page (the API /docs endpoint returns raw JSON). Espacenet DOES cover KZ
+  // (via the EAPO/EAEU feed), so route KZ to an Espacenet publication-number
+  // SEARCH URL. A search URL always returns HTTP 200 — never a 404 — so even
+  // if a specific KZ doc is absent the link lands the user on the right
+  // official aggregator instead of a dead page. Anti-fab: zero 404 in
+  // customer-facing links; a broken link is worse than no link.
+  // Scope (per cofounder de-scope 2026-06-23): EA/CN/EP/US/JP verified working
+  // on Google Patents — do NOT touch them. KZ is the only confirmed gap; other
+  // CIS-national offices (UZ/TM/…) would need the same Espacenet routing IF
+  // they ever appear, but KZ is the only one observed so far.
+  if (cc === "KZ") {
+    const pn = `${cc}${numCore}${kind ?? ""}`;
+    return `https://worldwide.espacenet.com/patent/search?q=${encodeURIComponent(
+      `pn=${pn}`
+    )}`;
+  }
   let pn: string;
   if (cc === "EA") {
     pn = `${cc}${numCore.padStart(6, "0")}${kind ?? ""}`;
