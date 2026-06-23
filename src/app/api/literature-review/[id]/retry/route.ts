@@ -8,7 +8,7 @@ import {
   requireAuth,
 } from "@/lib/auth-quota";
 import { checkAndChargeQuota } from "@/lib/quota";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -22,6 +22,10 @@ export async function POST(
   if (paused) return paused;
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — a retry re-runs the paid worker.
+  const overBudget = await perUserSpendGuard(auth.user.id, auth.tier);
+  if (overBudget) return overBudget;
 
   const { id } = await ctx.params;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });

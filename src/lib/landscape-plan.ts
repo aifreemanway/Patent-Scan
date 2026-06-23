@@ -118,18 +118,24 @@ export type LandscapePlan = {
 export async function planLandscape(
   topic: string,
   apiKey: string,
-  timeoutMs: number = GEMINI_TIMEOUT_MS.plan
+  timeoutMs: number = GEMINI_TIMEOUT_MS.plan,
+  // Per-user spend attribution (СЛОЙ-2). NOT part of the cache key — a cache hit
+  // costs nothing, so only the user who triggers the real LLM call is charged.
+  userId?: string | null
 ): Promise<LandscapePlan> {
   // Memoise by topic — the gateway is not bit-deterministic at temp 0, so the
   // same search must map to one plan (see llm-cache.ts). Version tag "plan-v1"
   // invalidates if the prompt changes.
-  return memo(cacheKey("plan-v1", topic), () => planLandscapeUncached(topic, apiKey, timeoutMs));
+  return memo(cacheKey("plan-v1", topic), () =>
+    planLandscapeUncached(topic, apiKey, timeoutMs, userId)
+  );
 }
 
 async function planLandscapeUncached(
   topic: string,
   apiKey: string,
-  timeoutMs: number
+  timeoutMs: number,
+  userId?: string | null
 ): Promise<LandscapePlan> {
   const { data } = await callGeminiJson<{
     queries?: unknown;
@@ -156,6 +162,7 @@ async function planLandscapeUncached(
     // comes from the prompt's explicit per-facet instructions, not from sampling.
     temperature: 0,
     timeoutMs,
+    userId,
   });
 
   const queries = Array.isArray(data.queries)

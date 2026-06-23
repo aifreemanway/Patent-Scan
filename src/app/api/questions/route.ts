@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
@@ -48,6 +48,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
+
   const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -86,6 +90,9 @@ export async function POST(req: Request): Promise<NextResponse> {
       temperature: 0.4,
       reasoningEffort: "none",
       timeoutMs: GEMINI_TIMEOUT_MS.questions,
+      // Per-user spend attribution (СЛОЙ-2) — this unquota'd route must tag its
+      // ₽ cost to the user so the per-user breaker can see loop-abuse here.
+      userId: guard.user.id,
     });
 
     const questions = Array.isArray(data.questions)

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuthAndQuota } from "@/lib/auth-quota";
 import {
   synthesizeLandscape,
@@ -62,6 +62,10 @@ export async function POST(req: Request) {
 
   const guard = await requireAuthAndQuota("landscape");
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2). guard.tier is resolved here (quota path).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {

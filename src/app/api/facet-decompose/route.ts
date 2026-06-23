@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuthCached } from "@/lib/auth-quota";
 import { decomposeFacets } from "@/lib/facet-decompose";
 import { MAX_DESCRIPTION_LEN, RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
@@ -23,6 +23,10 @@ export async function POST(req: Request) {
 
   const guard = await requireAuthCached();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const facets = await decomposeFacets(invention, apiKey);
+    const facets = await decomposeFacets(invention, apiKey, undefined, guard.user.id);
     return NextResponse.json({ facets });
   } catch (e) {
     console.error("[facet-decompose] failed", {

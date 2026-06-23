@@ -157,6 +157,8 @@ export async function runDeepAnalysisVerdict(opts: {
   description: string;
   answers: string[];
   patents: InputPatent[];
+  /** Per-user spend attribution (СЛОЙ-2) — the worker passes the row's user_id. */
+  userId?: string | null;
 }): Promise<DeepResponsePayload> {
   const userText = buildUserText(opts.description, opts.answers, opts.patents);
 
@@ -167,6 +169,7 @@ export async function runDeepAnalysisVerdict(opts: {
     systemPrompt: DEEP_ANALYSIS_SYSTEM_PROMPT,
     userText,
     timeoutMs: DEEP_ANALYSIS_TIMEOUT_MS,
+    userId: opts.userId,
     // Streaming removed the gateway's ~187s deadline, so we can afford the
     // headroom: a full per-patent verdict over up to 60 analogs overflowed the
     // 8192 default (finish_reason "length" → truncated, invalid JSON). 16384

@@ -38,7 +38,9 @@ export type Assessment = {
 export async function assessDescription(
   description: string,
   apiKey: string,
-  timeoutMs: number = GEMINI_TIMEOUT_MS.assess
+  timeoutMs: number = GEMINI_TIMEOUT_MS.assess,
+  // Per-user spend attribution (СЛОЙ-2) — threaded from the route's auth guard.
+  userId?: string | null
 ): Promise<Assessment> {
   const { data } = await callGeminiJson<{
     sufficient?: unknown;
@@ -50,6 +52,7 @@ export async function assessDescription(
     userText: description,
     temperature: 0.1,
     timeoutMs,
+    userId,
   });
 
   const sufficient = data.sufficient === true;

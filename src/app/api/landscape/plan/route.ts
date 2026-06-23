@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuthCached } from "@/lib/auth-quota";
 import { planLandscape } from "@/lib/landscape-plan";
 import {
@@ -24,6 +24,10 @@ export async function POST(req: Request) {
 
   const guard = await requireAuthCached();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
@@ -52,7 +56,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const plan = await planLandscape(topic, apiKey);
+    const plan = await planLandscape(topic, apiKey, undefined, guard.user.id);
     return NextResponse.json({ topic, ...plan });
   } catch (e) {
     console.error("[landscape-plan] failed", {

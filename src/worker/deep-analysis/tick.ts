@@ -69,7 +69,7 @@ async function runOne(admin: SupabaseClient, row: DeepRow): Promise<void> {
 
   console.info(`[worker/deep] processing ${row.id} «${description.slice(0, 60)}»`);
 
-  const payload = await runDeepAnalysisVerdict({ apiKey, description, answers, patents });
+  const payload = await runDeepAnalysisVerdict({ apiKey, description, answers, patents, userId: row.user_id });
 
   const { error } = await admin
     .from("search_requests")
