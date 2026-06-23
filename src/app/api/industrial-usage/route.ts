@@ -11,7 +11,7 @@
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import { buildIndustrialUsage } from "@/lib/industrial-usage/pipeline";
@@ -32,6 +32,10 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   // Available on all tiers. We still load the per-user toggle so a user who
   // turned the section off in /account/profile gets the lock instead.
@@ -78,6 +82,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       apiKey,
       patsearchToken,
       tavilyKey,
+      // Per-user spend attribution (СЛОЙ-2).
+      userId: guard.user.id,
     });
     return NextResponse.json(report);
   } catch (e) {

@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuthAndQuota } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import {
@@ -80,6 +80,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   // counter incremented atomically.
   const guard = await requireAuthAndQuota("literature_review");
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2). guard.tier is resolved here (quota path).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   let body: Partial<LitReviewParams>;
   try {

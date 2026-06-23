@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { extractSearchTerms } from "@/lib/extract-search-terms";
 import {
@@ -116,6 +116,10 @@ export async function POST(req: Request) {
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
+
   const token = process.env.PATSEARCH_TOKEN;
   const geminiKey = process.env.TIMEWEB_AI_KEY;
   if (!token || !geminiKey) {
@@ -153,7 +157,7 @@ export async function POST(req: Request) {
   let qnEn: string;
   let extractedIpc: string[] = [];
   try {
-    const terms = await extractSearchTerms(query, geminiKey);
+    const terms = await extractSearchTerms(query, geminiKey, undefined, undefined, guard.user.id);
     qn = terms.qn;
     qnEn = terms.qnEn;
     extractedIpc = terms.ipcCodes;

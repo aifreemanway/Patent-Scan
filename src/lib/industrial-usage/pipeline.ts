@@ -104,6 +104,8 @@ export type BuildIUOpts = {
   apiKey: string;
   patsearchToken: string;
   tavilyKey: string;
+  /** Per-user spend attribution (СЛОЙ-2) — threaded from the route's auth guard. */
+  userId?: string | null;
 };
 
 export async function buildIndustrialUsage(opts: BuildIUOpts): Promise<IUReport> {
@@ -184,6 +186,7 @@ export async function buildIndustrialUsage(opts: BuildIUOpts): Promise<IUReport>
     userText,
     reasoningEffort: "none",
     timeoutMs: 120_000,
+    userId: opts.userId,
   });
 
   // Filter sourceRefs to existing refs only (defensive; the prompt forbids

@@ -46,7 +46,9 @@ export async function extractSearchTerms(
   // Recall-critical call (qn/qnEn/IPC drive PatSearch). Default keeps Gemini
   // thinking ON; pass "none" only after a before/after recall-diff proves the
   // extracted queries don't degrade (cofounder guardrail 2026-06-08).
-  reasoningEffort?: "none" | "low" | "medium" | "high"
+  reasoningEffort?: "none" | "low" | "medium" | "high",
+  // Per-user spend attribution (СЛОЙ-2) — threaded from the route's auth guard.
+  userId?: string | null
 ): Promise<SearchTerms> {
   const { data } = await callGeminiJson<{
     qn?: unknown;
@@ -62,6 +64,7 @@ export async function extractSearchTerms(
     temperature: 0,
     reasoningEffort,
     timeoutMs,
+    userId,
   });
 
   const qn = typeof data.qn === "string" ? data.qn.trim() : "";

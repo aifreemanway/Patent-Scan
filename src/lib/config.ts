@@ -180,3 +180,40 @@ export const QUOTA_LIMITS = {
   team: { search: 60, landscape: 30, questions: Infinity },
   enterprise: { search: Infinity, landscape: Infinity, questions: Infinity },
 } as const;
+
+// --- Per-user daily LLM spend budget (СЛОЙ-2, ₽/day, MSK) ---
+//
+// An anti-ABUSE ceiling, NOT a quota. Operational quota (QUOTA_LIMITS) charges
+// per user-facing search/landscape; but the unquota'd LLM routes (questions /
+// gate / facet-decompose / prior-art-rank / landscape-plan / search-rospatent /
+// industrial-usage) can be looped per-user without touching quota, burning ₽.
+// lib/spend-guard.ts `perUserSpendGuard` trips a per-user 503 once a user's
+// confirmed LLM spend today (MSK) exceeds their tier's budget. The global
+// breaker (#115, env LLM_DAILY_BUDGET_RUB) stays as the aggregate backstop.
+//
+// Reference: per-product LLM COGS ≈ Поиск ₽17 / Deep ₽13 / Скрининг ₽10 /
+// Ландшафт ₽6 — so even free's 200₽/day is ~12 searches' worth, generous for
+// real use and only bites loop-abuse. Values are start points (Vsevolod
+// 2026-06-23); make tunable from /admin/costs later. enterprise = no per-user
+// cap (Infinity) — trusted accounts; the global breaker still covers aggregate.
+// Tiers mirror the DB profiles_tier_check set (free/starter/team/enterprise);
+// team_plus is mapped ahead of its billing rollout so it is never capped at free.
+export const LLM_DAILY_BUDGET_RUB_BY_TIER: Record<string, number> = {
+  free: 200,
+  starter: 600,
+  team: 1500,
+  team_plus: 3000,
+  enterprise: Infinity,
+};
+
+/**
+ * Resolve a tier string to its daily per-user ₽ budget. Unknown / missing tier
+ * → the most conservative (free) budget: an anti-abuse default that never leaves
+ * a user uncapped because their tier string didn't match a known key.
+ */
+export function dailyBudgetRubForTier(tier: string | null | undefined): number {
+  if (tier && Object.prototype.hasOwnProperty.call(LLM_DAILY_BUDGET_RUB_BY_TIER, tier)) {
+    return LLM_DAILY_BUDGET_RUB_BY_TIER[tier];
+  }
+  return LLM_DAILY_BUDGET_RUB_BY_TIER.free;
+}

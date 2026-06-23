@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuthCached } from "@/lib/auth-quota";
 import {
   GEMINI_TIMEOUT_MS,
@@ -59,6 +59,10 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const guard = await requireAuthCached();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   const apiKey = process.env.TIMEWEB_AI_KEY;
   if (!apiKey) {
@@ -159,6 +163,9 @@ export async function POST(req: Request): Promise<NextResponse> {
         temperature: 0.2,
         ...(rankEffort ? { reasoningEffort: rankEffort } : {}),
         timeoutMs: GEMINI_TIMEOUT_MS.rank,
+        // Per-user spend attribution (СЛОЙ-2). Only runs on a cache MISS, so the
+        // user who actually triggers the LLM call gets the ₽ cost.
+        userId: guard.user.id,
       });
       return Array.isArray(data.ids)
         ? data.ids

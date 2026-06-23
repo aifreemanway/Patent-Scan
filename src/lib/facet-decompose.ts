@@ -68,20 +68,24 @@ export type Facet = { ru: string; en: string };
 export async function decomposeFacets(
   invention: string,
   apiKey: string,
-  timeoutMs: number = GEMINI_TIMEOUT_MS.facet
+  timeoutMs: number = GEMINI_TIMEOUT_MS.facet,
+  // Per-user spend attribution (СЛОЙ-2). NOT part of the cache key — a cache hit
+  // costs nothing, so only the user who triggers the real LLM call is charged.
+  userId?: string | null
 ): Promise<Facet[]> {
   // Memoise by invention text (same rationale as planLandscape — see llm-cache.ts).
   // "facets-v2" tag: bump because the prompt gained the compound measure+transmit
   // grain, so old cached facet sets must not be reused.
   return memo(cacheKey("facets-v2", invention), () =>
-    decomposeFacetsUncached(invention, apiKey, timeoutMs)
+    decomposeFacetsUncached(invention, apiKey, timeoutMs, userId)
   );
 }
 
 async function decomposeFacetsUncached(
   invention: string,
   apiKey: string,
-  timeoutMs: number
+  timeoutMs: number,
+  userId?: string | null
 ): Promise<Facet[]> {
   const { data } = await callGeminiJson<{ facets?: unknown }>({
     apiKey,
@@ -95,6 +99,7 @@ async function decomposeFacetsUncached(
     // explicit per-grain instructions, not sampling randomness.
     temperature: 0,
     timeoutMs,
+    userId,
   });
 
   if (!Array.isArray(data.facets)) return [];

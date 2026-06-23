@@ -16,7 +16,7 @@
 
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { createSupabaseAdmin } from "@/lib/supabase-server";
 import { createSearchRequest, deriveTopic } from "@/lib/search-requests";
@@ -47,6 +47,11 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — gate at submit so an over-budget user
+  // doesn't enqueue a worker job that would burn more LLM ₽.
+  const overBudget = await perUserSpendGuard(auth.user.id, auth.tier);
+  if (overBudget) return overBudget;
 
   // Fail fast if the gateway key isn't configured — better to reject before
   // consuming the credit than to let the worker fail and refund.

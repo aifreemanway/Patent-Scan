@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import { assessDescription } from "@/lib/assess-description";
 import { RATE_WINDOW_MS, RATE_MAX } from "@/lib/config";
@@ -22,6 +22,10 @@ export async function POST(req: Request) {
 
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   let body: unknown;
   try {
@@ -53,7 +57,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await assessDescription(description, apiKey);
+    const result = await assessDescription(description, apiKey, undefined, guard.user.id);
     return NextResponse.json({
       sufficient: result.sufficient,
       reason: result.reason,

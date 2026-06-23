@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
-import { spendGuard } from "@/lib/spend-guard";
+import { spendGuard, perUserSpendGuard } from "@/lib/spend-guard";
 import { requireAuth } from "@/lib/auth-quota";
 import {
   TAVILY_URL,
@@ -49,6 +49,10 @@ export async function POST(req: Request) {
 
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
+
+  // Per-user daily spend breaker (СЛОЙ-2) — after requireAuth (needs user.id).
+  const overBudget = await perUserSpendGuard(guard.user.id, guard.tier);
+  if (overBudget) return overBudget;
 
   const apiKey = process.env.TAVILY_API_KEY;
   if (!apiKey) {
