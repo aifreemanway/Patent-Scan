@@ -56,17 +56,36 @@ export async function POST(req: NextRequest) {
   // 1. Turnstile.
   const captcha = await verifyTurnstile(turnstileToken, clientIp(req));
   if (!captcha.ok) {
-    // Surface Cloudflare's verdict server-side so a captcha outage is
-    // diagnosable (key-pair mismatch vs. domain-not-allowed vs. expired token).
+    // Surface the verdict server-side so a captcha outage is diagnosable
+    // (key-pair mismatch vs. domain-not-allowed vs. provider-unreachable).
     // No PII / secret is logged — only the reason and Cloudflare error-codes.
-    console.error("[auth/login] turnstile rejected:", {
+    console.error("[auth/login] turnstile not ok:", {
       reason: captcha.reason,
       codes: captcha.codes,
       hostname: captcha.hostname,
     });
-    const code =
-      captcha.reason === "missing_token" ? "captcha_missing" : "captcha_failed";
-    return fail(code, 400);
+
+    // Fail-OPEN when WE could not reach the verifier (network) or it is
+    // misconfigured (missing_secret). These are infrastructure faults on our
+    // side, NOT a bot signal — blocking here locks out every legit user during
+    // an outage (which is exactly what happened: the VPS could not reach
+    // challenges.cloudflare.com for the ~1-2KB real-token POST). Bots are still
+    // limited by the per-IP magic-link throttle + email validation downstream.
+    // A definitive `rejected` (Cloudflare evaluated the token and said no) and a
+    // `missing_token` (user never solved the widget) stay fail-CLOSED.
+    const failOpen =
+      captcha.reason === "network" || captcha.reason === "missing_secret";
+    if (failOpen) {
+      console.warn(
+        `[auth/login] turnstile fail-open (${captcha.reason}) — proceeding without captcha; verifier unreachable/misconfigured`
+      );
+    } else {
+      const code =
+        captcha.reason === "missing_token"
+          ? "captcha_missing"
+          : "captcha_failed";
+      return fail(code, 400);
+    }
   }
 
   // 2. Email validation.
