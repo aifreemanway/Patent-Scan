@@ -9,6 +9,7 @@ import {
   type NormalizedHit,
   type PatSearchHit,
 } from "@/lib/patsearch-normalize";
+import { validatePatentLinks } from "@/lib/link-validator";
 import {
   PATSEARCH_URL,
   PATSEARCH_TIMEOUT_MS,
@@ -219,7 +220,7 @@ export async function POST(req: Request) {
           { status: 502 }
         );
       }
-      const hits = normalizeHits(result.data.hits ?? []);
+      const hits = await validatePatentLinks(normalizeHits(result.data.hits ?? []));
       return NextResponse.json({
         hits,
         total: result.data.total ?? hits.length,
@@ -277,7 +278,7 @@ export async function POST(req: Request) {
       seen.add(id);
       combined.push(h);
     }
-    const hits = normalizeHits(combined);
+    const hits = await validatePatentLinks(normalizeHits(combined));
 
     return NextResponse.json({
       hits,

@@ -40,6 +40,18 @@ export function countryFromId(id: string): string {
   return m ? m[1] : "";
 }
 
+/**
+ * Google Patents SEARCH url for a raw PatSearch id (strips the trailing
+ * `_YYYYMMDD`). A search url ALWAYS returns HTTP 200 and resolves the patent
+ * number to its document, so it's the safe fallback when a direct `/patent/{pn}`
+ * link can't be built or has been found dead (anti-fab: no 404s shown).
+ */
+export function googleSearchUrl(id: string): string {
+  return `https://patents.google.com/?q=${encodeURIComponent(
+    id.replace(/_\d+$/, "")
+  )}`;
+}
+
 export function buildUrl(id: string, country: string): string {
   if (!id) return "";
   if (country === "RU") {
@@ -72,7 +84,7 @@ export function buildUrl(id: string, country: string): string {
   // Fallback for ids that don't match the {CC}{digits}{kind?} shape: search.
   const m = /^([A-Z]{2})0*(\d+)([A-Z]\d?)?/.exec(id);
   if (!m) {
-    return `https://patents.google.com/?q=${encodeURIComponent(id.replace(/_\d+$/, ""))}`;
+    return googleSearchUrl(id);
   }
   const [, cc, numCore, kind] = m;
   // KZ — Kazakhstan NATIONAL patents. Google Patents does NOT index them
