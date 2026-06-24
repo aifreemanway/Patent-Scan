@@ -21,6 +21,16 @@ dotenvConfig({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.local",
 });
 
+// Disable Node's Happy-Eyeballs dual-stack auto-selection: the prod VPS has
+// broken outbound IPv6 that black-holes, so fetch/undici stalls on the dead AAAA
+// family (ETIMEDOUT ~500ms) for dual-stack hosts. The web app does this via
+// instrumentation.ts; the worker is a separate process, so set it here too —
+// before any module opens a connection. See src/instrumentation.ts for context.
+import net from "node:net";
+import dns from "node:dns";
+net.setDefaultAutoSelectFamily(false);
+dns.setDefaultResultOrder("ipv4first");
+
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   stage1,
