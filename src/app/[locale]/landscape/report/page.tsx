@@ -769,16 +769,22 @@ function LandscapeReportInner() {
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {c.patentIds.map((id) => {
                         const h = hitById.get(id);
-                        return (
+                        const chip =
+                          "rounded-md bg-white px-2 py-0.5 font-mono text-xs text-slate-700 ring-1 ring-slate-200";
+                        return h?.url ? (
                           <a
                             key={id}
-                            href={h?.url || "#"}
+                            href={h.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-md bg-white px-2 py-0.5 font-mono text-xs text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                            className={`${chip} hover:bg-slate-100`}
                           >
                             {id}
                           </a>
+                        ) : (
+                          <span key={id} className={chip}>
+                            {id}
+                          </span>
                         );
                       })}
                     </div>
@@ -856,16 +862,22 @@ function LandscapeReportInner() {
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {tr.patentIds.map((id) => {
                           const h = hitById.get(id);
-                          return (
+                          const chip =
+                            "rounded-md bg-white px-2 py-0.5 font-mono text-xs text-slate-700 ring-1 ring-slate-200";
+                          return h?.url ? (
                             <a
                               key={id}
-                              href={h?.url || "#"}
+                              href={h.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="rounded-md bg-white px-2 py-0.5 font-mono text-xs text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                              className={`${chip} hover:bg-slate-100`}
                             >
                               {id}
                             </a>
+                          ) : (
+                            <span key={id} className={chip}>
+                              {id}
+                            </span>
                           );
                         })}
                       </div>
