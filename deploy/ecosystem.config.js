@@ -13,7 +13,16 @@ module.exports = {
       // Run the Next binary directly so pm2 manages the node process (clean signals).
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3000",
-      env: { NODE_ENV: "production", PORT: "3000" },
+      // ipv4first: this VPS has broken outbound IPv6 (curl -6 → instant no-route),
+      // and Node's fetch/undici will otherwise attempt the AAAA address of
+      // dual-stack hosts (e.g. challenges.cloudflare.com for Turnstile siteverify),
+      // causing intermittent "network" failures that surfaced as login captcha
+      // errors. Forcing IPv4 removes the broken family from DNS resolution.
+      env: {
+        NODE_ENV: "production",
+        PORT: "3000",
+        NODE_OPTIONS: "--dns-result-order=ipv4first",
+      },
       // Beta scale + I/O-bound long requests → one instance handles concurrency on
       // the async event loop (the wait is external APIs, not CPU). Bump to cluster
       // only if CPU-bound later.
@@ -32,7 +41,8 @@ module.exports = {
       cwd: "/var/www/patent-scan",
       script: "node_modules/.bin/tsx",
       args: "src/worker/literature-review/index.ts",
-      env: { NODE_ENV: "production" },
+      // Same broken-IPv6 mitigation as the web app (see note above).
+      env: { NODE_ENV: "production", NODE_OPTIONS: "--dns-result-order=ipv4first" },
       // fork mode (not cluster) — pm2 cluster_mode is for HTTP servers and
       // silently swallows stdout for non-server scripts (worker shows online
       // but logs stay empty). Fork mode pipes console.* normally.
