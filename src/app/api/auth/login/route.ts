@@ -56,6 +56,14 @@ export async function POST(req: NextRequest) {
   // 1. Turnstile.
   const captcha = await verifyTurnstile(turnstileToken, clientIp(req));
   if (!captcha.ok) {
+    // Surface Cloudflare's verdict server-side so a captcha outage is
+    // diagnosable (key-pair mismatch vs. domain-not-allowed vs. expired token).
+    // No PII / secret is logged — only the reason and Cloudflare error-codes.
+    console.error("[auth/login] turnstile rejected:", {
+      reason: captcha.reason,
+      codes: captcha.codes,
+      hostname: captcha.hostname,
+    });
     const code =
       captcha.reason === "missing_token" ? "captcha_missing" : "captcha_failed";
     return fail(code, 400);

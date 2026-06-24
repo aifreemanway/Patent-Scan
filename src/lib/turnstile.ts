@@ -5,7 +5,12 @@ import { TURNSTILE_VERIFY_URL } from "./config";
 
 export type TurnstileResult =
   | { ok: true }
-  | { ok: false; reason: "missing_token" | "missing_secret" | "network" | "rejected"; codes?: string[] };
+  | {
+      ok: false;
+      reason: "missing_token" | "missing_secret" | "network" | "rejected";
+      codes?: string[];
+      hostname?: string;
+    };
 
 /** Verify a Turnstile token against Cloudflare siteverify. */
 let warnedMissingSecret = false;
@@ -45,9 +50,15 @@ export async function verifyTurnstile(
   if (!resp.ok) return { ok: false, reason: "network" };
 
   const data = (await resp.json().catch(() => null)) as
-    | { success: boolean; "error-codes"?: string[] }
+    | { success: boolean; "error-codes"?: string[]; hostname?: string }
     | null;
   if (!data) return { ok: false, reason: "network" };
-  if (!data.success) return { ok: false, reason: "rejected", codes: data["error-codes"] };
+  if (!data.success)
+    return {
+      ok: false,
+      reason: "rejected",
+      codes: data["error-codes"],
+      hostname: data.hostname,
+    };
   return { ok: true };
 }
