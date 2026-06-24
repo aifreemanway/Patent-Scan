@@ -48,6 +48,7 @@ import {
 } from "./email";
 import type { LitReviewParams } from "@/lib/literature-review/types";
 import { reactivationTick } from "../reactivation/tick";
+import { expirySubscriptionsTick } from "../billing/expiry-tick";
 import {
   deepAnalysisTick,
   requeueStuckDeepAnalysis,
@@ -482,6 +483,18 @@ async function main(): Promise<void> {
   // immediately instead of waiting an hour.
   reactivationTick(admin).catch((e) => {
     console.error("[worker] reactivation startup error", e);
+  });
+
+  // Billing expiry tick — hourly, independent. Downgrades subscriptions whose
+  // paid period lapsed (the one cron required even for manual billing). Cheap
+  // (one RPC), idempotent, no busy guard needed (1h ≫ run time).
+  setInterval(() => {
+    expirySubscriptionsTick(admin).catch((e) => {
+      console.error("[worker] billing expiry interval error", e);
+    });
+  }, REACTIVATION_TICK_INTERVAL_MS);
+  expirySubscriptionsTick(admin).catch((e) => {
+    console.error("[worker] billing expiry startup error", e);
   });
 
   // Keep alive
