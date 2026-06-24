@@ -111,7 +111,7 @@ export default function SearchPage() {
       // window-first plus diagnostics.ranked (the LLM-ranked window size). Both
       // versions share the same result shape; v2 additionally feeds the Expert
       // Field-View. v1 stays the verdict-only prod path until the recall-v2 hold lifts.
-      const { hits, total, diagnostics } = useV2
+      const { hits: retrievedHits, total, diagnostics } = useV2
         ? await retrieveNoveltyPriorArtV2({
             description: description.trim(),
             answers: cleanAnswers,
@@ -122,10 +122,35 @@ export default function SearchPage() {
             answers: cleanAnswers,
           });
 
+      let hits = retrievedHits;
+
       if (hits.length === 0) {
         sessionStorage.setItem("ps_report", JSON.stringify({ empty: true }));
         router.push("/report");
         return;
+      }
+
+      // Anti-fab (source-link-invariant п.4 / BUG-AC-2): validate the FINAL
+      // displayed set's source links and drop/downgrade any dead one before it
+      // reaches the report. Done on the ranked set (not the wide net) via the
+      // server validator. Best-effort: on ANY failure we keep the original links
+      // — link-checking must never break a search.
+      try {
+        const vr = await fetch("/api/validate-links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hits: hits.map((h) => ({ id: h.id, country: h.country, url: h.url })),
+          }),
+        });
+        if (vr.ok) {
+          const data = (await vr.json()) as { hits?: { url?: string }[] };
+          if (Array.isArray(data.hits) && data.hits.length === hits.length) {
+            hits = hits.map((h, i) => ({ ...h, url: data.hits![i]?.url ?? h.url }));
+          }
+        }
+      } catch {
+        // keep original hits — never break the search on a link-check failure
       }
 
       setActivePhrases(null);
