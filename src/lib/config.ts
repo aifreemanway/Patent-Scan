@@ -18,6 +18,13 @@
 export const RETRIEVAL_V2_ENABLED =
   process.env.NEXT_PUBLIC_RETRIEVAL_V2_ENABLED === "1";
 
+/** Billing master switch (BILLING_LIVE pattern). When OFF (default) the billing
+ *  routes refuse to create or charge real payments — the whole subscription
+ *  stack (migration 0010 + lib/yookassa.ts) stays dormant. Flip to "1" only
+ *  after PR-C (billing UI) + offer/return policy + Vsevolod's launch sign-off.
+ *  Server-side only (NOT NEXT_PUBLIC) — never trust the client for this. */
+export const BILLING_LIVE = process.env.BILLING_LIVE === "1";
+
 // --- Gemini (routed via the Timeweb gateway — see lib/gemini.ts) ---
 
 /** Gemini model id on the Timeweb gateway. Override via env `GEMINI_MODEL`
@@ -217,3 +224,23 @@ export function dailyBudgetRubForTier(tier: string | null | undefined): number {
   }
   return LLM_DAILY_BUDGET_RUB_BY_TIER.free;
 }
+
+// --- Subscription / one-report prices (₽/мес and ₽) — ⚠ PROVISIONAL ---
+//
+// Provisional figures (cofounder 2026-06-02, design §D2): FINAL only after НОРД
+// feedback + first pilots + explicit Vsevolod sign-off. Named constants ONLY —
+// do NOT surface in UI copy (PR-C) until finalized. Enterprise = custom
+// (договор, no fixed price). The billing checkout (PR-B) reads these to compute
+// the charge amount; keep them the single source for prices.
+export const SUBSCRIPTION_PRICE_RUB: Record<string, number> = {
+  starter: 5000,
+  team: 20000,
+  team_plus: 35000,
+};
+// One-report á-la-carte (non-subscribers / over-quota). Patent search is NOT
+// sold one-off — it's bundled in Free/subscription.
+export const ONE_REPORT_PRICE_RUB = {
+  screening: 4900,
+  screening_iul: 9900,
+  litreview: 12900,
+} as const;
