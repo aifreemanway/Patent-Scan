@@ -13,15 +13,20 @@ module.exports = {
       // Run the Next binary directly so pm2 manages the node process (clean signals).
       script: "node_modules/next/dist/bin/next",
       args: "start -p 3000",
-      // ipv4first: this VPS has broken outbound IPv6 (curl -6 → instant no-route),
-      // and Node's fetch/undici will otherwise attempt the AAAA address of
-      // dual-stack hosts (e.g. challenges.cloudflare.com for Turnstile siteverify),
-      // causing intermittent "network" failures that surfaced as login captcha
-      // errors. Forcing IPv4 removes the broken family from DNS resolution.
+      // This VPS has broken outbound IPv6 that BLACK-HOLES (silently drops, no
+      // RST). Node 20's fetch/undici defaults to Happy-Eyeballs dual-stack
+      // auto-selection, so it attempts the AAAA address of dual-stack hosts
+      // (e.g. challenges.cloudflare.com for Turnstile siteverify) and stalls on
+      // the dead IPv6 family → ETIMEDOUT (~500ms) → login captcha "network"
+      // failures. `--dns-result-order=ipv4first` alone does NOT fix it (it
+      // reorders DNS but undici still ATTEMPTS IPv6); `--no-network-family-
+      // autoselection` disables Happy-Eyeballs so Node connects single-family to
+      // the first (IPv4) address, exactly like `curl -4` — verified on the box.
       env: {
         NODE_ENV: "production",
         PORT: "3000",
-        NODE_OPTIONS: "--dns-result-order=ipv4first",
+        NODE_OPTIONS:
+          "--dns-result-order=ipv4first --no-network-family-autoselection",
       },
       // Beta scale + I/O-bound long requests → one instance handles concurrency on
       // the async event loop (the wait is external APIs, not CPU). Bump to cluster
@@ -42,7 +47,11 @@ module.exports = {
       script: "node_modules/.bin/tsx",
       args: "src/worker/literature-review/index.ts",
       // Same broken-IPv6 mitigation as the web app (see note above).
-      env: { NODE_ENV: "production", NODE_OPTIONS: "--dns-result-order=ipv4first" },
+      env: {
+        NODE_ENV: "production",
+        NODE_OPTIONS:
+          "--dns-result-order=ipv4first --no-network-family-autoselection",
+      },
       // fork mode (not cluster) — pm2 cluster_mode is for HTTP servers and
       // silently swallows stdout for non-server scripts (worker shows online
       // but logs stay empty). Fork mode pipes console.* normally.
