@@ -887,14 +887,18 @@ function LandscapeReportInner() {
             <ul className="mt-4 space-y-1 text-sm">
               {hits.map((h) => (
                 <li key={h.id} className="flex gap-2">
-                  <a
-                    href={h.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
-                  >
-                    {h.id}
-                  </a>
+                  {h.url ? (
+                    <a
+                      href={h.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-xs text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+                    >
+                      {h.id}
+                    </a>
+                  ) : (
+                    <span className="font-mono text-xs text-slate-900">{h.id}</span>
+                  )}
                   <span className="text-slate-400">·</span>
                   <span className="text-slate-600">{h.year}</span>
                   <span className="text-slate-400">·</span>

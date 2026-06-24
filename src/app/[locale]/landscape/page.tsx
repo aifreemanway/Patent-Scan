@@ -117,7 +117,7 @@ export default function LandscapePage() {
       const searchResults = await Promise.all(searchPromises);
 
       const seen = new Set<string>();
-      const hits: LandscapeHit[] = [];
+      let hits: LandscapeHit[] = [];
       for (const sr of searchResults) {
         for (const h of sr.hits ?? []) {
           if (!h.id || seen.has(h.id)) continue;
@@ -133,6 +133,28 @@ export default function LandscapePage() {
         );
         router.push("/landscape/report");
         return;
+      }
+
+      // Anti-fab (source-link-invariant п.4 / BUG-AC-2): validate the source
+      // links of the deduped patent set before it's synthesized and shown, and
+      // drop/downgrade any dead one. Best-effort: on ANY failure keep the
+      // original links — link-checking must never break a landscape build.
+      try {
+        const vr = await fetch("/api/validate-links", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            hits: hits.map((h) => ({ id: h.id, country: h.country, url: h.url })),
+          }),
+        });
+        if (vr.ok) {
+          const data = (await vr.json()) as { hits?: { url?: string }[] };
+          if (Array.isArray(data.hits) && data.hits.length === hits.length) {
+            hits = hits.map((h, i) => ({ ...h, url: data.hits![i]?.url ?? h.url }));
+          }
+        }
+      } catch {
+        // keep original hits — never break the build on a link-check failure
       }
 
       const totalAcrossQueries = searchResults.reduce(
