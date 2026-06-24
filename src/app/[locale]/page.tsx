@@ -144,7 +144,7 @@ export default async function LandingPage({
               <p className="hero-promise">
                 {t("hero.promiseA")} <span className="em">{t("hero.promiseEm")}</span>{t("hero.promiseB")}
               </p>
-              <TrackedLink href="/search" goal="search_start" className="btn-primary">
+              <TrackedLink href="/new-search" goal="search_start" className="btn-primary">
                 {t("hero.cta")}
                 {ARROW}
               </TrackedLink>
@@ -446,7 +446,7 @@ export default async function LandingPage({
           <div className="pilot">
             <h3>{t("pilot.title")}</h3>
             <p>{t("pilot.sub")}</p>
-            <TrackedLink href="/search" goal="pilot_cta" className="btn-primary">
+            <TrackedLink href="/new-search" goal="pilot_cta" className="btn-primary">
               {t("pilot.cta")}
               {ARROW}
             </TrackedLink>

@@ -86,7 +86,7 @@ export default async function BlogPostPage({
         </div>
         <div className="mt-12 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
           <TrackedLink
-            href="/search"
+            href="/new-search"
             goal="blog_to_search"
             className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >

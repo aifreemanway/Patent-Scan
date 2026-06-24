@@ -33,8 +33,14 @@ export async function GET(
   const prefix = locale === routing.defaultLocale ? "" : `/${locale}`;
   // Reject protocol-relative (`//evil.com`) as defense-in-depth even though
   // the subsequent `${origin}${prefix}${next}` concat would keep it same-origin.
+  // Default post-login destination is the product chooser (/new-search), NOT a
+  // search form: dropping a freshly-signed-in user straight into novelty search
+  // hid the other tools and left them unsure what they were running (user OS,
+  // 2026-06-24). An explicit `next` (e.g. a tool/billing deep link) still wins.
   const safeNext =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/search";
+    next && next.startsWith("/") && !next.startsWith("//")
+      ? next
+      : "/new-search";
   const successUrl = `${origin}${prefix}${safeNext}`;
   const errorUrl = `${origin}${prefix}/login?error=invalid_link`;
 
