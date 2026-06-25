@@ -1080,7 +1080,62 @@
     },
     "billing": {
       "title": "Pricing & subscription",
-      "subtitle": "Choose a plan or order a one-off report."
+      "subtitle": "Choose a plan or order a one-off report.",
+      "returnNotice": "Payment is processing. Your plan will update automatically once the payment is confirmed — usually within a couple of minutes.",
+      "historyTitle": "Payment history",
+      "colDate": "Date",
+      "colItem": "Item",
+      "colAmount": "Amount",
+      "colStatus": "Status"
+    }
+  },
+  "Checkout": {
+    "title": "Checkout — {tier}",
+    "close": "Close",
+    "periodMonth": "Monthly",
+    "periodYear": "Yearly",
+    "yearBadge": "−2 mo",
+    "priceMonth": "{price} / mo",
+    "priceYear": "{price} / yr",
+    "payByInvoice": "Pay by invoice",
+    "payByCard": "Pay by card",
+    "invoiceLead": "We'll issue an invoice to your details.",
+    "nameLabel": "Full name or company",
+    "innLabel": "Company tax ID (INN)",
+    "phoneLabel": "Phone",
+    "emailNote": "The invoice will be sent to your account email.",
+    "invoiceAccessNote": "Plan access opens once the invoice is paid.",
+    "submitInvoice": "Send request",
+    "submitting": "Sending…",
+    "back": "Back",
+    "cardInstant": "access opens immediately",
+    "autoRenewLabel": "Auto-renew",
+    "autoRenewDesc": "At the end of the paid month we'll charge {price} for the next one. We'll warn you 3 days before. You can turn it off anytime in settings, in one click. Without the checkbox it's a one-time payment for one month.",
+    "yearCardOnlyInvoice": "Annual payment is by invoice only (for companies).",
+    "invoiceSuccessTitle": "Invoice request sent",
+    "invoiceSuccessBody": "We'll issue an invoice to the details provided and send it to your account email. Plan access opens once the payment is received.",
+    "errors": {
+      "invalid_format": "Check the fields — name/company is required, INN is 10–12 digits.",
+      "invalid_tier": "This plan is not available for checkout.",
+      "send_failed": "Could not send the request, please retry.",
+      "rate_limited": "Too many attempts. Try again in a few minutes.",
+      "billing_disabled": "Card payment is temporarily unavailable — please use pay by invoice.",
+      "generic": "Something went wrong, please retry."
+    },
+    "manage": {
+      "title": "Your subscription",
+      "currentPlan": "{tier} plan",
+      "renewsOn": "renews {date}",
+      "endsOn": "active until {date}",
+      "cancel": "Cancel subscription",
+      "resume": "Resume",
+      "confirmCancel": "Cancel the subscription? Access stays until the end of the paid period.",
+      "cancelNotice": "Auto-renew is off. Plan access stays until the end of the paid period, then the account moves to Free.",
+      "err": {
+        "no_subscription": "No active subscription found.",
+        "update_failed": "Could not update, please retry.",
+        "generic": "Something went wrong, please retry."
+      }
     }
   },
   "LiteratureReview": {

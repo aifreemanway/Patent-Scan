@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   const guard = await requireAuth();
   if (!guard.ok) return guard.response;
 
-  let body: { tier?: unknown };
+  let body: { tier?: unknown; autoRenew?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +43,12 @@ export async function POST(req: Request) {
   const plan = planFor(typeof body.tier === "string" ? body.tier : "");
   if (!plan) return NextResponse.json({ error: "invalid_tier" }, { status: 400 });
 
+  // Auto-renew (screenshot checkbox). Default OFF — opting INTO recurring card
+  // charges must be explicit (honest default + matches the reference UX «без
+  // галочки платёж разовый, на один месяц»). When on, we save the payment method
+  // for the renewal cron (PR-D); when off, it's a one-time monthly charge.
+  const autoRenew = body.autoRenew === true;
+
   // Public origin behind the nginx TLS proxy (same trick as /api/auth/login).
   const fwdHost = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   const fwdProto = req.headers.get("x-forwarded-proto") ?? "https";
@@ -51,7 +57,9 @@ export async function POST(req: Request) {
 
   const idempotenceKey = randomUUID();
   const email = guard.user.email ?? undefined;
-  const description = `Подписка ${plan.tier} — Патент·Скан`;
+  const description = autoRenew
+    ? `Подписка ${plan.tier} — Патент·Скан`
+    : `Подписка ${plan.tier} (1 мес, разовый) — Патент·Скан`;
 
   try {
     const payment = await createPayment(
@@ -59,7 +67,7 @@ export async function POST(req: Request) {
         amountRub: plan.priceRub,
         description,
         returnUrl,
-        savePaymentMethod: true, // recurring (D1) — saved on first success
+        savePaymentMethod: autoRenew, // save the method only when auto-renew is on
         capture: true,
         metadata: {
           user_id: guard.user.id,
@@ -83,7 +91,7 @@ export async function POST(req: Request) {
       currency: "RUB",
       purpose: plan.purpose,
       period_months: plan.periodMonths,
-      is_recurring: true,
+      is_recurring: autoRenew,
       idempotence_key: idempotenceKey,
       metadata: { tier: plan.tier },
     });

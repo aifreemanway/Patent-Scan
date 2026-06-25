@@ -16,6 +16,7 @@ import {
   formatDate,
   formatDateTime,
 } from "../../ui";
+import { AdminSubscriptionActions } from "../../AdminSubscriptionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -147,12 +148,8 @@ export default async function AdminUserDetailPage({
         )}
       </Card>
 
-      <Card title="Действия">
-        <p className="text-sm text-slate-500">
-          Смена тарифа и активация по счёту (Фаза 2) — пока вручную через Supabase
-          по согласованию. Денежные write-действия включатся после мёрджа
-          биллинг-миграции 0010 и появления реального счёта (ТЗ §0.1 / §5).
-        </p>
+      <Card title="Подписка — активация / деактивация">
+        <AdminSubscriptionActions userId={profile.id} currentTier={profile.tier} />
       </Card>
     </div>
   );

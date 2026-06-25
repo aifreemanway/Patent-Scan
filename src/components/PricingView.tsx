@@ -11,6 +11,7 @@
 
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { SubscribeButton } from "@/components/BillingCheckout";
 import {
   SUBSCRIPTION_TIERS,
   ONE_OFF_PRODUCTS,
@@ -23,6 +24,13 @@ import {
   type SubscriptionTier,
   type OneOffProduct,
 } from "@/lib/pricing";
+
+/** Self-serve tiers that open the checkout modal (starter/team/team_plus). */
+const CHECKOUT_TIERS = new Set<SubscriptionTier["id"]>([
+  "starter",
+  "team",
+  "team_plus",
+]);
 
 /** Where a CTA points in PRE-LAUNCH (billing not live). Paid plans/reports route
  *  to the existing заявка flow; nothing leads to a checkout that does not exist. */
@@ -48,10 +56,21 @@ function ctaHref(kind: CtaKind): string {
 export async function PricingView({
   locale,
   currentTier,
+  interactive = false,
+  billingLive = false,
+  autoOpenTier,
+  autoOpenPeriod = "month",
 }: {
   locale: string;
   /** When rendered inside ЛК, the user's active tier — highlighted. */
   currentTier?: SubscriptionTier["id"];
+  /** ЛК-only: paid tier CTAs open the checkout modal instead of the заявка link. */
+  interactive?: boolean;
+  /** Authoritative (env-driven) billing flag — controls the «картой» button. */
+  billingLive?: boolean;
+  /** Deep-link: open this tier's modal on mount (from /pricing ?plan=…). */
+  autoOpenTier?: SubscriptionTier["id"];
+  autoOpenPeriod?: "month" | "year";
 }) {
   const t = await getTranslations("Pricing");
 
@@ -87,6 +106,10 @@ export async function PricingView({
               tier={tier}
               locale={locale}
               current={currentTier === tier.id}
+              interactive={interactive}
+              billingLive={billingLive}
+              autoOpen={interactive && autoOpenTier === tier.id}
+              autoOpenPeriod={autoOpenPeriod}
               t={t}
             />
           ))}
@@ -215,11 +238,19 @@ function TierCard({
   tier,
   locale,
   current,
+  interactive,
+  billingLive,
+  autoOpen,
+  autoOpenPeriod,
   t,
 }: {
   tier: SubscriptionTier;
   locale: string;
   current: boolean;
+  interactive: boolean;
+  billingLive: boolean;
+  autoOpen: boolean;
+  autoOpenPeriod: "month" | "year";
   t: Awaited<ReturnType<typeof getTranslations<"Pricing">>>;
 }) {
   const priceLabel =
@@ -275,6 +306,15 @@ function TierCard({
           <span className="inline-flex w-full justify-center rounded-md border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-800">
             {t("yourPlan")}
           </span>
+        ) : interactive && CHECKOUT_TIERS.has(tier.id) ? (
+          <SubscribeButton
+            tier={tier.id as "starter" | "team" | "team_plus"}
+            billingLive={billingLive}
+            featured={tier.featured}
+            label={t("ctaConnect")}
+            autoOpen={autoOpen}
+            autoOpenPeriod={autoOpenPeriod}
+          />
         ) : (
           <Link
             href={ctaHref(tier.cta)}

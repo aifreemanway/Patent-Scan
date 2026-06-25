@@ -225,22 +225,30 @@ export function dailyBudgetRubForTier(tier: string | null | undefined): number {
   return LLM_DAILY_BUDGET_RUB_BY_TIER.free;
 }
 
-// --- Subscription / one-report prices (₽/мес and ₽) — ⚠ PROVISIONAL ---
+// --- Subscription / one-report prices (₽/мес and ₽) — CANON-final ---
 //
-// Provisional figures (cofounder 2026-06-02, design §D2): FINAL only after НОРД
-// feedback + first pilots + explicit Vsevolod sign-off. Named constants ONLY —
-// do NOT surface in UI copy (PR-C) until finalized. Enterprise = custom
-// (договор, no fixed price). The billing checkout (PR-B) reads these to compute
-// the charge amount; keep them the single source for prices.
+// ⚠ SINGLE SOURCE for the amount the billing checkout (PR-B) actually charges
+// (planFor → /api/billing/checkout amount + 54-ФЗ receipt). These MUST equal the
+// витринные prices in lib/pricing.ts (CANON §4 / SIGN-OFF), or a customer is
+// charged a number different from what /pricing showed — a real-money defect.
+//
+// Sign-off: Vsevolod 2026-06-02 (launch-baseline) + «го на цены» 2026-06-25.
+// CANON: Antepatent/calibration-reference/CANON-products-IA-pricing-2026-06-02.md §4.
+//   Starter 5 900 / Team 24 900 / Team Plus 39 900 (₽/мес). Enterprise = custom.
+// Annual cadence (CANON §4b) is billed by-invoice OUTSIDE ЮKassa (manual), so the
+// self-serve checkout here is monthly-only — no annual constants needed.
 export const SUBSCRIPTION_PRICE_RUB: Record<string, number> = {
-  starter: 5000,
-  team: 20000,
-  team_plus: 35000,
+  starter: 5900,
+  team: 24900,
+  team_plus: 39900,
 };
-// One-report á-la-carte (non-subscribers / over-quota). Patent search is NOT
-// sold one-off — it's bundled in Free/subscription.
+// One-off á-la-carte reports (Free / non-subscribers / over-cap) — CANON §4
+// «today-track» anchor prices. NOTE: not yet wired to a checkout path (one-off
+// purchase flow is not built); kept canon-aligned so the future flow reads the
+// correct numbers and never re-introduces a stale price. Patent search itself is
+// NOT sold one-off — it's bundled in Free/subscription.
 export const ONE_REPORT_PRICE_RUB = {
-  screening: 4900,
-  screening_iul: 9900,
-  litreview: 12900,
+  deep: 6900,
+  landscape: 9900,
+  screening: 12900,
 } as const;

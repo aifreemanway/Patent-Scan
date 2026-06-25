@@ -104,6 +104,12 @@ drop policy if exists subscriptions_self on public.subscriptions;
 create policy subscriptions_self on public.subscriptions
   for select using (auth.uid() = user_id);
 
+-- Explicit writes for service_role (checkout inserts the pending payment; the
+-- webhook/admin upsert subscriptions). BYPASSRLS alone is not a table grant, so
+-- grant directly — and independently of which role created the tables.
+grant select, insert, update on public.payments to service_role;
+grant select, insert, update on public.subscriptions to service_role;
+
 -- ── apply_successful_payment — RISK-CRITICAL idempotent application ───────────
 -- Applies a SUCCEEDED ЮKassa payment to the user's tier EXACTLY ONCE. The
 -- payment row is locked; if it is already 'succeeded' the call is a no-op (a

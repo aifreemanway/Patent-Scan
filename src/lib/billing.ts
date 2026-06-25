@@ -1,10 +1,11 @@
 // Billing domain helpers — plans, purpose↔tier mapping, ЮKassa IP allowlist,
 // 54-ФЗ receipt. Design: specs/subscription-billing-design-2026-06-02.md.
-// Prices come from config (single source, PROVISIONAL).
+// Prices come from config (single source, CANON-final — must equal lib/pricing.ts).
 
 import { SUBSCRIPTION_PRICE_RUB } from "./config";
 
 export type BillingTier = "starter" | "team" | "team_plus";
+export type BillingPeriod = "month" | "year";
 
 export type Plan = {
   tier: BillingTier;
@@ -16,18 +17,46 @@ export type Plan = {
 
 const SELF_SERVE_TIERS: readonly BillingTier[] = ["starter", "team", "team_plus"];
 
+export function isBillingTier(v: unknown): v is BillingTier {
+  return typeof v === "string" && SELF_SERVE_TIERS.includes(v as BillingTier);
+}
+
 /** Resolve a requested tier to a self-serve monthly plan, or null if invalid.
- *  Enterprise is custom (договор) — never self-checkout. */
+ *  Enterprise is custom (договор) — never self-checkout. Card checkout (ЮKassa)
+ *  is monthly-only; annual is invoice-only (CANON §4b), see invoicePlan(). */
 export function planFor(tier: string): Plan | null {
-  if (!SELF_SERVE_TIERS.includes(tier as BillingTier)) return null;
+  if (!isBillingTier(tier)) return null;
   const price = SUBSCRIPTION_PRICE_RUB[tier];
   if (typeof price !== "number" || price <= 0) return null;
   return {
-    tier: tier as BillingTier,
+    tier,
     purpose: `subscription_${tier}`,
     priceRub: price,
     periodMonths: 1,
   };
+}
+
+/** Pay-by-invoice plan (B2B счёт): monthly or annual. CANON §4b — annual is
+ *  «2 месяца бесплатно» = pay for 10 months (×10), and is billed by invoice
+ *  OUTSIDE ЮKassa (manual issuance + admin activation). No 54-ФЗ receipt here —
+ *  the closing document is the УПД, generated outside the system. */
+export function invoicePlan(
+  tier: string,
+  period: BillingPeriod
+): { tier: BillingTier; periodMonths: number; amountRub: number; period: BillingPeriod } | null {
+  if (!isBillingTier(tier)) return null;
+  const monthly = SUBSCRIPTION_PRICE_RUB[tier];
+  if (typeof monthly !== "number" || monthly <= 0) return null;
+  if (period === "year") {
+    return { tier, periodMonths: 12, amountRub: monthly * 10, period };
+  }
+  return { tier, periodMonths: 1, amountRub: monthly, period };
+}
+
+/** Display label for a tier (for emails / admin). Витринные имена — в i18n; this
+ *  is a plain server-side label for internal notifications only. */
+export function tierLabel(tier: BillingTier): string {
+  return tier === "starter" ? "Starter" : tier === "team" ? "Team" : "Team Plus";
 }
 
 /** Reverse map: a succeeded payment's metadata.purpose → tier + period for the
