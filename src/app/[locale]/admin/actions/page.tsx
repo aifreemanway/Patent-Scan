@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const ACTION_LABEL: Record<string, string> = {
   tier_switch: "Смена тарифа",
   invoice_activation: "Активация по счёту",
+  subscription_deactivation: "Деактивация подписки",
   grant_credit: "Выдача кредитов",
 };
 
