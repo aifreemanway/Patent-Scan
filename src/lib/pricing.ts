@@ -57,9 +57,41 @@ export const PRICE_TEAM = 24900;
 export const PRICE_TEAM_PLUS = 39900;
 // Enterprise = custom (по запросу) — no numeric price.
 
-// Institutional credit packs (CANON / ТЗ §3.4 footer line)
-export const PRICE_PACK_SCREENING_10 = 119000;
-export const PRICE_PACK_DEEP_20 = 109000;
+// Subscriber overage — extra reports beyond the included quota (CANON §4a, ba +
+// cofounder sign-off). −50% off the one-off anchor, PAID TIERS ONLY (Free pays
+// full price — else the anchor dies). A monthly pool cap per tier; over the cap →
+// full price / upgrade nudge. Поиск-overage is NOT −50% — it's a fixed pack (a
+// metric hook, not a premium deliverable).
+//
+// ⚠ CONFIG-ONLY today: there is no overage/one-off CHECKOUT path yet, so nothing
+// charges these. They live here so the billed path (when built) reads correct
+// numbers — the discount math on a billed path is RISK-critical and must be done
+// in that PR, not inferred from markup. Credit-packs were REMOVED (CANON §4a:
+// dominated by the −50% overage, broke the clean «included + per-unit» model).
+export const OVERAGE_REPORT_PRICE_RUB = {
+  deep: 3450, // 6900 − 50%
+  landscape: 4950, // 9900 − 50%
+  screening: 6450, // 12900 − 50%
+} as const;
+
+/** Monthly pooled cap of discounted extra reports (Deep+Landscape+Screening),
+ *  by paid tier. Over the cap → full one-off price or upgrade. */
+export const OVERAGE_REPORT_CAP = {
+  starter: 3,
+  team: 8,
+  team_plus: 15,
+} as const;
+
+/** Поиск-overage = fixed pack of 10 searches (NOT −50%), paid-only. Per-tier the
+ *  number of packs/mo is capped so a user can't stack up to the next tier's base
+ *  (anti-arbitrage); the search ceiling is < the next tier's monthly base. */
+export const SEARCH_PACK_SIZE = 10;
+export const SEARCH_PACK_PRICE_RUB = 1990;
+export const SEARCH_PACK_CAP = {
+  starter: 1, // ceiling 20 searches/mo
+  team: 2, // ceiling 70
+  team_plus: 3, // ceiling 130
+} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -218,12 +250,6 @@ export const ADDONS: readonly Addon[] = [
 export const VISIBLE_ADDONS: readonly Addon[] = ADDONS_ENABLED
   ? ADDONS.filter((a) => a.enabled)
   : [];
-
-/** Institutional credit packs (ТЗ §3.4). Rendered as a single contact line. */
-export const CREDIT_PACKS = {
-  screening10: PRICE_PACK_SCREENING_10,
-  deep20: PRICE_PACK_DEEP_20,
-} as const;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers

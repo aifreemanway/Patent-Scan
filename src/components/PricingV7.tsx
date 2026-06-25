@@ -100,12 +100,8 @@ export function PricingV7() {
     <>
       {/* NAV rendered by page.tsx (SiteNav) outside this component */}
 
-      {/* ── Preliminary-pricing banner — REQUIRED (ТЗ §5) ────────────── */}
-      <div className="container">
-        <div className="pricing-prelim-banner" style={{ marginTop: 24 }}>
-          {t("preliminaryBanner")}
-        </div>
-      </div>
+      {/* «Предварительные тарифы» banner removed 2026-06-25 (Vsevolod) — prices
+          are presented as final for the launch/email campaign. */}
 
       {/* ── Hero ────────────────────────────────────────────────────── */}
       <div className="pricing-hero">

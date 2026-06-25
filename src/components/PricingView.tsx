@@ -16,7 +16,6 @@ import {
   SUBSCRIPTION_TIERS,
   ONE_OFF_PRODUCTS,
   VISIBLE_ADDONS,
-  CREDIT_PACKS,
   BILLING_LIVE,
   formatRub,
   oneOffPrice,
@@ -76,10 +75,7 @@ export async function PricingView({
 
   return (
     <div className="space-y-16">
-      {/* Preliminary-pricing banner — REQUIRED (ТЗ §5) */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        {t("preliminaryBanner")}
-      </div>
+      {/* «Предварительные тарифы» banner removed 2026-06-25 (Vsevolod). */}
 
       {/* Hero / positioning (honest pivot B — no "замена института/поверенного") */}
       <header className="space-y-3 text-center">
@@ -136,20 +132,7 @@ export async function PricingView({
             <ProductCard key={p.id} product={p} locale={locale} t={t} />
           ))}
         </div>
-
-        {/* Institutional credit packs (contact line) */}
-        <p className="mt-8 text-center text-sm text-slate-600">
-          {t("oneOff.packs", {
-            screening10: formatRub(CREDIT_PACKS.screening10, locale),
-            deep20: formatRub(CREDIT_PACKS.deep20, locale),
-          })}{" "}
-          <Link
-            href={CONTACT_HREF}
-            className="font-medium text-blue-600 hover:text-blue-700"
-          >
-            {t("oneOff.packsCta")} →
-          </Link>
-        </p>
+        {/* Credit-packs line removed (CANON §4a — dominated by −50% overage). */}
       </section>
 
       {/* ── Reserved addons (rendered ONLY when ADDONS_ENABLED + per-addon on;
