@@ -1111,7 +1111,8 @@
     "cardInstant": "access opens immediately",
     "autoRenewLabel": "Auto-renew",
     "autoRenewDesc": "At the end of the paid month we'll charge {price} for the next one. We'll warn you 3 days before. You can turn it off anytime in settings, in one click. Without the checkbox it's a one-time payment for one month.",
-    "yearCardOnlyInvoice": "Annual payment is by invoice only (for companies).",
+    "yearCardOnlyInvoice": "Annual payment is by invoice only (for companies). On early service termination — refund pro-rata to unused days:",
+    "prorataLink": "refund terms",
     "invoiceSuccessTitle": "Invoice request sent",
     "invoiceSuccessBody": "We'll issue an invoice to the details provided and send it to your account email. Plan access opens once the payment is received.",
     "errors": {

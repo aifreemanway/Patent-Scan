@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import {
   PRICE_STARTER,
   PRICE_TEAM,
@@ -287,8 +288,16 @@ export function CheckoutModal({
                     )}
                   </>
                 )}
-                {billingLive && period === "year" && (
-                  <p className="text-center text-xs text-slate-500">{t("yearCardOnlyInvoice")}</p>
+                {period === "year" && (
+                  <p className="text-center text-xs text-slate-500">
+                    {t("yearCardOnlyInvoice")}{" "}
+                    <Link
+                      href="/terms"
+                      className="underline hover:text-slate-700"
+                    >
+                      {t("prorataLink")}
+                    </Link>
+                  </p>
                 )}
               </div>
             )}
