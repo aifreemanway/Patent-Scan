@@ -33,8 +33,13 @@ eq("403 → abstract_only", classifyAccess({ kind: "status", status: 403 }), "ab
 eq("451 (paywall) → abstract_only", classifyAccess({ kind: "status", status: 451 }), "abstract_only");
 eq("404 → unreachable", classifyAccess({ kind: "status", status: 404 }), "unreachable");
 eq("410 → unreachable", classifyAccess({ kind: "status", status: 410 }), "unreachable");
-eq("500 → unreachable", classifyAccess({ kind: "status", status: 500 }), "unreachable");
-eq("network/timeout → unreachable", classifyAccess({ kind: "network" }), "unreachable");
+// FIX A (smoke 2026-06-28): transient/server signals are NOT proof of death →
+// "unknown" so the orchestrator preserves the prior (harvest) accessLevel.
+eq("429 (rate-limit) → unknown", classifyAccess({ kind: "status", status: 429 }), "unknown");
+eq("408 (timeout) → unknown", classifyAccess({ kind: "status", status: 408 }), "unknown");
+eq("500 → unknown", classifyAccess({ kind: "status", status: 500 }), "unknown");
+eq("503 → unknown", classifyAccess({ kind: "status", status: 503 }), "unknown");
+eq("network/timeout → unknown", classifyAccess({ kind: "network" }), "unknown");
 
 // helper to build a minimal source
 function src(over: Partial<LitReviewSource>): LitReviewSource {
@@ -141,6 +146,78 @@ async function run() {
     const out = await stage7VerifySources(sources, { probe, reroll });
     eq("kept (no crash)", out.sources.length, 1);
     eq("marked unreachable", out.sources[0].accessLevel, "unreachable");
+  }
+
+  // ── 8. FIX B — patent-provenance sources are NEVER probed (no false-dead) ────
+  console.log("\nstage7 — FIX B (skip patents):");
+  {
+    let probeCalls = 0;
+    const sources = [
+      // ФИПС patent that would 429/timeout under burst → must be left untouched.
+      src({
+        ref: 1,
+        url: "https://new.fips.ru/registers-doc-view/fips_servlet?DB=RUPAT&DocNumber=2799985",
+        provenance: "patsearch",
+        accessLevel: "open",
+        doi: null,
+      }),
+      // Google Patents (also patsearch ingress) — untouched.
+      src({ ref: 2, url: "https://patents.google.com/patent/US1234567A", provenance: "patsearch", accessLevel: "open" }),
+    ];
+    const probe = async (): Promise<ProbeOutcome> => {
+      probeCalls++;
+      return { kind: "status", status: 429 }; // ФИПС-style throttle — must never reach here
+    };
+    const reroll = async () => "https://should.not/swap";
+    const out = await stage7VerifySources(sources, { probe, reroll });
+    eq("patents NOT probed (0 probe calls)", probeCalls, 0);
+    eq("ФИПС accessLevel preserved (open)", out.sources[0].accessLevel, "open");
+    eq("ФИПС url untouched", out.sources[0].url, sources[0].url);
+    eq("Google Patents preserved (open)", out.sources[1].accessLevel, "open");
+    eq("no false unreachable", out.unreachableCount, 0);
+    eq("no false transient", out.transientUnknownCount, 0);
+    eq("reroll never fired for patents", out.rerolledCount, 0);
+  }
+
+  // ── 9. FIX A-orchestrator — transient (429 / network) PRESERVES prior level ──
+  console.log("\nstage7 — FIX A (transient preserves prior):");
+  {
+    const sources = [
+      // scholarly primary, harvest already said "open" — a 429 blip must NOT kill it.
+      src({ ref: 1, url: "https://doi.org/10.x/rate", doi: "10.x/rate", accessLevel: "open", reachedAt: "2026-01-01T00:00:00.000Z" }),
+      // network timeout on a real paper — preserve, don't mark dead.
+      src({ ref: 2, url: "https://doi.org/10.x/slow", doi: "10.x/slow", accessLevel: "abstract_only" }),
+    ];
+    const probe = async (url: string): Promise<ProbeOutcome> =>
+      url.endsWith("/rate") ? { kind: "status", status: 429 } : { kind: "network" };
+    let rerollCalls = 0;
+    const reroll = async () => {
+      rerollCalls++;
+      return "https://oa/should-not-swap.pdf";
+    };
+    const out = await stage7VerifySources(sources, { probe, reroll });
+    eq("429 source stays open (prior kept)", out.sources[0].accessLevel, "open");
+    eq("429 reachedAt untouched", out.sources[0].reachedAt, "2026-01-01T00:00:00.000Z");
+    eq("network source stays abstract_only", out.sources[1].accessLevel, "abstract_only");
+    eq("transient NOT counted unreachable", out.unreachableCount, 0);
+    eq("transientUnknownCount = 2", out.transientUnknownCount, 2);
+    eq("reroll NOT fired on transient", rerollCalls, 0);
+  }
+
+  // ── 10. genuine 404 scholarly → unreachable + reroll attempt (regression) ────
+  console.log("\nstage7 — genuine 404 still dead + reroll:");
+  {
+    let rerollCalls = 0;
+    const sources = [src({ ref: 1, url: "https://doi.org/10.x/gone", doi: "10.x/gone", accessLevel: "open" })];
+    const probe = async (): Promise<ProbeOutcome> => ({ kind: "status", status: 404 });
+    const reroll = async () => {
+      rerollCalls++;
+      return null;
+    };
+    const out = await stage7VerifySources(sources, { probe, reroll });
+    eq("404 → unreachable", out.sources[0].accessLevel, "unreachable");
+    eq("definitelyDead counted", out.unreachableCount, 1);
+    eq("reroll WAS attempted on genuine 404", rerollCalls, 1);
   }
 
   console.log(`\nverify-doi: ${passed} passed, ${failed} failed`);

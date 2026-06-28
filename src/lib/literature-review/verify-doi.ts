@@ -22,23 +22,31 @@ export type ProbeOutcome =
   | { kind: "network" };                 // timeout / DNS / connection reset / abort
 
 /**
- * Map a probe outcome to an accessLevel.
- *   - 2xx                → "open"
- *   - 401 / 403 / 451    → "abstract_only" (paywall / auth-gated)
- *   - 404 / 410          → "unreachable"
- *   - other 4xx/5xx      → "unreachable" (the link does not serve the doc now)
- *   - network/timeout    → "unreachable"
- * Deterministic, no network. Never returns "unknown" — a probe that ran always
- * yields a concrete signal; "unknown" is reserved for "no probe was made".
+ * Map a probe outcome to an accessLevel. Conservative + anti-fab: only a
+ * DEFINITIVE signal marks a source dead or paywalled; transient/ambiguous
+ * signals return "unknown" so the orchestrator preserves the prior (harvest)
+ * accessLevel instead of falsely downgrading a real source.
+ *   - 2xx                       → "open"
+ *   - 401 / 403 / 451           → "abstract_only" (paywall / auth-gated)
+ *   - 404 / 410                 → "unreachable" (definitively gone)
+ *   - 408 / 425 / 429 / 5xx     → "unknown" (rate-limit / server blip — NOT death)
+ *   - network / timeout / abort → "unknown" (a 7s abort can't be distinguished
+ *                                 from a slow-but-live host — never proof of death)
+ *   - any other status          → "unknown"
+ * Deterministic, no network. Smoke 2026-06-28: collapsing 429/timeout into
+ * "unreachable" stamped 51% of ФИПС patents (rate-limited under burst) as dead —
+ * exactly the anti-fab violation §4 exists to prevent.
  */
 export function classifyAccess(outcome: ProbeOutcome): LitReviewAccessLevel {
-  if (outcome.kind === "network") return "unreachable";
+  // Transient: a timeout/DNS/reset/abort is not proof the document is gone.
+  if (outcome.kind === "network") return "unknown";
   const s = outcome.status;
   if (s >= 200 && s < 300) return "open";
   if (s === 401 || s === 403 || s === 451) return "abstract_only";
-  // 404/410 explicitly, plus any other non-2xx (incl. 5xx) → the link does not
-  // resolve to the document at verify time. Honest, conservative.
-  return "unreachable";
+  if (s === 404 || s === 410) return "unreachable"; // definitively gone
+  // 408/425/429 (rate-limit / too-early) and 5xx (server) and any other status →
+  // ambiguous/transient. Return "unknown" → orchestrator keeps the prior level.
+  return "unknown";
 }
 
 // ── Single-URL probe (GET, hard timeout, fail-open) ────────────────────────

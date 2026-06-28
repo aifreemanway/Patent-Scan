@@ -617,6 +617,20 @@ export async function stage3to8(
 //
 // `probe` / `reroll` are injectable for tests (mock the network). Production
 // uses the real network fns from verify-doi.ts.
+/** Patent-host guard for §4 (Fix B, smoke 2026-06-28): ФИПС / Google Patents /
+ *  Espacenet links are verified by harvest (PatSearch existence) + checked by
+ *  lib/link-validator (ФИПС Content-Length), NEVER by stage7's status-only probe
+ *  — ФИПС returns 200 for missing docs and 429-throttles bursts (false "dead"). */
+function isPatentHost(url: string): boolean {
+  const h = hostFromUrl(url)?.toLowerCase() ?? "";
+  return (
+    h.includes("fips.ru") ||
+    h.includes("patents.google") ||
+    h.includes("espacenet") ||
+    h.includes("rospatent")
+  );
+}
+
 export async function stage7VerifySources(
   sources: LitReviewSource[],
   opts: {
@@ -625,8 +639,14 @@ export async function stage7VerifySources(
   } = {}
 ): Promise<{
   sources: LitReviewSource[];
+  /** Definitively dead links (404/410 only) — the ONLY count surfaced to the
+   *  customer caveat. Transient noise must never pollute it. */
   unreachableCount: number;
   rerolledCount: number;
+  /** Transient/ambiguous probes (429/5xx/408/network) — prior accessLevel kept. */
+  transientUnknownCount: number;
+  /** Paywalled (401/403/451) → abstract_only. */
+  abstractOnlyCount: number;
 }> {
   const probe = opts.probe ?? ((url: string) => probeUrl(url));
   const reroll = opts.reroll ?? ((doi: string) => rerollOaUrl(doi));
@@ -642,11 +662,30 @@ export async function stage7VerifySources(
   // Cap parallelism — public APIs / DOI resolvers rate-limit on bursts and we
   // must not DDoS them. 10-at-a-time is conservative (was the prior HEAD cap).
   const batchSize = 10;
+  // Global wall-clock budget (fail-open). Once exceeded, the remaining sources
+  // are kept UNCHANGED so a slow-publisher day can never balloon a paid review's
+  // time-to-PDF — bounds worst-case latency deterministically. Env-tunable.
+  const deadlineMs = Number(process.env.LITREVIEW_VERIFY_DEADLINE_MS) || 45_000;
+  const startedAt = Date.now();
+
   const verified: LitReviewSource[] = [];
-  let unreachableCount = 0;
+  let unreachableCount = 0; // 404/410 only — definitely dead
   let rerolledCount = 0;
+  let transientUnknownCount = 0; // 429/5xx/408/network — prior kept
+  let abstractOnlyCount = 0;
+  const failByHost: Record<string, number> = {}; // creeping-block ops signal
 
   for (let i = 0; i < sources.length; i += batchSize) {
+    // Global deadline (fail-open): keep the rest UNCHANGED, stop probing.
+    if (verifyDoiEnabled && Date.now() - startedAt > deadlineMs) {
+      verified.push(...sources.slice(i));
+      console.warn("[litreview/stage7] verify deadline hit — remaining kept unchanged", {
+        probed: i,
+        kept: sources.length - i,
+        deadlineMs,
+      });
+      break;
+    }
     const batch = sources.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (s): Promise<LitReviewSource> => {
@@ -659,11 +698,32 @@ export async function stage7VerifySources(
               reachedAt: (await isUrlReachable(s.url)) ? new Date().toISOString() : null,
             };
           }
+
+          // FIX B: do NOT probe patents — existence is API-verified at harvest
+          // and patent links are validated by lib/link-validator. ФИПС's
+          // burst-throttling 429s would otherwise falsely stamp real RU patents
+          // "dead" (smoke: 51% ФИПС-fail under batch-10). `patsearch` is the sole
+          // patent ingress; the host guard catches a web hit on a patent host.
+          if (s.provenance === "patsearch" || isPatentHost(s.url)) {
+            return s;
+          }
+
           const outcome = await probe(s.url);
           const access = classifyAccess(outcome);
           const reached = outcome.kind === "status" && outcome.status >= 200 && outcome.status < 300;
 
-          // Step 2 — reroll an unreachable DOI to an OA mirror of the SAME work.
+          // FIX A-orchestrator: a transient/ambiguous probe (429/5xx/408/network
+          // → "unknown") is NOT proof of death. Preserve the prior harvest
+          // accessLevel + reachedAt exactly (true no-op) — never downgrade a
+          // verified-open primary on a rate-limit/timeout blip.
+          if (access === "unknown") {
+            transientUnknownCount++;
+            const h = hostFromUrl(s.url) ?? "unknown";
+            failByHost[h] = (failByHost[h] ?? 0) + 1;
+            return s;
+          }
+
+          // Step 2 — reroll a definitively-dead (404/410) DOI to an OA mirror.
           if (access === "unreachable" && s.doi) {
             try {
               const oaUrl = await reroll(s.doi);
@@ -684,6 +744,8 @@ export async function stage7VerifySources(
 
           if (access === "unreachable") {
             unreachableCount++;
+            const h = hostFromUrl(s.url) ?? "unknown";
+            failByHost[h] = (failByHost[h] ?? 0) + 1;
             // KEEP the source (anti-fab: unreachable ≠ non-existent), mark it.
             return { ...s, accessLevel: "unreachable", reachedAt: null };
           }
@@ -692,6 +754,7 @@ export async function stage7VerifySources(
           // downgrade an existing better signal: the classifier here only ran
           // because a real probe returned, so this IS the ground truth at
           // verify time.
+          if (access === "abstract_only") abstractOnlyCount++;
           return {
             ...s,
             accessLevel: access,
@@ -712,11 +775,21 @@ export async function stage7VerifySources(
 
   console.info("[litreview/stage7-verify]", {
     total: sources.length,
-    unreachableCount,
+    deadLinks: unreachableCount, // 404/410 only — the customer-caveat number
     rerolledCount,
+    transientUnknown: transientUnknownCount,
+    abstractOnly: abstractOnlyCount,
+    failByHost,
+    elapsedMs: Date.now() - startedAt,
   });
 
-  return { sources: verified, unreachableCount, rerolledCount };
+  return {
+    sources: verified,
+    unreachableCount,
+    rerolledCount,
+    transientUnknownCount,
+    abstractOnlyCount,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
