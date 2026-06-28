@@ -18,11 +18,13 @@ import { createSupabaseAdmin } from "@/lib/supabase-server";
  * (canSendMarketing compares strictly). A cosmetic fix (typo) does NOT bump it.
  * Keep in sync with the i18n `Auth.marketingConsent` copy it labels.
  */
-export const MARKETING_CONSENT_VERSION = "mkt-2026-06-23";
-// History: mkt-2026-06-11 (initial) → mkt-2026-06-23 (added operator name to the
-// consent text per ap-poverenny / 152-ФЗ ст.9 ч.4 п.2). The bump means consents
-// on the older version are not auto-covered (canSendMarketing is fail-CLOSED) —
-// the few pre-bump consenters re-opt-in via the account toggle.
+export const MARKETING_CONSENT_VERSION = "mkt-2026-06-25";
+// History: mkt-2026-06-11 (initial) → mkt-2026-06-23 (added operator name per
+// ap-poverenny / 152-ФЗ ст.9 ч.4 п.2) → mkt-2026-06-25 (value-based wording +
+// operator-reg caption, ap-marketing copy, ap-poverenny PASS 28.06). Each bump
+// means consents on the older version are not auto-covered (canSendMarketing is
+// fail-CLOSED) — pre-bump consenters re-opt-in via the account toggle. Pre-launch
+// (no marketing sent yet), so the re-consent set is empty/negligible.
 
 export type ConsentSource =
   | "registration"

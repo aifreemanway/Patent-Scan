@@ -268,6 +268,17 @@ export function LoginForm({
           />
           <span>{t("marketingConsent")}</span>
         </label>
+        <p
+          className="consent-caption"
+          style={{
+            margin: "4px 0 0 26px",
+            fontSize: "12px",
+            lineHeight: 1.45,
+            color: "var(--text-mute, #64748b)",
+          }}
+        >
+          {t("marketingConsentCaption")}
+        </p>
 
         <p className="auth-foot">{t("loginNote")}</p>
       </form>
