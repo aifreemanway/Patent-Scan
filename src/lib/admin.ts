@@ -14,42 +14,13 @@
 import { notFound } from "next/navigation";
 import { requireUser, UnauthorizedError } from "./supabase-server";
 import type { User } from "@supabase/supabase-js";
+import { isAdminEmail } from "./admin-emails";
 
-// Gmail ignores dots in the local part and any "+tag" suffix, and
-// gmail.com == googlemail.com — so vsevolod.kobzar@gmail.com,
-// vsevolodkobzar@gmail.com and vsevolodkobzar+x@gmail.com are ONE inbox.
-// Canonicalize both sides before comparing, or an exact-string match 404s a
-// legit admin over a cosmetic dot (real bug 2026-06-10: registered login was
-// vsevolodkobzar@gmail.com, allowlist had the dotted form).
-function canonicalEmail(email: string): string {
-  const e = email.trim().toLowerCase();
-  const at = e.lastIndexOf("@");
-  if (at < 0) return e;
-  let local = e.slice(0, at);
-  const domain = e.slice(at + 1);
-  if (domain === "gmail.com" || domain === "googlemail.com") {
-    local = local.split("+")[0].replace(/\./g, "");
-    return `${local}@gmail.com`;
-  }
-  return e;
-}
-
-/** Parsed ADMIN_EMAILS as a canonicalized set. Defaults to the founder's email
- *  (spec §1 «стартовое значение = vsevolod.kobzar@gmail.com») so the gate is safe
- *  even before the env is set. */
-function adminEmails(): Set<string> {
-  return new Set(
-    (process.env.ADMIN_EMAILS ?? "vsevolod.kobzar@gmail.com")
-      .split(",")
-      .map((s) => canonicalEmail(s))
-      .filter(Boolean)
-  );
-}
-
-export function isAdminEmail(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return adminEmails().has(canonicalEmail(email));
-}
+// The pure allowlist check (gmail canonicalisation + ADMIN_EMAILS membership)
+// lives in admin-emails.ts — no server imports — so light callers like the
+// auth/login admin throttle can use it without pulling next/navigation +
+// supabase-server. Re-export so existing `@/lib/admin` importers keep one entry.
+export { isAdminEmail };
 
 /**
  * Resolve the current user IFF they are an allowlisted admin, else null.

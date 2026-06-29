@@ -170,6 +170,12 @@ export const SIGNUP_IP_LIMIT = {
   max: 3,
 } as const;
 
+/** Raised per-IP magic-link cap for allowlisted ADMIN_EMAILS (founder ops): the
+ *  default 3/24h locked the admin out during legit multi-attempt logins (incident
+ *  2026-06-29). Still bounded anti-flood — worst case this many links/24h to the
+ *  admin's own inbox, each Turnstile-gated. Env-overridable for tuning. */
+export const SIGNUP_IP_ADMIN_MAX = Number(process.env.SIGNUP_IP_ADMIN_MAX) || 30;
+
 // --- Per-user quotas (month, by tier) ---
 //
 // Reference only — enforcement is in Postgres `quota_limit()` /

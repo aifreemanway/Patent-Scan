@@ -12,7 +12,8 @@ import { createSupabaseServer } from "@/lib/supabase-server";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { validateEmail } from "@/lib/email-validator";
-import { SIGNUP_IP_LIMIT } from "@/lib/config";
+import { SIGNUP_IP_LIMIT, SIGNUP_IP_ADMIN_MAX } from "@/lib/config";
+import { isAdminEmail } from "@/lib/admin-emails";
 import { MARKETING_CONSENT_VERSION } from "@/lib/marketing-consent";
 import { routing } from "@/i18n/routing";
 
@@ -92,10 +93,17 @@ export async function POST(req: NextRequest) {
   const validation = await validateEmail(email);
   if (!validation.ok) return fail(validation.reason, 400);
 
-  // 3. Per-IP throttle.
+  // 3. Per-IP throttle. Allowlisted admin emails (founder ops) get a raised cap
+  //    so a handful of legit login retries never lock them out; everyone else
+  //    stays at 3/24h. Separate keyPrefix → admin requests use their own bucket
+  //    (a non-admin on the same IP is unaffected, and vice-versa). The email is
+  //    already format/MX-validated above; isAdminEmail re-canonicalizes (gmail
+  //    dots/+tags) so a raised cap only ever applies to the real admin inbox.
+  const isAdmin = isAdminEmail(validation.normalized);
   const throttled = await rateLimit(req, {
-    ...SIGNUP_IP_LIMIT,
-    keyPrefix: "signup-ip",
+    windowMs: SIGNUP_IP_LIMIT.windowMs,
+    max: isAdmin ? SIGNUP_IP_ADMIN_MAX : SIGNUP_IP_LIMIT.max,
+    keyPrefix: isAdmin ? "signup-ip-admin" : "signup-ip",
   });
   if (throttled) return throttled;
 
