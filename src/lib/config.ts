@@ -187,10 +187,16 @@ export const SIGNUP_IP_ADMIN_MAX = Number(process.env.SIGNUP_IP_ADMIN_MAX) || 30
 // build (charged at /api/landscape/synthesize). `questions` is unquota'd.
 // Deep Analysis is a separate transactional counter, not part of these tiers.
 
+// Numbers mirror CANON §4a (canonical-naming-IA-CTA-2026-06-02.md rows 69-73),
+// enforced in Postgres quota_limit() (migration 0015). Landscape is a paid-tier
+// product: Free/Starter get 0 (upsell to Team), Team 2, TeamPlus 5, Enterprise
+// unlimited. Screening (literature_review) and Deep are NOT here — Screening is
+// a TeamPlus yearly credit, Deep a separate free-trial/billing counter.
 export const QUOTA_LIMITS = {
-  free: { search: 3, landscape: 3, questions: Infinity },
-  starter: { search: 20, landscape: 10, questions: Infinity },
-  team: { search: 60, landscape: 30, questions: Infinity },
+  free: { search: 3, landscape: 0, questions: Infinity },
+  starter: { search: 10, landscape: 0, questions: Infinity },
+  team: { search: 50, landscape: 2, questions: Infinity },
+  team_plus: { search: 100, landscape: 5, questions: Infinity },
   enterprise: { search: Infinity, landscape: Infinity, questions: Infinity },
 } as const;
 
