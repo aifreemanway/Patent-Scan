@@ -16,6 +16,7 @@
     "poc:literature-review-mab": "tsx scripts/poc-gates/literature-review-mab-biosimilars.ts",
     "poc:industrial-usage-nord": "tsx scripts/poc-gates/industrial-usage-nord.ts",
     "render:sample-pdf": "tsx scripts/render-sample-pdf.tsx",
+    "test:email-validator": "tsx scripts/test-email-validator.ts",
     "test:source-tier": "tsx scripts/test-source-tier.ts",
     "test:verify-doi": "tsx scripts/test-verify-doi.ts"
   },
