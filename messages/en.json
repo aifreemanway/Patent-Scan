@@ -912,7 +912,7 @@
   "Auth": {
     "login": {
       "title": "Sign in to <em>Patent-Scan</em>",
-      "subtitle": "Enter your email — we'll send a sign-in link. No password needed. First time here — your account is created automatically.",
+      "subtitle": "Enter your email — we'll send a sign-in code. No password needed. First time here? An account is created automatically.",
       "emailLabel": "Email",
       "emailPlaceholder": "you@example.com",
       "consent": "I accept the <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>, and consent to the processing of my personal data.",
@@ -920,13 +920,13 @@
       "marketingConsent": "Send me patent case breakdowns and practical tips on protecting intellectual property. You can unsubscribe anytime.",
       "marketingConsentCaption": "Personal data operator: sole proprietor V.Yu. Kobzar, reg. No. 77-26-552292. See the Privacy Policy for details.",
       "captchaLoading": "Verifying you're human…",
-      "submit": "Send sign-in link",
+      "submit": "Send me a code",
       "submitting": "Sending…",
       "successTitle": "Check your email",
-      "successBody": "We sent a sign-in link to {email}. Open it in the same browser — you'll be signed in automatically.",
-      "loginNote": "The link is valid for 15 minutes. Didn't receive it — check your Spam folder or try again in a minute.",
+      "successBody": "We sent a code to {email}. Enter it here — or open the link in the message.",
+      "loginNote": "The code and the link are valid for 15 minutes. No email? Check spam, or try again in a minute.",
       "errors": {
-        "generic": "Couldn't send the link. Please try again.",
+        "generic": "Could not send the code. Please try again.",
         "invalid_format": "Invalid email format.",
         "disposable_email": "This address belongs to a disposable email service. Sign-in works only through a link we email you, so the mailbox has to be a lasting one — please use your work or personal email.",
         "no_mx_record": "This domain can't receive mail. Please check the address.",
@@ -934,8 +934,16 @@
         "captcha_failed": "Bot check failed. Please refresh the page.",
         "otp_send_failed": "Email service temporarily unavailable. Try again in a minute.",
         "rate_limited": "Too many attempts from this IP. Try again tomorrow.",
-        "disposable_email_hint": "Think your address was blocked by mistake? Write to support@patent-scan.com and we'll review it."
-      }
+        "disposable_email_hint": "Think your address was blocked by mistake? Write to support@patent-scan.com and we'll review it.",
+        "invalid_code": "That code is wrong or expired. Check the digits or request a new one.",
+        "code_rate_limited": "Too many attempts. Please wait a few minutes."
+      },
+      "codeLabel": "Code from the email",
+      "codePlaceholder": "000000",
+      "codeSubmit": "Sign in",
+      "codeSubmitting": "Checking…",
+      "codeHelp": "A six-digit code, valid for 15 minutes. No email? Check your spam folder.",
+      "codeResend": "Send it again"
     },
     "callback": {
       "verifying": "Completing sign-in…",

@@ -99,6 +99,12 @@ export function LoginForm({
   const [status, setStatus] = useState<Status>("idle");
   const [errorCode, setErrorCode] = useState<ErrorCode | "generic" | null>(null);
   const [consentError, setConsentError] = useState(false);
+  // Code step. Shown after the email is accepted: the letter carries both a
+  // 6-digit code and a link, and the code is the half that survives a mail
+  // provider prefetching (and thereby spending) the link.
+  const [code, setCode] = useState("");
+  const [codeStatus, setCodeStatus] = useState<Status>("idle");
+  const [codeError, setCodeError] = useState<"invalid_code" | "code_rate_limited" | "generic" | null>(null);
   const widgetRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
   const rendered = useRef(false);
@@ -178,11 +184,111 @@ export function LoginForm({
     }
   }
 
+  async function onSubmitCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (codeStatus === "submitting") return;
+    const digits = code.replace(/\D/g, "");
+    if (digits.length !== 6) {
+      setCodeError("invalid_code");
+      return;
+    }
+    setCodeStatus("submitting");
+    setCodeError(null);
+    try {
+      const resp = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code: digits, next: postLoginNext }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json().catch(() => null)) as { next?: string } | null;
+        // Full navigation, not router.push: the session cookies were just set on
+        // this response and every guarded page is server-rendered.
+        window.location.assign(data?.next ?? "/new-search");
+        return;
+      }
+      setCodeError(resp.status === 429 ? "code_rate_limited" : "invalid_code");
+      setCodeStatus("error");
+    } catch {
+      setCodeError("generic");
+      setCodeStatus("error");
+    }
+  }
+
   if (status === "success") {
     return (
-      <div className="auth-card">
-        <h1 className="auth-h1">{t("successTitle")}</h1>
-        <p className="auth-sub">{t("successBody", { email })}</p>
+      <div className="auth-card-wrap">
+        <form onSubmit={onSubmitCode} className="auth-card">
+          <h1 className="auth-h1">{t("successTitle")}</h1>
+          <p className="auth-sub">{t("successBody", { email })}</p>
+
+          <div className="field">
+            <label htmlFor="code">{t("codeLabel")}</label>
+            <input
+              id="code"
+              type="text"
+              // `one-time-code` lets iOS/Android offer the code straight from
+              // the notification, which is the whole point of typing one.
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              autoFocus
+              required
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/\D/g, "").slice(0, 6));
+                if (codeError) setCodeError(null);
+              }}
+              placeholder={t("codePlaceholder")}
+              style={{
+                fontSize: "24px",
+                letterSpacing: "8px",
+                textAlign: "center",
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              }}
+            />
+          </div>
+
+          {codeError && <p className="auth-error">{t(`errors.${codeError}`)}</p>}
+
+          <button
+            type="submit"
+            disabled={codeStatus === "submitting" || code.length !== 6}
+            className="btn-submit"
+          >
+            {codeStatus === "submitting" ? t("codeSubmitting") : t("codeSubmit")}
+          </button>
+
+          <p className="auth-foot">{t("codeHelp")}</p>
+
+          <button
+            type="button"
+            className="auth-link-btn"
+            onClick={() => {
+              // Back to the email step for a fresh send. Turnstile has to be
+              // re-rendered — its token was consumed by the first request.
+              setStatus("idle");
+              setCode("");
+              setCodeError(null);
+              setToken(null);
+              rendered.current = false;
+              widgetIdRef.current = null;
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              marginTop: "10px",
+              color: "#2563EB",
+              fontSize: "13px",
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            {t("codeResend")}
+          </button>
+        </form>
       </div>
     );
   }
