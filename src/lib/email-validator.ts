@@ -47,6 +47,54 @@ const SEEDED_DISPOSABLE_DOMAINS = [
   "emailondeck.com",
 ];
 
+/**
+ * Providers that must NEVER be refused as disposable, whatever any list says.
+ *
+ * This is a safety net, not a gate. An allowlist as the DOOR policy was
+ * considered and rejected on 2026-08-25: in the 1000-company cold-outreach base
+ * 697 addresses (69.7%) sit on 644 distinct CORPORATE domains, so admitting only
+ * the big mail providers would turn away seven tenths of the audience the
+ * campaign is aimed at — and that tail cannot be enumerated in advance. What an
+ * allowlist IS good for is bounding the blast radius of our own blocklist: a bad
+ * entry, ours or upstream's, can never take out gmail / mail.ru / yandex.
+ */
+const MAJOR_PROVIDERS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "mail.ru",
+  "bk.ru",
+  "list.ru",
+  "inbox.ru",
+  "internet.ru",
+  "yandex.ru",
+  "yandex.com",
+  "ya.ru",
+  "rambler.ru",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "me.com",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+]);
+
+/** Zero-width and bidi characters. They have no legitimate place in an address,
+ *  and a trailing U+200B was enough to walk straight past the blocklist. */
+const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
+
+/**
+ * Strip what a domain must never carry: invisible characters, and the trailing
+ * dot of an absolute FQDN. `fommie.online.` resolves to the very same mailbox as
+ * `fommie.online` (verified — same route1/2/3.mx.cloudflare.net), so without
+ * this the gate is one keystroke away from being bypassed. Non-ASCII is left
+ * alone on purpose: `.рф` domains are legitimate here.
+ */
+function sanitizeDomain(domain: string): string {
+  return domain.replace(INVISIBLE_RE, "").replace(/\.+$/, "").trim();
+}
+
 function parseDomainList(raw: string | undefined): string[] {
   if (!raw) return [];
   return raw
@@ -91,8 +139,9 @@ function blockingEnabled(): boolean {
 
 /** True if `domain` is a known throwaway-inbox domain (allowlist wins). */
 export function isDisposableDomain(domain: string): boolean {
-  const d = domain.trim().toLowerCase();
+  const d = sanitizeDomain(domain.toLowerCase());
   if (!d) return false;
+  if (MAJOR_PROVIDERS.has(d)) return false;
   if (allowlisted().has(d)) return false;
   return disposableSet.has(d) || blockedExtra().has(d);
 }
@@ -113,8 +162,8 @@ export function normalizeEmail(email: string): string {
   const lowered = email.trim().toLowerCase();
   const at = lowered.indexOf("@");
   if (at < 0) return lowered;
-  const local = lowered.slice(0, at).split("+")[0];
-  const domain = lowered.slice(at + 1);
+  const local = lowered.slice(0, at).split("+")[0].replace(INVISIBLE_RE, "");
+  const domain = sanitizeDomain(lowered.slice(at + 1));
   if (domain === "gmail.com" || domain === "googlemail.com") {
     return `${local.replace(/\./g, "")}@gmail.com`;
   }
@@ -141,6 +190,11 @@ export async function validateEmail(email: string): Promise<EmailValidation> {
   const at = normalized.indexOf("@");
   const domain = normalized.slice(at + 1);
   if (!domain) return { ok: false, reason: "invalid_format" };
+  // `normalized` is already sanitised, so the blocklist match, the MX lookup and
+  // the address handed to signInWithOtp all see the SAME domain. Before this,
+  // `a@fommie.online.` walked past the gate and — worse, and older than the
+  // disposable work — `user@gmail.com.` minted a SECOND auth user off one real
+  // mailbox, resetting the Deep-trial. Found by ap-qa on PR #125.
   if (blockingEnabled() && isDisposableDomain(domain)) {
     return { ok: false, reason: "disposable_email" };
   }
@@ -157,7 +211,9 @@ export async function validateEmail(email: string): Promise<EmailValidation> {
     // of outage (the blackholed-IPv6 incident took logins down for everyone),
     // so transient resolver failures now fail OPEN and are logged instead.
     const code = (err as NodeJS.ErrnoException)?.code;
-    if (code === "ENOTFOUND" || code === "ENODATA") {
+    // EBADNAME joins the definitive set (ap-qa, PR #125): the resolver is not
+    // failing, it is telling us the name itself is malformed ("a..b", "x_y.com").
+    if (code === "ENOTFOUND" || code === "ENODATA" || code === "EBADNAME") {
       return { ok: false, reason: "no_mx_record" };
     }
     console.warn(

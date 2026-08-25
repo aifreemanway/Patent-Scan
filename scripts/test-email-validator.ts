@@ -90,6 +90,30 @@ async function main() {
   delete process.env.DISPOSABLE_BLOCK_ENABLED;
   check("…and blocking is back ON by default", await reasonFor("a@mailinator.com"), "disposable_email");
 
+  // ap-qa, PR #125. A trailing dot makes an absolute FQDN that resolves to the
+  // SAME mailbox, and a zero-width char is invisible in any UI — both walked
+  // straight past the gate. The gmail case is the worse half and predates the
+  // disposable work: it minted a second auth user off one real inbox, handing
+  // out a fresh Deep-trial.
+  console.log("\n— domain sanitisation (trailing dot / invisible chars) —");
+  const ZW = String.fromCharCode(0x200b);
+  const { normalizeEmail: norm } = await import("../src/lib/email-validator");
+  check("trailing dot cannot bypass", await reasonFor("a@fommie.online."), "disposable_email");
+  check("several trailing dots cannot bypass", await reasonFor("a@fommie.online.."), "disposable_email");
+  check("zero-width suffix cannot bypass", await reasonFor("a@fommie.online" + ZW), "disposable_email");
+  check("dedup: trailing dot collapses", norm("user@gmail.com."), "user@gmail.com");
+  check("dedup: zero-width collapses", norm("user@mail.ru" + ZW), "user@mail.ru");
+
+  // Answers 'should we just allowlist the big providers?' (Vsevolod, 25.08).
+  // Not as a door — 69.7% of the 1000-company outreach base is on 644 distinct
+  // corporate domains — but as a floor under our own blocklist.
+  console.log("\n— major providers can never be blocked by a bad list entry —");
+  process.env.DISPOSABLE_DOMAINS_EXTRA = "gmail.com,mail.ru,yandex.ru";
+  for (const d of ["gmail.com", "mail.ru", "yandex.ru"]) {
+    check(`${d} survives a bad blocklist entry`, await reasonFor(`a@${d}`), "ok");
+  }
+  delete process.env.DISPOSABLE_DOMAINS_EXTRA;
+
   console.log("\n— normalization —");
   const { normalizeEmail } = await import("../src/lib/email-validator");
   check("gmail dots+tag collapse", normalizeEmail("Vse.volod+x@googlemail.com"), "vsevolod@gmail.com");
@@ -124,6 +148,12 @@ async function main() {
     throw e;
   };
   check("definitive ENOTFOUND still blocks", await reasonFor("a@mail.ru"), "no_mx_record");
+  (dns as { resolveMx: unknown }).resolveMx = async () => {
+    const e = new Error("simulated malformed name") as NodeJS.ErrnoException;
+    e.code = "EBADNAME";
+    throw e;
+  };
+  check("EBADNAME is definitive, not transient", await reasonFor("a@mail.ru"), "no_mx_record");
   (dns as { resolveMx: unknown }).resolveMx = realResolveMx;
 
   console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed\n`);
