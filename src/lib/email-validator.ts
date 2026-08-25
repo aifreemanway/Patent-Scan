@@ -33,6 +33,18 @@ const SEEDED_DISPOSABLE_DOMAINS = [
   "myerly.com",
   "whoopza.org",
   "whoopza.store",
+  // Well-known throwaway services the npm package still misses (checked against
+  // 1.0.62, 2026-08-25). Deliberately NOT seeded here: alias relays such as
+  // SimpleLogin, AnonAddy, DuckDuckGo Email and iCloud Hide My Email. They also
+  // mint unlimited addresses, but they mint them for ONE real person — and that
+  // person is our audience (engineers, R&D). Blocking them costs paying
+  // customers; email simply is not a reliable identity, and the ₽ ceilings
+  // (per-IP magic links, per-user spend guard, global breaker) are what bound
+  // the damage.
+  "tempmail.com",
+  "mail.tm",
+  "minuteinbox.com",
+  "emailondeck.com",
 ];
 
 function parseDomainList(raw: string | undefined): string[] {

@@ -57,6 +57,18 @@ async function main() {
   console.log("\n— npm blocklist still enforced —");
   check("mailinator.com blocked", await reasonFor("a@mailinator.com"), "disposable_email");
 
+  console.log("\n— well-known services the npm package misses —");
+  for (const d of ["tempmail.com", "mail.tm", "minuteinbox.com", "emailondeck.com"]) {
+    check(`${d} blocked`, await reasonFor(`a@${d}`), "disposable_email");
+  }
+
+  // Alias relays must keep working: one real person, many addresses.
+  // Blocking them would cost paying customers — see email-validator.ts.
+  console.log("\n— alias relays stay allowed (real people, not throwaways) —");
+  for (const d of ["simplelogin.io", "anonaddy.com", "duck.com", "icloud.com"]) {
+    check(`${d} accepted`, await reasonFor(`a@${d}`), "ok");
+  }
+
   console.log("\n— env override: add a domain without a deploy —");
   process.env.DISPOSABLE_DOMAINS_EXTRA = "brandnew-temp.example, @another-temp.example";
   check(
