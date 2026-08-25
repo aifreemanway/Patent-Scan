@@ -98,11 +98,38 @@ async function main() {
   console.log("\n— domain sanitisation (trailing dot / invisible chars) —");
   const ZW = String.fromCharCode(0x200b);
   const { normalizeEmail: norm } = await import("../src/lib/email-validator");
-  check("trailing dot cannot bypass", await reasonFor("a@fommie.online."), "disposable_email");
-  check("several trailing dots cannot bypass", await reasonFor("a@fommie.online.."), "disposable_email");
-  check("zero-width suffix cannot bypass", await reasonFor("a@fommie.online" + ZW), "disposable_email");
+  // Every spelling below resolves to the SAME mailbox (checked with a live
+  // dns.resolveMx on each: identical route1/2/3.mx.cloudflare.net), so any one
+  // of them getting through is a full bypass. The hand-written character list
+  // this replaced caught only the first three — ap-qa found the rest.
+  const VECTORS: [string, string][] = [
+    ["trailing dot", "fommie.online."],
+    ["two trailing dots", "fommie.online.."],
+    ["U+200B tail", "fommie.online" + ZW],
+    ["U+00AD tail", "fommie.online" + String.fromCharCode(0x00ad)],
+    ["U+00AD mid", "fom" + String.fromCharCode(0x00ad) + "mie.online"],
+    ["U+180E", "fommie.online" + String.fromCharCode(0x180e)],
+    ["U+034F", "fommie" + String.fromCharCode(0x034f) + ".online"],
+    ["U+3164 hangul filler", "fommie.online" + String.fromCharCode(0x3164)],
+    ["uppercase + dot", "FOMMIE.ONLINE."],
+  ];
+  for (const [label, domain] of VECTORS) {
+    check(`${label} cannot bypass`, await reasonFor(`a@${domain}`), "disposable_email");
+  }
   check("dedup: trailing dot collapses", norm("user@gmail.com."), "user@gmail.com");
   check("dedup: zero-width collapses", norm("user@mail.ru" + ZW), "user@mail.ru");
+  // The half that matters beyond throwaway inboxes: one real gmail mailbox must
+  // never be able to present itself as several auth users.
+  for (const d of ["gmail.com.", "GMAIL.COM.", "gm" + String.fromCharCode(0x00ad) + "ail.com", "gmail.com" + ZW]) {
+    check(`dedup: ${JSON.stringify(d)} is one gmail`, norm(`user@${d}`), "user@gmail.com");
+  }
+
+  // IDNA canonicalisation must not punycode a Cyrillic domain on its way to
+  // signInWithOtp, and must not refuse a real .рф client.
+  console.log("\n— .рф domains survive canonicalisation —");
+  check("президент.рф stays Cyrillic", norm("a@президент.рф"), "a@президент.рф");
+  check("президент.рф accepted", await reasonFor("a@президент.рф"), "ok");
+  check("налог.рф accepted", await reasonFor("a@налог.рф"), "ok");
 
   // Answers 'should we just allowlist the big providers?' (Vsevolod, 25.08).
   // Not as a door — 69.7% of the 1000-company outreach base is on 644 distinct

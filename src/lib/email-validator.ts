@@ -4,6 +4,7 @@
 
 import disposableDomains from "disposable-email-domains";
 import { promises as dns } from "dns";
+import { domainToASCII, domainToUnicode } from "node:url";
 
 const disposableSet = new Set<string>(disposableDomains as string[]);
 
@@ -80,19 +81,31 @@ const MAJOR_PROVIDERS = new Set([
   "yahoo.com",
 ]);
 
-/** Zero-width and bidi characters. They have no legitimate place in an address,
- *  and a trailing U+200B was enough to walk straight past the blocklist. */
-const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
+/** Characters with no business inside an address. Unicode's own
+ *  Default_Ignorable set, not a hand-kept list — a hand-kept list is how the
+ *  first version of this missed U+00AD, U+034F, U+180E and U+3164 (ap-qa). */
+const IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/gu;
 
 /**
- * Strip what a domain must never carry: invisible characters, and the trailing
- * dot of an absolute FQDN. `fommie.online.` resolves to the very same mailbox as
- * `fommie.online` (verified — same route1/2/3.mx.cloudflare.net), so without
- * this the gate is one keystroke away from being bypassed. Non-ASCII is left
- * alone on purpose: `.рф` domains are legitimate here.
+ * Canonical domain: exactly what DNS will resolve, so the blocklist, the MX
+ * lookup and the address handed to Supabase can never disagree.
+ *
+ * Done through IDNA/UTS-46 (`domainToASCII` → `domainToUnicode`) rather than by
+ * stripping characters ourselves. UTS-46 already discards the ignorable ones and
+ * folds the alternative separators (U+3002 。, U+FF0E ．, U+FF61 ｡) to a plain
+ * dot — which is why `fommie.online` reached by eleven different spellings all
+ * resolved to the same mailbox while our blocklist saw eleven different strings.
+ * Verified against every one of them: same route1/2/3.mx.cloudflare.net.
+ *
+ * Round-tripping back to Unicode keeps `.рф` domains readable, so punycode never
+ * leaks into the address we send the magic link to. The trailing dot of an
+ * absolute FQDN is dropped last; malformed input (`a..b`, `x_y.com`) passes
+ * through unchanged and is caught downstream by EBADNAME / no_mx_record.
  */
-function sanitizeDomain(domain: string): string {
-  return domain.replace(INVISIBLE_RE, "").replace(/\.+$/, "").trim();
+function canonicalDomain(domain: string): string {
+  const ascii = domainToASCII(domain.trim().toLowerCase());
+  if (!ascii) return "";
+  return domainToUnicode(ascii).replace(/\.+$/, "");
 }
 
 function parseDomainList(raw: string | undefined): string[] {
@@ -139,7 +152,7 @@ function blockingEnabled(): boolean {
 
 /** True if `domain` is a known throwaway-inbox domain (allowlist wins). */
 export function isDisposableDomain(domain: string): boolean {
-  const d = sanitizeDomain(domain.toLowerCase());
+  const d = canonicalDomain(domain);
   if (!d) return false;
   if (MAJOR_PROVIDERS.has(d)) return false;
   if (allowlisted().has(d)) return false;
@@ -162,8 +175,8 @@ export function normalizeEmail(email: string): string {
   const lowered = email.trim().toLowerCase();
   const at = lowered.indexOf("@");
   if (at < 0) return lowered;
-  const local = lowered.slice(0, at).split("+")[0].replace(INVISIBLE_RE, "");
-  const domain = sanitizeDomain(lowered.slice(at + 1));
+  const local = lowered.slice(0, at).split("+")[0].replace(IGNORABLE_RE, "");
+  const domain = canonicalDomain(lowered.slice(at + 1));
   if (domain === "gmail.com" || domain === "googlemail.com") {
     return `${local.replace(/\./g, "")}@gmail.com`;
   }
