@@ -43,6 +43,10 @@ type EmailActionType =
 type HookPayload = {
   user?: { email?: string };
   email_data?: {
+    /** Plain 6-digit OTP. GoTrue has always sent it alongside token_hash; we
+     *  discarded it until 2026-08-25. It is what makes a login survive a mail
+     *  provider that prefetches links — see renderHtml. */
+    token?: string;
     token_hash?: string;
     redirect_to?: string;
     email_action_type?: EmailActionType;
@@ -105,14 +109,29 @@ const SUBJECTS: Record<string, string> = {
   email: "Вход в ПатентСкан",
 };
 
-function renderHtml(verifyUrl: string): string {
-  // Clean, inline-CSS, single-button RU email. Branding only; no fabricated data.
+function renderHtml(verifyUrl: string, code?: string): string {
+  // Clean, inline-CSS RU email: code first, button second. Branding only; no
+  // fabricated data — the code is the one GoTrue generated for this request.
+  //
+  // The code leads because the button does not survive every inbox: a mail
+  // provider that prefetches links spends the one-time token before the human
+  // clicks it, and they get "link expired" (prod, 2026-08-15 08:47:21 → a
+  // foreign IP consumed the token 28s later; that user never signed in and
+  // re-registered elsewhere 2.5 minutes on). A typed code cannot be spent by a
+  // scanner's GET. The button stays for everyone it already works for.
+  const codeBlock = code
+    ? `<tr><td style="padding-bottom:24px;">
+<div style="font-size:12px;color:#64748b;padding-bottom:8px;">Код для входа</div>
+<div style="font-size:30px;font-weight:700;letter-spacing:7px;color:#0f172a;background:#f1f5f9;border-radius:10px;padding:16px 0;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">${code}</div>
+</td></tr>`
+    : "";
   return `<!doctype html><html lang="ru"><body style="margin:0;background:#f5f6f8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f6f8;padding:32px 0;"><tr><td align="center">
 <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;padding:36px 40px;max-width:480px;">
 <tr><td style="font-size:20px;font-weight:700;color:#2563EB;padding-bottom:8px;">ПатентСкан</td></tr>
-<tr><td style="font-size:16px;font-weight:600;padding:8px 0 4px;">Ваша ссылка для входа</td></tr>
-<tr><td style="font-size:14px;line-height:22px;color:#475569;padding-bottom:24px;">Нажмите кнопку ниже, чтобы войти. Ссылка действует ограниченное время и одноразовая. Если вы не запрашивали вход — просто проигнорируйте это письмо.</td></tr>
+<tr><td style="font-size:16px;font-weight:600;padding:8px 0 4px;">Вход в ПатентСкан</td></tr>
+<tr><td style="font-size:14px;line-height:22px;color:#475569;padding-bottom:20px;">Введите код на странице входа — или нажмите кнопку. Код и ссылка действуют ограниченное время и срабатывают один раз. Если вы не запрашивали вход — просто проигнорируйте это письмо.</td></tr>
+${codeBlock}
 <tr><td style="padding-bottom:24px;"><a href="${verifyUrl}" style="display:inline-block;background:#2563EB;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:13px 28px;border-radius:8px;">Войти в ПатентСкан</a></td></tr>
 <tr><td style="font-size:12px;line-height:18px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:16px;">Если кнопка не работает, скопируйте ссылку в браузер:<br><span style="color:#64748b;word-break:break-all;">${verifyUrl}</span></td></tr>
 </table>
@@ -157,7 +176,7 @@ export async function POST(req: Request) {
       subject: SUBJECTS[actionType] ?? SUBJECTS.magiclink,
       from_email: FROM_EMAIL,
       from_name: FROM_NAME,
-      body: { html: renderHtml(verifyUrl) },
+      body: { html: renderHtml(verifyUrl, ed.token) },
     },
   };
 
