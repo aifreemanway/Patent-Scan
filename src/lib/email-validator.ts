@@ -4,24 +4,179 @@
 
 import disposableDomains from "disposable-email-domains";
 import { promises as dns } from "dns";
+import { domainToASCII, domainToUnicode } from "node:url";
 
 const disposableSet = new Set<string>(disposableDomains as string[]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Canonical form used for dedup (profiles.email_normalized).
- * Lowercase everything and drop `+alias` for EVERY domain (sec-fix 2026-06-12:
- * yandex/mail.ru/outlook/proton all treat user+tag as user — keeping the tag
- * let one mailbox mint unlimited free accounts). Dots are stripped for
- * gmail/googlemail only — other providers treat `a.b` and `ab` as different.
+ * Domains the npm blocklist does NOT know, seeded from a confirmed abuse case
+ * (2026-08-25): safequail626@fommie.online and safequail626@fommie.com were one
+ * person burning a fresh Deep-trial per signup (₽16.37 of COGS each). All six
+ * belong to VanishInbox — a throwaway-inbox service that self-deletes mailboxes
+ * after ~10 minutes.
+ *
+ * Why they slipped through: `disposable-email-domains` is a static package and
+ * carries none of them (verified against 1.0.62, the latest release — updating
+ * the package does NOT fix this), and every one of them has live MX records, so
+ * the no_mx_record check passed too.
+ *
+ * Why we match on the domain and not on the MX host: all six point at
+ * route1/2/3.mx.cloudflare.net — Cloudflare Email Routing, which thousands of
+ * legitimate company and personal domains also use. Blocking that MX would take
+ * out real customers, so the domain list stays the mechanism.
+ */
+const SEEDED_DISPOSABLE_DOMAINS = [
+  "fommie.com",
+  "fommie.online",
+  "fommie.store",
+  "myerly.com",
+  "whoopza.org",
+  "whoopza.store",
+  // Well-known throwaway services the npm package still misses (checked against
+  // 1.0.62, 2026-08-25). Deliberately NOT seeded here: alias relays such as
+  // SimpleLogin, AnonAddy, DuckDuckGo Email and iCloud Hide My Email. They also
+  // mint unlimited addresses, but they mint them for ONE real person — and that
+  // person is our audience (engineers, R&D). Blocking them costs paying
+  // customers; email simply is not a reliable identity, and the ₽ ceilings
+  // (per-IP magic links, per-user spend guard, global breaker) are what bound
+  // the damage.
+  "tempmail.com",
+  "mail.tm",
+  "minuteinbox.com",
+  "emailondeck.com",
+];
+
+/**
+ * Providers that must NEVER be refused as disposable, whatever any list says.
+ *
+ * This is a safety net, not a gate. An allowlist as the DOOR policy was
+ * considered and rejected on 2026-08-25: in the 1000-company cold-outreach base
+ * 697 addresses (69.7%) sit on 644 distinct CORPORATE domains, so admitting only
+ * the big mail providers would turn away seven tenths of the audience the
+ * campaign is aimed at — and that tail cannot be enumerated in advance. What an
+ * allowlist IS good for is bounding the blast radius of our own blocklist: a bad
+ * entry, ours or upstream's, can never take out gmail / mail.ru / yandex.
+ */
+const MAJOR_PROVIDERS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "mail.ru",
+  "bk.ru",
+  "list.ru",
+  "inbox.ru",
+  "internet.ru",
+  "yandex.ru",
+  "yandex.com",
+  "ya.ru",
+  "rambler.ru",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "me.com",
+  "proton.me",
+  "protonmail.com",
+  "yahoo.com",
+]);
+
+/** Characters with no business inside an address. Unicode's own
+ *  Default_Ignorable set, not a hand-kept list — a hand-kept list is how the
+ *  first version of this missed U+00AD, U+034F, U+180E and U+3164 (ap-qa). */
+const IGNORABLE_RE = /\p{Default_Ignorable_Code_Point}/gu;
+
+/**
+ * Canonical domain: exactly what DNS will resolve, so the blocklist, the MX
+ * lookup and the address handed to Supabase can never disagree.
+ *
+ * Done through IDNA/UTS-46 (`domainToASCII` → `domainToUnicode`) rather than by
+ * stripping characters ourselves. UTS-46 already discards the ignorable ones and
+ * folds the alternative separators (U+3002 。, U+FF0E ．, U+FF61 ｡) to a plain
+ * dot — which is why `fommie.online` reached by eleven different spellings all
+ * resolved to the same mailbox while our blocklist saw eleven different strings.
+ * Verified against every one of them: same route1/2/3.mx.cloudflare.net.
+ *
+ * Round-tripping back to Unicode keeps `.рф` domains readable, so punycode never
+ * leaks into the address we send the magic link to. The trailing dot of an
+ * absolute FQDN is dropped last; malformed input (`a..b`, `x_y.com`) passes
+ * through unchanged and is caught downstream by EBADNAME / no_mx_record.
+ */
+function canonicalDomain(domain: string): string {
+  const ascii = domainToASCII(domain.trim().toLowerCase());
+  if (!ascii) return "";
+  return domainToUnicode(ascii).replace(/\.+$/, "");
+}
+
+function parseDomainList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((d) => d.trim().toLowerCase().replace(/^@/, ""))
+    .filter(Boolean);
+}
+
+/**
+ * Extra domains to block on top of the npm package, from env
+ * `DISPOSABLE_DOMAINS_EXTRA` (comma-separated). Read per call, so adding a
+ * newly-spotted throwaway service on prod is an env edit + `pm2 reload` — no
+ * code change, no deploy. Same live-env pattern as ADMIN_EMAILS.
+ */
+function blockedExtra(): Set<string> {
+  return new Set([
+    ...SEEDED_DISPOSABLE_DOMAINS,
+    ...parseDomainList(process.env.DISPOSABLE_DOMAINS_EXTRA),
+  ]);
+}
+
+/**
+ * Escape hatch: domains that must NEVER be treated as disposable, from env
+ * `DISPOSABLE_DOMAINS_ALLOW`. Wins over every blocklist, including the npm
+ * package. This is the lever for a false positive — a real customer wrongly
+ * blocked is unstuck in seconds without shipping anything, and it is surgical
+ * (one domain) rather than opening the gate for everyone.
+ */
+function allowlisted(): Set<string> {
+  return new Set(parseDomainList(process.env.DISPOSABLE_DOMAINS_ALLOW));
+}
+
+/**
+ * Master kill-switch for the disposable check. Defaults to ON — policy call by
+ * Vsevolod 2026-08-25: we block throwaway inboxes. Set
+ * `DISPOSABLE_BLOCK_ENABLED=0` to stand the whole check down if it ever starts
+ * misfiring at an hour when nobody can triage domain-by-domain.
+ */
+function blockingEnabled(): boolean {
+  return process.env.DISPOSABLE_BLOCK_ENABLED !== "0";
+}
+
+/** True if `domain` is a known throwaway-inbox domain (allowlist wins). */
+export function isDisposableDomain(domain: string): boolean {
+  const d = canonicalDomain(domain);
+  if (!d) return false;
+  if (MAJOR_PROVIDERS.has(d)) return false;
+  if (allowlisted().has(d)) return false;
+  return disposableSet.has(d) || blockedExtra().has(d);
+}
+
+/**
+ * Canonical form used for dedup. Lowercase everything and drop `+alias` for
+ * EVERY domain (sec-fix 2026-06-12: yandex/mail.ru/outlook/proton all treat
+ * user+tag as user — keeping the tag let one mailbox mint unlimited free
+ * accounts). Dots are stripped for gmail/googlemail only — other providers
+ * treat `a.b` and `ab` as different.
+ *
+ * NOTE: there is no `profiles.email_normalized` column. Dedup happens because
+ * the login route passes this normalized address to `signInWithOtp`
+ * (api/auth/login/route.ts), so Supabase resolves the same auth user for every
+ * alias of one mailbox.
  */
 export function normalizeEmail(email: string): string {
   const lowered = email.trim().toLowerCase();
   const at = lowered.indexOf("@");
   if (at < 0) return lowered;
-  const local = lowered.slice(0, at).split("+")[0];
-  const domain = lowered.slice(at + 1);
+  const local = lowered.slice(0, at).split("+")[0].replace(IGNORABLE_RE, "");
+  const domain = canonicalDomain(lowered.slice(at + 1));
   if (domain === "gmail.com" || domain === "googlemail.com") {
     return `${local.replace(/\./g, "")}@gmail.com`;
   }
@@ -48,13 +203,35 @@ export async function validateEmail(email: string): Promise<EmailValidation> {
   const at = normalized.indexOf("@");
   const domain = normalized.slice(at + 1);
   if (!domain) return { ok: false, reason: "invalid_format" };
-  if (disposableSet.has(domain)) return { ok: false, reason: "disposable_email" };
+  // `normalized` is already sanitised, so the blocklist match, the MX lookup and
+  // the address handed to signInWithOtp all see the SAME domain. Before this,
+  // `a@fommie.online.` walked past the gate and — worse, and older than the
+  // disposable work — `user@gmail.com.` minted a SECOND auth user off one real
+  // mailbox, resetting the Deep-trial. Found by ap-qa on PR #125.
+  if (blockingEnabled() && isDisposableDomain(domain)) {
+    return { ok: false, reason: "disposable_email" };
+  }
 
   try {
     const mx = await dns.resolveMx(domain);
     if (!mx || mx.length === 0) return { ok: false, reason: "no_mx_record" };
-  } catch {
-    return { ok: false, reason: "no_mx_record" };
+  } catch (err) {
+    // Only a DEFINITIVE answer blocks. ENOTFOUND (no such domain) and ENODATA
+    // (domain exists, no MX) mean the address genuinely cannot receive mail.
+    // Anything else — resolver timeout, SERVFAIL, refused, network down — is a
+    // fault on OUR side, and the old catch-all turned it into a signup refusal
+    // for a legitimate customer. This box has a history of exactly that class
+    // of outage (the blackholed-IPv6 incident took logins down for everyone),
+    // so transient resolver failures now fail OPEN and are logged instead.
+    const code = (err as NodeJS.ErrnoException)?.code;
+    // EBADNAME joins the definitive set (ap-qa, PR #125): the resolver is not
+    // failing, it is telling us the name itself is malformed ("a..b", "x_y.com").
+    if (code === "ENOTFOUND" || code === "ENODATA" || code === "EBADNAME") {
+      return { ok: false, reason: "no_mx_record" };
+    }
+    console.warn(
+      `[email-validator] MX lookup for "${domain}" failed transiently (${code ?? "unknown"}) — failing open`
+    );
   }
   return { ok: true, normalized };
 }

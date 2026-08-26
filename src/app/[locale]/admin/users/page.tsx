@@ -4,7 +4,7 @@
 import { setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { requireAdminPage } from "@/lib/admin";
-import { listUsers } from "@/lib/admin-data";
+import { listUsers, getEmailCollisions } from "@/lib/admin-data";
 import {
   Card,
   TierBadge,
@@ -25,13 +25,80 @@ export default async function AdminUsersPage({
   setRequestLocale(locale);
   await requireAdminPage();
 
-  const { users, capped, costPending } = await listUsers();
+  const [{ users, capped, costPending }, collisions] = await Promise.all([
+    listUsers(),
+    getEmailCollisions(),
+  ]);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight text-slate-900">
         Пользователи <span className="text-slate-400">({users.length})</span>
       </h1>
+
+      {collisions.length > 0 && (
+        <Card>
+          <h2 className="text-sm font-semibold text-slate-900">
+            Один логин на разных доменах{" "}
+            <span className="text-slate-400">({collisions.length})</span>
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Совпадает часть до «@», а домены разные — так выглядел кейс с
+            одноразовой почтой 25.08 (один человек, новый Deep-trial на каждый
+            аккаунт). Это сигнал, а не блокировка: общий адрес вроде «info@» у
+            двух разных компаний попадёт сюда законно. Чем короче окно между
+            регистрациями, тем выше в списке.
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                  <th className="px-3 py-2">Логин</th>
+                  <th className="px-3 py-2">Аккаунты</th>
+                  <th className="px-3 py-2 text-right">Окно</th>
+                </tr>
+              </thead>
+              <tbody>
+                {collisions.map((c) => (
+                  <tr
+                    key={c.localPart}
+                    className="border-b border-slate-100 last:border-0 align-top"
+                  >
+                    <td className="px-3 py-2 font-mono text-slate-700">
+                      {c.localPart}
+                      <div className="text-xs text-slate-400">
+                        доменов: {c.domains.length}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.accounts.map((a) => (
+                        <div key={a.id}>
+                          <Link
+                            href={`/admin/users/${a.id}`}
+                            className="text-blue-700 hover:underline"
+                          >
+                            {a.email}
+                          </Link>
+                          <span className="ml-2 text-xs text-slate-400">
+                            {formatDate(a.created_at)}
+                          </span>
+                        </div>
+                      ))}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono text-slate-700">
+                      {c.spanHours === null
+                        ? "—"
+                        : c.spanHours < 48
+                          ? `${c.spanHours} ч`
+                          : `${Math.round(c.spanHours / 24)} д`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="overflow-x-auto">

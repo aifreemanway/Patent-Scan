@@ -358,3 +358,77 @@ export async function getAdminActions(
   }
   return { rows: (data ?? []) as AdminActionRow[], pending: false };
 }
+
+// --- Abuse signal: one local-part spread across several domains -------------
+
+export type EmailCollision = {
+  localPart: string;
+  domains: string[];
+  accounts: { id: string; email: string; created_at: string | null }[];
+  /** Hours between the first and last signup in the group; null if unknown. */
+  spanHours: number | null;
+};
+
+/** Grouping key for the signal: same rules as normalizeEmail's local part,
+ *  plus dots stripped for every domain. Dots matter for real dedup (only gmail
+ *  ignores them) but here we only need "is this plausibly the same human", and
+ *  `john.smith@a.com` / `johnsmith@b.com` plainly is. */
+function collisionKey(email: string): string {
+  const at = email.trim().toLowerCase().indexOf("@");
+  if (at < 0) return "";
+  return email.trim().toLowerCase().slice(0, at).split("+")[0].replace(/\./g, "");
+}
+
+/**
+ * Same local-part registered under two or more different domains — the pattern
+ * behind the 2026-08-25 throwaway-inbox case (safequail626@fommie.online +
+ * safequail626@fommie.com, one person, a fresh Deep-trial each time).
+ *
+ * This is a SIGNAL, not a gate: nothing here blocks anyone, and a shared name
+ * like `info@` across two client companies will show up as a benign hit. Sorted
+ * tightest-window first, since a burst of signups is the interesting shape.
+ */
+export async function getEmailCollisions(): Promise<EmailCollision[]> {
+  const profiles = await fetchProfiles();
+
+  const groups = new Map<string, AdminProfile[]>();
+  for (const p of profiles) {
+    if (!p.email) continue;
+    const key = collisionKey(p.email);
+    if (!key) continue;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(p);
+    else groups.set(key, [p]);
+  }
+
+  const out: EmailCollision[] = [];
+  for (const [localPart, members] of groups) {
+    const domains = [
+      ...new Set(members.map((m) => m.email.slice(m.email.indexOf("@") + 1))),
+    ];
+    if (domains.length < 2) continue;
+
+    const stamps = members
+      .map((m) => (m.created_at ? Date.parse(m.created_at) : NaN))
+      .filter((t) => !Number.isNaN(t));
+    const spanHours =
+      stamps.length >= 2
+        ? Math.round(((Math.max(...stamps) - Math.min(...stamps)) / 3_600_000) * 10) / 10
+        : null;
+
+    out.push({
+      localPart,
+      domains: domains.sort(),
+      accounts: members.map((m) => ({
+        id: m.id,
+        email: m.email,
+        created_at: m.created_at,
+      })),
+      spanHours,
+    });
+  }
+
+  // Tightest burst first; unknown-span groups last.
+  out.sort((a, b) => (a.spanHours ?? Infinity) - (b.spanHours ?? Infinity));
+  return out;
+}
