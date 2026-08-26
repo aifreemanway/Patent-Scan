@@ -102,6 +102,13 @@ async function main() {
   // dns.resolveMx on each: identical route1/2/3.mx.cloudflare.net), so any one
   // of them getting through is a full bypass. The hand-written character list
   // this replaced caught only the first three — ap-qa found the rest.
+  //
+  // Count for the record: EIGHT of these were live bypasses on the hand-list
+  // version, not five as commit 021aab2 says. The alternative dots (。．｡) DO
+  // pass EMAIL_RE in TAIL position — `a@fommie.online。` matches
+  // `[^s@]+.[^s@]+` on the ASCII dot and reaches the blocklist. They are only
+  // refused early in SEPARATOR position (`a@fommie。online`), which is the one
+  // I measured. ap-qa ran both positions side by side and was right.
   const VECTORS: [string, string][] = [
     ["trailing dot", "fommie.online."],
     ["two trailing dots", "fommie.online.."],
