@@ -928,12 +928,13 @@
       "errors": {
         "generic": "Couldn't send the link. Please try again.",
         "invalid_format": "Invalid email format.",
-        "disposable_email": "Disposable email addresses aren't supported. Please use a regular email.",
+        "disposable_email": "This address belongs to a disposable email service. Sign-in works only through a link we email you, so the mailbox has to be a lasting one — please use your work or personal email.",
         "no_mx_record": "This domain can't receive mail. Please check the address.",
         "captcha_missing": "Bot check failed to load. Please refresh the page.",
         "captcha_failed": "Bot check failed. Please refresh the page.",
         "otp_send_failed": "Email service temporarily unavailable. Try again in a minute.",
-        "rate_limited": "Too many attempts from this IP. Try again tomorrow."
+        "rate_limited": "Too many attempts from this IP. Try again tomorrow.",
+        "disposable_email_hint": "Think your address was blocked by mistake? Write to support@patent-scan.com and we'll review it."
       }
     },
     "callback": {
