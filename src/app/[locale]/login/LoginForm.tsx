@@ -249,7 +249,20 @@ export function LoginForm({
         )}
 
         {errorCode && (
-          <p className="auth-error">{t(`errors.${errorCode}`)}</p>
+          <>
+            <p className="auth-error">{t(`errors.${errorCode}`)}</p>
+            {/* Shown WITH the refusal, never behind a click: п.4 ст.16 ЗоЗПП
+                requires naming the reason and offering a channel to contest it,
+                and a wrongly-blocked customer must not have to hunt for one. */}
+            {errorCode === "disposable_email" && (
+              <p
+                className="auth-error"
+                style={{ marginTop: "6px", fontWeight: 400, opacity: 0.85 }}
+              >
+                {t("errors.disposable_email_hint")}
+              </p>
+            )}
+          </>
         )}
 
         <button
