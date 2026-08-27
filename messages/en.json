@@ -928,7 +928,7 @@
       "errors": {
         "generic": "Could not send the code. Please try again.",
         "invalid_format": "Invalid email format.",
-        "disposable_email": "This address belongs to a disposable email service. Sign-in works only through a link we email you, so the mailbox has to be a lasting one — please use your work or personal email.",
+        "disposable_email": "This address belongs to a disposable email service. Signing in requires the link or code we email you, so the mailbox has to be a lasting one — please use your work or personal email.",
         "no_mx_record": "This domain can't receive mail. Please check the address.",
         "captcha_missing": "Bot check failed to load. Please refresh the page.",
         "captcha_failed": "Bot check failed. Please refresh the page.",
