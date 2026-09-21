@@ -10,6 +10,7 @@ import { setRequestLocale, getTranslations } from "next-intl/server";
 import { requireUser } from "@/lib/supabase-server";
 import { PricingView } from "@/components/PricingView";
 import { SubscriptionManager } from "@/components/SubscriptionManager";
+import { SubscribeGoal } from "./SubscribeGoal";
 import { BILLING_LIVE } from "@/lib/config";
 import { formatRub, type SubscriptionTier } from "@/lib/pricing";
 
@@ -93,6 +94,14 @@ export default async function BillingPage({
     subscription.tier !== "free" &&
     ["active", "past_due"].includes(subscription.status as string);
 
+  // Цель Метрики шлём только когда юзер вернулся из кассы И подписка уже
+  // активна (вебхук отработал) — то есть по факту оплаты, не по намерению.
+  const subTier = subscription?.tier as string | undefined;
+  const subscribeGoalTier =
+    showReturnNotice && hasActiveSub && (subTier === "starter" || subTier === "team")
+      ? subTier
+      : null;
+
   return (
     <div className="mx-auto max-w-6xl space-y-8">
       <header>
@@ -106,6 +115,13 @@ export default async function BillingPage({
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
           {t("billing.returnNotice")}
         </div>
+      )}
+
+      {subscribeGoalTier && (
+        <SubscribeGoal
+          tier={subscribeGoalTier}
+          periodEnd={(subscription?.current_period_end as string) ?? null}
+        />
       )}
 
       {hasActiveSub && (

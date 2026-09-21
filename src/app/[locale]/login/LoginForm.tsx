@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { reachGoal } from "@/lib/metrika";
 
 /** Куда вернуть пользователя ПОСЛЕ магик-линка, по query лендинга/тарифов:
  *  - ?next=/... (явная цель, напр. /account/billing от тарифных CTA) — приоритет;
@@ -159,6 +160,9 @@ export function LoginForm({
       });
 
       if (resp.ok) {
+        // Лид: письмо со ссылкой/кодом ушло. По факту 200, не по сабмиту —
+        // отказы (429, disposable, captcha) сюда не попадают.
+        reachGoal("lead_email");
         setStatus("success");
         return;
       }
