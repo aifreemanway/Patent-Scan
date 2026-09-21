@@ -1,6 +1,7 @@
 // Яндекс.Метрика — единая точка интеграции.
 //
-// Счётчик 109614566 (21 цель заведена в кабинете Метрики маркетингом). Здесь —
+// Счётчик 109614566 (в кабинете 29 целей, из них 25 типа action — сверка
+// ap-marketing 21.09; здесь перечислены те, что шлём из кода). Здесь —
 // только клиентские хелперы; сам тег монтируется через <YandexMetrika /> в
 // layout (next/script, afterInteractive). reachGoal безопасен на сервере (no-op),
 // поэтому модуль можно импортировать в любой client-компонент без 'use client'.
@@ -27,7 +28,25 @@ export type MetrikaGoal =
   | "pricing_enterprise_click" // /pricing Enterprise «Связаться» CTA
   | "pricing_free_click" // /pricing Free «Зарегистрироваться»
   | "pricing_oneoff_click" // /pricing разовый отчёт CTA
-  | "blog_to_search"; // CTA статьи блога → /search (конверсия «статья→поиск», mediabuyer)
+  | "blog_to_search" // CTA статьи блога → /search (конверсия «статья→поиск», mediabuyer)
+  // ── Воронка: lead / purchase / subscribe ────────────────────────────────────
+  // Идентификаторы выгружены ap-marketing из кабинета Метрики 21.09 (поле
+  // conditions.url). Четыре автоцели (заполнил/отправил контактные данные,
+  // отправка формы, клик по email) Метрика ловит сама — reachGoal НЕ вызываем.
+  | "search_complete" // [lead] поиск завершён: /api/analyze вернул отчёт (ГЛАВНАЯ)
+  | "lead_email" // [lead] email захвачен: ссылка/код отправлены на почту
+  | "enterprise_demo" // [lead] заявка Enterprise отправлена
+  // purchase-цели разовых отчётов: точки срабатывания ПОКА НЕТ — разовые
+  // продаются заявкой (счёт), отдельного one-off checkout в продукте нет.
+  // Клик по «Заказать» уже покрыт целью pricing_oneoff_click; вешать на него
+  // purchase исказило бы воронку. Проводим при появлении one-off оплаты.
+  | "order_deep" // [purchase] Deep
+  | "order_landscape" // [purchase] Ландшафт
+  | "order_screening" // [purchase] Скрининг
+  // subscribe-цели шлём по факту успешной оплаты (возврат из ЮKassa), не по
+  // клику — пока дремлют за BILLING_LIVE.
+  | "subscribe_starter" // [subscribe] Starter
+  | "subscribe_team"; // [subscribe] Team
 
 declare global {
   interface Window {

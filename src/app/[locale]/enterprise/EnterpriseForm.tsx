@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { reachGoal } from "@/lib/metrika";
 
 // v9 demo-request form. VISUAL layout mirrors v7-enterprise.html (2-col
 // .form-grid, RU labels, single 152-ФЗ consent). BACKEND IS PRESERVED:
@@ -126,6 +127,9 @@ export function EnterpriseForm({
       });
 
       if (resp.ok) {
+        // Лид: заявка принята и ушла на support@ (CF Email Routing → почта
+        // Vsevolod). По факту 200 — отказы и rate-limit сюда не попадают.
+        reachGoal("enterprise_demo");
         setStatus("success");
         return;
       }

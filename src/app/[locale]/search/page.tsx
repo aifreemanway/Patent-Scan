@@ -9,6 +9,7 @@ import { retrieveNoveltyPriorArt as retrieveNoveltyPriorArtV2 } from "@/lib/nove
 import { RETRIEVAL_V2_ENABLED } from "@/lib/config";
 import type { FieldPatentInput } from "@/lib/field-view";
 import { QuotaExceededBlock } from "@/components/QuotaExceededBlock";
+import { reachGoal } from "@/lib/metrika";
 import { useRotatingText } from "@/hooks/useRotatingText";
 
 type Question = { q: string; placeholder: string };
@@ -188,6 +189,11 @@ export default function SearchPage() {
 
       const report = await analyzeResp.json();
       report.searchTotal = total || hits.length;
+
+      // Главная цель воронки: поиск доведён до отчёта. Именно здесь, а не на
+      // сабмите формы — 402 (квота) и ошибки analyze выше уже вышли из функции,
+      // так что в цель не попадут.
+      reachGoal("search_complete", { engine: expert ? "v2" : "v1" });
 
       report._input = {
         description: description.trim(),
